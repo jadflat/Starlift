@@ -14,5 +14,5 @@ static const uint16_t NOTE_INC16[12] = { 34292, 36331, 38491, 40780, 43205, 4577
 // glide speed (0 = none) and how fast a released note dies
 struct Inst { uint8_t ratio, idx0, idxDecay, idxFloor, amp, volDecay, volFloor, drive, vib, glide, release; };
 enum { SB_STEP = 33, SB_SWEEP, SB_DELAY, SB_SHIFT, SB_NBARS, SB_LEAD, SB_BASS = SB_LEAD + 16, SB_DRUMS = SB_BASS + 16, SB_BARS = SB_DRUMS + 16 };   // a song blob's layout
-static const uint16_t SONG_OFF[SONG_COUNT] = { 0, 294, 540, 786, 1080, 1358, 1652, 540, 1358 };
-static const uint16_t SONG_LEN[SONG_COUNT] = { 294, 246, 246, 294, 278, 294, 294, 246, 294 };
+static const uint16_t SONG_OFF[SONG_COUNT] = { 0, 246, 492, 738, 1032, 1310, 1604, 492, 1310 };
+static const uint16_t SONG_LEN[SONG_COUNT] = { 246, 246, 246, 294, 278, 294, 294, 246, 294 };

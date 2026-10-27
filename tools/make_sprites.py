@@ -320,6 +320,17 @@ import plants as plantdesigns                         # the alien plants (tools/
 for n in plantdesigns.ORDER:
     fa, fb = plantdesigns.frames(plantdesigns.P[n])
     CARD['PL_%s0' % n] = grid(fa); CARD['PL_%s1' % n] = grid(fb if n != 'ROCK' else fa)
+import skies                                          # the planets and suns in the skies (tools/skies.py)
+for n, f, x, y in skies.SKIES:
+    if f:
+        CARD['SKY_' + n] = f()
+import life                                           # critters, the sky giants and the logos (tools/life.py)
+for n in life.FLY_ORDER + life.CRAWL_ORDER:
+    CARD['CR_%s0' % n] = life.g(life.CRITTERS[n][0]); CARD['CR_%s1' % n] = life.g(life.CRITTERS[n][1])
+for n in life.GIANT_ORDER:
+    CARD['GI_' + n] = life.g(life.GIANTS[n])
+for n, gr in life.LOGOS.items():
+    CARD['LOGO_' + n] = gr
 import bases as basedesigns                           # the other player bases and alien collectors (tools/bases.py)
 BASE_DOOR, COLL_TOP, COLL_TUBE = [18], [31], [(15, 19, 23)]   # the dome's door; the bucket's mouth (from the ground) and tubes
 for k, f in enumerate(basedesigns.BASES):
@@ -398,6 +409,11 @@ def main():
     lines.append("static const uint8_t COLL_TOP[4] = { %s };    // where colonists drop in, above the ground" % ", ".join(map(str, COLL_TOP)))
     lines.append("static const uint8_t COLL_TUBE[4][3] = { %s };" % ", ".join("{ %s }" % ", ".join(map(str, t)) for t in COLL_TUBE))
     lines.append("static const CSpr *const PLANTPIC[9][2] = { %s };" % ", ".join("{ &C_PL_%s0, &C_PL_%s1 }" % (n, n) for n in plantdesigns.ORDER))
+    lines.append("static const CSpr *const SKYPIC[8] = { %s };   // by SkyObj; the aurora is drawn by code" % ", ".join("&C_SKY_" + n if f else "nullptr" for n, f, x, y in skies.SKIES))
+    lines.append("static const uint8_t SKY_AT[8][2] = { %s };   // where each one's centre sits on screen" % ", ".join("{ %d, %d }" % (x, y) for n, f, x, y in skies.SKIES))
+    lines.append("static const CSpr *const CRITPIC[2][3][2] = { %s };   // fliers, crawlers; two frames each" % ", ".join(
+        "{ %s }" % ", ".join("{ &C_CR_%s0, &C_CR_%s1 }" % (n, n) for n in order) for order in (life.FLY_ORDER, life.CRAWL_ORDER)))
+    lines.append("static const CSpr *const GIANTPIC[8] = { %s };   // each world's sky giant" % ", ".join("&C_GI_" + n for n in life.GIANT_OF))
     lines.append("static const CSpr *const SPIN[8] = { %s };" % ", ".join("&C_MAN_SPIN%d" % i for i in range(8)))
     lines.append("static const CSpr *const LANDER_UP[7] = { %s };" % ", ".join("&C_LANDUP%d" % i for i in range(7)))
     lines.append("static const CSpr *const SAUCER[4] = { %s };" % ", ".join("&C_SAUCER%d" % i for i in range(4)))

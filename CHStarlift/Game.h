@@ -14,14 +14,14 @@ enum Tile : uint8_t { TL_STONES, TL_BRICKS, TL_STRATA, TL_CRYSTAL };
 struct Planet {
     uint8_t pal[9][3];                                  // SKY0, SKY1, FAR, MID, NEAR, GNDD, GND, GNDL, ACC
     uint8_t grav, theme, weather, sky, style[3], tile, air, clouds, crack;   // grav: 1/1024 px a frame squared (64 = 1 G)
-    uint8_t food, shopc, basec, fly, crawl, plants[3], wind, base, coll;     // the takeaway's food and colour, the base's colour, the wildlife, wind 0-3, the base's and the aliens' designs
+    uint8_t food, shopc, basec, fly, crawl, plants[3], wind, base, coll, worms;     // the takeaway's food and colour, the base's colour, the wildlife, wind 0-3, the base's and the aliens' designs
     char name[12], place[20], shop[12], ads[3][14];
 };
 enum State : uint8_t { TITLE, INTRO, PLAY, CLEAR, OVER, WIN, PAUSED, HELP, OPTIONS };
 enum ManSt : uint8_t { M_NONE, M_IDLE, M_RUN, M_ABOARD, M_BEAM, M_JET, M_WALK, M_SAVED, M_LOST, M_HELD, M_DROP };   // HELD: in a UFO; DROP: falling into its bucket; JET: jet-packing down
 enum ManDo : uint8_t { D_STAND, D_LOOK, D_GAZE, D_CHAT, D_WANDER, D_WAVE, D_CHEER };
 struct Man { int16_t x, y; uint8_t st, act, t, home; int8_t face, vy; uint8_t by, look; };   // y in px (1/4 px when JET or DROP); by: the UFO holding it, + 1; look: suit colour and kit
-enum EnKind : uint8_t { E_NONE, E_UFO, E_STINGER, E_MINE, E_TURRET };
+enum EnKind : uint8_t { E_NONE, E_UFO, E_STINGER, E_MINE, E_TURRET, E_WORM };
 struct Enemy { int16_t x, y; int8_t vx, vy; uint8_t kind, hp, st, t, target, hit, cargo; };   // x, y in 1/16 px; cargo: colonists aboard a UFO
 struct Shot { int16_t x, y; int8_t dir; uint8_t life, kind; };                         // px; kind 0 the laser, 1 the rotary cannon
 struct EShot { int16_t x, y; int8_t vx, vy; uint8_t life, kind; };                     // 1/16 px

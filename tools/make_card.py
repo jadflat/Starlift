@@ -57,10 +57,10 @@ WORLDS = [
          pal=[(2, 2, 10), (14, 14, 34), (92, 92, 104), (132, 132, 140), (74, 74, 84), (40, 40, 48), (112, 112, 120), (184, 184, 192), (40, 90, 230)],
          grav=11, theme='MOON', wx='METEOR', sky='EARTH', style=('JAGGED', 'SMOOTH', 'SMOOTH'), tile='STONES', air=0, clouds='INK', crack='INK',
          fly='NONE', crawl='NONE', plants=('ROCK', 'ROCK', 'ROCK'), wind=0, ads=("LUNA COLA", "CRATER WAX", "MOON PIES")),
-    dict(name="ARES", base=2, coll=2, place="VALLEY OF THE KINGS", shop="NOODLES", food='NOODLES', shopc='GOLD', basec='GNDL',
-         pal=[(120, 50, 50), (236, 150, 100), (190, 104, 84), (140, 60, 46), (92, 36, 32), (66, 24, 22), (152, 66, 40), (224, 128, 74), (255, 210, 110)],
-         grav=24, theme='RUINS', wx='DUST', sky='SUN', style=('SPIKES', 'MESA', 'JAGGED'), tile='BRICKS', air=1, clouds='SKY1', crack='INK',
-         fly='BAT', crawl='BEETLE', plants=('CACTUS', 'ROCK', 'FLOWER'), wind=3, ads=("RED SODA", "MUMMY WRAPS", "SAND SPA")),
+    dict(name="SABULON", base=2, coll=2, worms=2, place="THE DEEP DESERT", shop="NOODLES", food='NOODLES', shopc='GOLD', basec='GNDL',
+         pal=[(150, 82, 40), (244, 186, 112), (186, 120, 76), (222, 160, 92), (196, 132, 70), (150, 96, 50), (214, 160, 94), (248, 214, 150), (90, 170, 255)],
+         grav=24, theme='RUINS', wx='DUST', sky='SUN', style=('MESA', 'SMOOTH', 'SMOOTH'), tile='STRATA', air=1, clouds='SKY1', crack='INK',
+         fly='BAT', crawl='BEETLE', plants=('ROCK', 'CACTUS', 'ROCK'), wind=3, ads=("STILLSUIT CO", "WORM TOURS", "SAND SPA")),
     dict(name="CRYO", base=1, coll=1, place="POLAR OUTPOST", shop="ICE CREAM", food='ICECREAM', shopc='ACC', basec='WHITE',
          pal=[(4, 10, 40), (34, 70, 140), (150, 186, 228), (96, 132, 192), (56, 86, 146), (64, 92, 146), (172, 210, 240), (244, 250, 255), (0, 230, 255)],
          grav=19, theme='BASE', wx='SNOW', sky='AURORA', style=('SPIKES', 'JAGGED', 'SMOOTH'), tile='STONES', air=1, clouds='INK', crack='GNDD',
@@ -101,7 +101,7 @@ for w in WORLDS:
         r += bytes(c)
     r += bytes([w['grav'], TH[w['theme']], WX[w['wx']], SKY[w['sky']]] + [STY[x] for x in w['style']] +
                [TL[w['tile']], w['air'], C[w['clouds']], C[w['crack']], FOOD[w['food']], C[w['shopc']], C[w['basec']],
-                FLY[w['fly']], CRAWL[w['crawl']]] + [PL[x] for x in w['plants']] + [w['wind'], w['base'], w['coll']])
+                FLY[w['fly']], CRAWL[w['crawl']]] + [PL[x] for x in w['plants']] + [w['wind'], w['base'], w['coll'], w.get('worms', 0)])
     r += fixed(w['name'], 12) + fixed(w['place'], 20) + fixed(w['shop'], 12)
     for a in w['ads']:
         r += fixed(a, 14)
