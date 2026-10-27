@@ -831,6 +831,9 @@ static NOINL void snatch(Enemy &e, int x, int y) {
     if (e.st != 4 && (e.st != 5 || e.cargo)) return;
     const int by = e.st == 4 ? groundAt(burgerX + 35) - 8 - e.cargo / 2 : y + 6;   // the bag where it was: in the beam, or aboard
     addScore(500 * (sector + 1), x, by - 16); say(MS_FOOD_SNATCHED, 60);
+#ifdef SL_TRACE
+    fprintf(stderr, "snatch f%d\n", frameNo);
+#endif
     if (!dlv && !foodOn) { dlv = 1; bagX = x; bagY = by; }
     e.st = 5; e.cargo = 1;                                              // off it goes, empty-handed
 }
@@ -1068,7 +1071,11 @@ static void updateDelivery() {
     case 3: tx = X - 12 * scDir; ty = Y - 12; bagX = scX; bagY = scY - 2; if (lst == 2) dlv = 5; break;   // up to the lander with it
     case 4:                                                             // tossed into the open lid
         if (frameNo & 3) { bagX = toward(bagX, X, 1); bagY = toward(bagY, Y - 8, 1); }   // (three frames in four: unhurried)
-        if (bagX == X && bagY == Y - 8) { dlv = 5; dlvT = 45; foodOn = 1; sfx(S_CATCH); say(MS_ORDER_UP, 50); }
+        if (bagX == X && bagY == Y - 8) {
+#ifdef SL_TRACE
+            fprintf(stderr, "orderup f%d\n", frameNo);
+#endif
+            dlv = 5; dlvT = 45; foodOn = 1; sfx(S_CATCH); say(MS_ORDER_UP, 50); }
         return;
     default: tx = scX - scDir * 40; ty = -40; if (scY < -10) dlv = 0; break;   // and away
     }
