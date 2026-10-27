@@ -29,16 +29,17 @@ def padded(b):
 # the how-to-play pages: (page, x, y, colour, text); colours are the game's (Game.h: 1 white, 4 green, 11 accent, 12 silver, 14 gold, 15 red)
 WH, GR, AC, SI, GO, RE = 1, 4, 11, 12, 14, 15
 HELP = [
-    (0, 9, 24, WH, "LEFT/RIGHT  TURN THE LANDER"), (0, 9, 32, SI, "A           MAIN ENGINE"), (0, 9, 40, WH, "B           LANDING GEAR"),
-    (0, 9, 48, SI, "UP          LASER"), (0, 9, 56, WH, "START       PAUSE MENU"), (0, 9, 64, SI, "HOLD START  CHGAME MENU"),
-    (0, 9, 102, AC, "NEWTON RULES: NO BRAKES IN SPACE"),
-    (1, 8, 24, WH, "COLONISTS WAIT ON FLAT GROUND."), (1, 8, 32, GO, "LAND BESIDE THEM - NOT ON THEM!"),
-    (1, 8, 40, WH, "THEY RUN ABOARD: 8 SEATS."), (1, 8, 48, WH, "FLY THEM TO THE BASE PAD AT"), (1, 8, 56, WH, "THE FAR END. IT REFUELS AND"),
-    (1, 8, 64, WH, "REPAIRS THE LANDER."), (1, 8, 72, GO, "TO LAND: GEAR DOWN, LEVEL,"), (1, 8, 80, WH, "SLOW. EACH WORLD HAS ITS OWN"),
-    (1, 8, 88, WH, "GRAVITY AND SOME HAVE WIND."), (1, 8, 96, WH, "FULL SEATS ARE HEAVY."),
-    (2, 34, 22, WH, "UFOS BEAM COLONISTS UP AND"), (2, 34, 29, WH, "TAKE 5 HOME TO THEIR BUCKET."), (2, 34, 36, GR, "SHOOT ONE: THEY JET DOWN."),
-    (2, 34, 52, WH, "STINGERS SPIT PLASMA."), (2, 34, 70, WH, "MINES DRIFT TOWARDS YOU."), (2, 34, 86, WH, "TURRETS FIRE FLAK."),
-    (2, 9, 102, RE, "3 HITS AND THE LANDER IS LOST."),
+    (0, 9, 24, WH, "LEFT/RIGHT  TILT"), (0, 9, 32, SI, "A           MAIN ENGINE"), (0, 9, 40, WH, "B           CANNON + LASER"),
+    (0, 9, 48, SI, "DOWN TWICE  LANDING GEAR"), (0, 9, 56, WH, "START       PAUSE MENU"), (0, 9, 64, SI, "HOLD START  CHGAME MENU"),
+    (0, 9, 80, AC, "NEWTON RULES:"), (0, 9, 88, AC, "NO BRAKES IN SPACE!"),
+    (1, 8, 24, WH, "COLONISTS WAIT ON FLAT GROUND."), (1, 8, 32, GO, "LAND BESIDE THEM, NOT ON THEM!"),
+    (1, 8, 40, WH, "THEY RUN ABOARD: 8 SEATS."), (1, 8, 48, WH, "FLY THEM TO THE BASE PAD AT"), (1, 8, 56, WH, "THE FAR END: IT REFUELS AND"),
+    (1, 8, 64, WH, "REPAIRS THE LANDER."), (1, 8, 72, GO, "LAND: GEAR DOWN, LEVEL, SLOW."), (1, 8, 80, WH, "LEDGE CAMPS PAY DOUBLE,"),
+    (1, 8, 88, WH, "SO DO CHAINS OF CAMPS"), (1, 8, 96, WH, "IN ONE TRIP."),
+    (2, 8, 22, WH, "UFOS BEAM COLONISTS UP AND"), (2, 8, 30, WH, "TAKE 5 TO THEIR COLLECTOR."), (2, 8, 38, GR, "SHOOT ONE: THEY JET DOWN."),
+    (2, 8, 50, WH, "STINGERS SPIT PLASMA, MINES"), (2, 8, 58, WH, "DRIFT, TURRETS FIRE FLAK."),
+    (2, 8, 70, GO, "MOTHERSHIPS: ONLY LASERS HURT"), (2, 8, 78, GO, "THEM. SHOOT ONE OPEN TO FREE"), (2, 8, 86, GO, "EVERYONE IT TOOK."),
+    (2, 8, 98, RE, "3 HITS AND THE LANDER IS LOST."),
 ]
 
 # ---- the eight worlds: everything that makes each one itself (Game.h's struct Planet has the same layout, byte for byte)
@@ -117,12 +118,13 @@ for k, (name, t) in enumerate(MSGS):
         msg += bytes(512 - len(msg) % 512)
     msg[2 * k:2 * k + 2] = struct.pack('<H', len(msg))
     msg += b
-txt, help_off = bytearray(), []
+txt, help_off = bytearray(2 * len(HELP)), []                # a table of offsets (2 bytes each), then the lines
 for page, x, y, c, t in HELP:
     rec = bytes([page, x, y, c]) + t.encode('ascii') + bytes(1)
     if (len(txt) % 512) + len(rec) > 512:
         txt += bytes(512 - len(txt) % 512)
     help_off.append(len(txt))
+    txt[2 * (len(help_off) - 1):2 * len(help_off)] = struct.pack('<H', len(txt))
     txt += rec
 # ---- each world's pack: copies of the pictures it draws, the ones drawn every frame first, so a frame reads few blocks.
 # Its index (22 pictures: off, w, h, 4 bytes each) is loaded into RAM when the stage is built (Game.h: struct Pack).
@@ -185,5 +187,5 @@ open(os.path.join(ROOT, 'CHStarlift', 'CardIndex.h'), 'w', newline='').write(
     "enum : uint8_t { %s };\n"
     "static const uint32_t CARD_PLANET = %d;\n#define PLANET_LEN %d\n"
     "#define HELP_LINES %d\n"
-    "static const uint16_t HELP_OFF[HELP_LINES] = { %s };\n" % (h, pic_blk * 512, song_blk * 512, txt_blk * 512, pack_blk * 512, msg_blk * 512, ', '.join(n for n, t in MSGS), plan_blk * 512, PLANET_LEN, len(HELP), ", ".join(map(str, help_off))))
+    "// (the line offsets are the first 2 * HELP_LINES bytes of CARD_TXT)\n%s" % (h, pic_blk * 512, song_blk * 512, txt_blk * 512, pack_blk * 512, msg_blk * 512, ', '.join(n for n, t in MSGS), plan_blk * 512, PLANET_LEN, len(HELP), ""))
 print("STARLIFT.DAT: %d bytes (hash %08X)" % (len(head) + len(body), h))

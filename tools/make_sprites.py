@@ -332,6 +332,7 @@ for k, f in enumerate(life.FOODS):
 CARD['DESCENT'] = life.g(life.DESCENT)
 CARD['GANTRY'] = life.g(life.GANTRY)
 CARD['PUMP'] = life.g(life.PUMP)
+CARD['MOTHERSHIP'] = life.g(life.MOTHERSHIP)
 for n in life.GIANT_ORDER:
     CARD['GI_' + n] = life.g(life.GIANTS[n])
 for n, gr in life.LOGOS.items():

@@ -92,7 +92,7 @@ enum { ESHOTS = 8, PARTS = 40, WXN = 48, CRITS = 4, MEN = 18 };
 enum { ESHOTS = 12, PARTS = 56, WXN = 64, CRITS = 6, MEN = 20 };
 #endif
 enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, ENS = 12, SHOTS = 10,
-       SEATS = 8, FUEL_MAX = 1200, ZONES = 8 };
+       SEATS = 8, FUEL_MAX = 1500, ZONES = 8 };
 static uint8_t hgt[HN];                     // the ground's top (screen y) every 4 px
 static uint8_t tile[16][16];                // the ground's texture by column (it repeats every 16 px), 0 crack .. 3 lit, built for each planet
 static Man men[MEN];
@@ -140,7 +140,8 @@ static bool thrusting;
 
 static uint8_t banner, bannerT;                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
-static uint8_t tripN, killT, kills, flashT;               // colonists home this landing; the kill chain; the screen flash
+static uint8_t tripN, killT, kills, flashT, chainMask, ledges;   // chainMask: the camps visited this trip; ledges: the camps on high ledges (double points)
+static uint8_t tripNx;               // colonists home this landing; the kill chain; the screen flash
 static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
 static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
 static bool newHi;
@@ -217,15 +218,23 @@ static NOINL char *fmt(char *d, const char *a, int v = -1, const char *b = "", i
     return d;
 }
 // a message from the card's table (MS_... in CardIndex.h): two bytes of offset, then the text. Only while drawing.
+// The text is copied out (two buffers in turn), as a busy frame may reuse the card block it came from before it is drawn.
 static NOINL const char *T(uint8_t id) {
+    static char buf[2][32];
+    static uint8_t turn;
+    char *d = buf[turn ^= 1];
+    d[0] = 0;
     const uint8_t *p = card::at(CARD_MSG + id * 2u);
-    if (!p) return "";
-    const uint8_t *q = card::at(CARD_MSG + (uint32_t)(p[0] | p[1] << 8));
-    return q ? (const char *)q : "";
+    if (p) {
+        const uint32_t off = CARD_MSG + (uint32_t)(p[0] | p[1] << 8);
+        if (const uint8_t *q = card::at(off)) { uint8_t k = 0; while (k < 31 && q[k]) { d[k] = (char)q[k]; k++; } d[k] = 0; }
+    }
+    return d;
 }
-static NOINL void textC(int y, const char *s, uint8_t c) { gfx_text((128 - gfx_textWidth(s)) / 2, y, s, c); }
-static NOINL void textSh(int x, int y, const char *s, uint8_t c) { gfx_text(x + 1, y + 1, s, C_INK); gfx_text(x, y, s, c); }
-static NOINL void textCS(int y, const char *s, uint8_t c) { textSh((128 - gfx_textWidth(s)) / 2, y, s, c); }
+// all the text is the small 3 x 5 font (the call-outs at twice its size): one font in flash, not two
+static NOINL void textC(int y, const char *s, uint8_t c) { text35((128 - text35Width(s)) / 2, y + 1, s, c); }
+static NOINL void textSh(int x, int y, const char *s, uint8_t c) { text35s(x, y + 1, s, c, C_INK); }
+static NOINL void textCS(int y, const char *s, uint8_t c) { textSh((128 - text35Width(s)) / 2, y, s, c); }
 
 // ---- palette ------------------------------------------------------------------------------------------------------
 static const uint8_t PAL_SLOT[9] = { C_SKY0, C_SKY1, C_FAR, C_MID, C_NEAR, C_GNDD, C_GND, C_GNDL, C_ACC };
@@ -367,16 +376,6 @@ static void genStage() {
         if (pk > 170) h -= (pk - 170) * (26 + planet * 3) / 85;                // ridges to climb over
         hgt[i] = (uint8_t)clampi(h, 46, 122);
     }
-    if (planet == 0)                                                           // the Moon's craters: a raised rim round a bowl
-        for (int c = 0; c < 14; c++) {
-            const int cx = 160 + (int)(hash(s + c * 17u) % (W - 320)), r = 4 + (int)(hash(s + c * 29u) % 5);
-            for (int k = -r - 2; k <= r + 2; k++) {
-                const int i = cx / 4 + k;
-                if (i < 0 || i >= HN) continue;
-                const int a = absi(k);
-                hgt[i] = (uint8_t)clampi(hgt[i] + (a <= r ? (r - a) * 3 / 2 + 1 - (r * r - k * k) / (r * 4) : -2), 42, 122);
-            }
-        }
     // the pads: the start at one end, the base (pad and building) at the other
     if (baseRight) { startPadX = 30; basePadX = W - 116; buildX = W - 54; doorX = buildX + BASE_DOOR[PLR.base]; }
     else { startPadX = W - 70; basePadX = 76; buildX = 10; doorX = buildX + 43 - BASE_DOOR[PLR.base]; }
@@ -395,9 +394,15 @@ static void genStage() {
         zoneX[z] = (int16_t)cx;
         flatten(cx, 60);
     }
+    ledges = 0;
+    for (int z = 1; z < nZones && stage >= 2; z += 3) {                      // a camp up on a ledge: steep sides, little room
+        const int i0 = zoneX[z] / 4, lv = clampi(hgt[i0] - 26, 46, 120);
+        for (int k = -4; k <= 4; k++) hgt[i0 + k] = (uint8_t)lv;
+        ledges |= (uint8_t)(1 << z);
+    }
     memset(men, 0, sizeof men);
     nMen = (uint8_t)clampi(8 + stage, 8, MEN);
-    quota = (uint8_t)((nMen * clampi(50 + stage * 3, 50, 90) + 99) / 100);   // half of them at first, nine in ten by the end
+    quota = (uint8_t)((nMen * clampi(40 + stage * 3, 40, 85) + 99) / 100);   // two in five at first, more each stage
     memset(items, 0, sizeof items);
     for (int k = 0; k < clampi((stage + 2) / 3, 0, 5); k++) {                // things to pick up: supplies, repairs, fuel, now and then an engine part
         int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
@@ -410,7 +415,7 @@ static void genStage() {
         const int z = i % nZones;
         const int side = baseRight ? -1 : 1;                                  // camp on the side away from the base
         m.home = (uint8_t)z;
-        m.x = (int16_t)(zoneX[z] + side * (6 + (int)(hash(s + i * 13u) % 18)));
+        m.x = (int16_t)(zoneX[z] + side * (((ledges >> z) & 1) ? 4 + (int)(hash(s + i * 13u) % 8) : 6 + (int)(hash(s + i * 13u) % 18)));
         m.y = (int16_t)groundAt(m.x);
         m.st = M_IDLE; m.act = D_STAND; m.t = (uint8_t)rnd(60); m.face = (int8_t)(rnd(2) ? 1 : -1); m.look = (uint8_t)(hash(s + i * 71u) & 31);
     }
@@ -423,11 +428,12 @@ static void genStage() {
         spawnEn(E_TURRET, x, groundAt(x) - 3);
     }
     for (int k = 0; k < PLR.worms; k++) if (Enemy *e = spawnEn(E_WORM, 500 + k * 700, 100)) e->hp = 12;
+    if ((stage & 3) == 3) if (Enemy *e = spawnEn(E_MOTHER, alienX + 20, 34)) e->hp = (uint8_t)clampi(40 + stage * 2, 40, 120);
     buildTile();
     memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
     placeLanderOnPad(startPadX);
     cam = clampi(LX() - 64, 0, W - 128);
-    spawnT = 150; endT = 0; lightT = 0; warnT = 0;
+    spawnT = 300; endT = 0; lightT = 0; warnT = 0;
     for (auto &t : topsAt) t = -9999;                              // a new world: the layers' tops are made afresh
     wxLvl = (uint8_t)rnd(4);
 #ifdef SL_STORM
@@ -497,12 +503,13 @@ static void wreck() {
     int lost = 0;
     for (auto &m : men) if (m.st == M_ABOARD) { m.st = M_LOST; nLost++; lost++; }
     for (auto &it : items) if (it.st == 2) it.st = 0;                // the supplies go down with it
+    chainMask = 0;
     seats = 0;
     say(lost ? MS_CREW_LOST : MS_LANDER_LOST, 60);
 }
 static void damage(int n) {
     if (invT || lst == 2) return;
-    sfx(S_HIT); shake = 6; invT = 30;
+    sfx(S_HIT); shake = 6; invT = 50;
     if (shield <= n) { shield = 0; wreck(); } else shield -= (uint8_t)n;
 }
 
@@ -516,7 +523,7 @@ static void hullPt(int dx, int dy, int &x, int &y) {
 static void touchDown() {
     const int x = LX();
     const int gl = groundAt(x - 7), gr = groundAt(x + 7);
-    const bool level = absi(gl - gr) <= 2, upright = absi(ang) <= 1, soft = lvy <= 176 && absi(lvx) <= 110;
+    const bool level = absi(gl - gr) <= 2, upright = absi(ang) <= 1, soft = lvy <= 230 && absi(lvx) <= 140;
     if (!gear || !level || !upright || !soft) {
         if (!gear) say(MS_GEAR_UP, 60);
         else if (!level) say(MS_TOO_STEEP, 60);
@@ -530,6 +537,7 @@ static void touchDown() {
     onPad = (x >= basePadX && x < basePadX + 40) ? 2 : (x >= startPadX && x < startPadX + 40) ? 1 : 0;
     addScore(pts, x, LY() - 14);
     say(pts == 100 ? MS_PERFECT_LANDING : MS_LANDED, 40);
+    if (onPad && absi(x - (onPad == 2 ? basePadX : startPadX) - 20) <= 2) { addScore(200, x, LY() - 22); say(MS_BULLSEYE, 50); }   // dead centre
     sfx(S_LAND);
     for (int i = 0; i < 8; i++) part(x + (i & 1 ? 6 : -6), gl, (i & 1 ? 1 : -1) * (8 + rnd(10)), -rnd(6), 14, C_GNDL);
     for (auto &m : men)                                                  // landing on a colonist
@@ -560,11 +568,11 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
             fireCd = 12; sfx(S_LASER);
         }
     }
-    if (thr && fuel > 0) { if (thrLvl < 8) thrLvl++; } else if (thrLvl) thrLvl = thrLvl > 2 ? thrLvl - 2 : 0;   // the engine spools up and down
+    if (thr && fuel > 0) { if (thrLvl < 6) thrLvl++; } else if (thrLvl) thrLvl = thrLvl > 2 ? thrLvl - 2 : 0;   // the engine spools up and down
     thrusting = thrLvl > 0;
     if (lst == 1) {                                                  // on the ground
         rotT = 0;
-        if (thrLvl >= 6) { lst = 0; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
+        if (thrLvl >= 4) { lst = 0; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
         else {
             synth::engine(0);
             for (auto &it : items)                                   // things beside the lander are loaded
@@ -612,10 +620,10 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     // Newton: gravity, the engine along the hull, a little drag in an atmosphere, the wind
     const Planet &p = PLR;
     static uint8_t gacc;                                             // gravity in 1/1024 px a frame squared: carry the quarters
-    gacc = (uint8_t)(gacc + p.grav * 11 / 8 + (sector ? p.grav / 6 : 0));   // a heavy lander: the worlds' gravity, a third more
+    gacc = (uint8_t)(gacc + p.grav * 2 + (sector ? p.grav / 4 : 0));         // a heavy lander: twice the worlds' gravity
     lvy += gacc >> 2; gacc &= 3;
     if (thrusting) {
-        int t = (76 + engineUp * 5) * 32 / (32 + seats) * thrLvl / 8;                  // passengers are heavy; the engine takes a moment to spool up
+        int t = (120 + engineUp * 6) * 32 / (32 + seats) * thrLvl / 6;                  // passengers are heavy; the engine takes a moment to spool up
         if (LY() < TOP) t = t * (LY() + 200) / (TOP + 200);                          // above the screen the air thins and the engine fades
         lvx += (int16_t)((t * sinA(ang)) >> 10);
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
@@ -631,7 +639,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
         lvx += (int16_t)((windV - lvx) >> (8 - p.air + (gear ? 0 : 1)));
         lvy -= lvy >> 8;
     }
-    lvx = (int16_t)clampi(lvx, -700, 700); lvy = (int16_t)clampi(lvy, -600, 700);
+    lvx = (int16_t)clampi(lvx, -760, 760); lvy = (int16_t)clampi(lvy, -700, 960);
     lx += lvx; ly += lvy;
     if (LY() < -200) { ly = -200 << 8; if (lvy < 0) lvy = 0; }          // no ceiling: up and out of the screen, until the air runs out
     if (lx < (10 << 8)) { lx = 10 << 8; lvx = 0; }
@@ -671,6 +679,12 @@ static void updateMen() {
             if (lst == 1 && absi(dx) < 64 && absi(groundAt(X) - m.y) < 10 && seats < SEATS) {   // run for it
                 m.st = M_RUN; m.face = (int8_t)sgn(dx); m.t = 0; break;
             }
+            if (m.act == D_TREK) {                                                               // running for the next camp
+                const int tx = zoneX[m.by];
+                if (frameNo & 1) { m.x = (int16_t)(m.x + sgn(tx - m.x)); m.y = (int16_t)groundAt(m.x); m.face = (int8_t)(sgn(tx - m.x) ? sgn(tx - m.x) : m.face); }
+                if (absi(tx - m.x) < 6) { m.home = m.by; m.act = D_CHEER; m.t = 40; addScore(150, -1, 0); say(MS_MADE_IT, 40); }
+                break;
+            }
             if (lst == 0 && absi(dx) < 80 && Y < m.y - 10) {                                     // the lander is near: wave
                 if (m.act != D_WAVE) { m.act = D_WAVE; m.face = (int8_t)(sgn(dx) ? sgn(dx) : 1); }
                 m.t = 8;
@@ -696,6 +710,10 @@ static void updateMen() {
                 } else if (r < 6) { m.act = D_LOOK; m.t = 72; }
                 else if (r < 7) { m.act = D_GAZE; m.t = (uint8_t)(50 + rnd(40)); }
                 else if (r < 9) { m.act = D_WANDER; m.t = (uint8_t)(40 + rnd(60)); m.face = (int8_t)(rnd(2) ? 1 : -1); }
+                else if (stage >= 2 && nZones > 1 && absi(m.x - cam - 64) < 100 && rnd(4) == 0) {   // a dash across to the next camp
+                    m.act = D_TREK; m.by = (uint8_t)clampi(m.home + (baseRight ? 1 : -1), 0, nZones - 1);
+                    if (m.by == m.home) m.by = (uint8_t)(m.home ? m.home - 1 : 1);
+                }
                 else { m.act = D_STAND; m.t = (uint8_t)(40 + rnd(60)); }
             }
             break;
@@ -704,7 +722,7 @@ static void updateMen() {
             if (lst != 1) { m.st = M_IDLE; m.act = D_STAND; m.t = 30; break; }
             if ((frameNo & 3) != 3) { m.x = (int16_t)(m.x + sgn(X - m.x)); m.y = (int16_t)groundAt(m.x); }
             if (absi(X - m.x) <= 2) {
-                if (seats < SEATS) { m.st = M_ABOARD; seats++; sfx(S_BOARD); addScore(10, -1, 0); if (seats == SEATS) say(MS_SEATS_FULL, 40); }
+                if (seats < SEATS) { m.st = M_ABOARD; seats++; chainMask |= (uint8_t)(1 << m.home); sfx(S_BOARD); addScore(10, -1, 0); if (seats == SEATS) say(MS_SEATS_FULL, 40); }
                 else { m.st = M_IDLE; m.act = D_STAND; m.t = 40; }
             }
             break;
@@ -721,18 +739,21 @@ static void updateMen() {
         }
         case M_DROP:                                                           // falling into the aliens' bucket, 1/4 px
             m.y = (int16_t)(m.y + 3);
-            if ((m.y >> 2) >= groundAt(alienX + 20) - COLL_TOP[PLR.coll] + 3) { m.st = M_LOST; nLost++; tubeT = 45; sfx(S_SLURP); }
+            if ((m.y >> 2) >= groundAt(alienX + 20) - COLL_TOP[PLR.coll] + 3) { m.st = M_LOST; m.by = 255; nLost++; tubeT = 45; sfx(S_SLURP); }   // (255: in the collector)
             break;
         case M_WALK:
             if (frameNo & 1) { m.x = (int16_t)(m.x + sgn(doorX - m.x)); m.y = (int16_t)groundAt(m.x); }
             if (absi(m.x - doorX) <= 1) {
                 m.st = M_SAVED; nSaved++; gSaved++; sfx(S_SAVED); tripN++;
                 if (seats == 0 && tripN > 1) {                                  // the last of the trip in: a bonus for bringing many
-                    addScore(tripN * tripN * 50, doorX, m.y - 28);
-                    say(MS_TRIP_BONUS_X, 60, tripN);
+                    int camps = 0;
+                    for (uint8_t b = chainMask; b; b >>= 1) camps += b & 1;
+                    addScore(tripN * tripN * 50 + (camps > 1 ? camps * camps * 100 : 0), doorX, m.y - 28);
+                    if (camps > 1) say(MS_CHAIN, 60, camps); else say(MS_TRIP_BONUS_X, 60, tripN);   // a chain of camps in one trip
+                    chainMask = 0;
                 }
                 for (int k = 0; k < 6; k++) part(doorX, m.y - 6, rnd(24) - 12, -8 - rnd(14), 18, k & 1 ? C_GOLD : C_WHITE);   // a little fanfare of sparks
-                addScore(250 * (sector + 1), doorX, m.y - 16);
+                addScore(250 * (sector + 1) * (((ledges >> m.home) & 1) + 1), doorX, m.y - 16);   // from a high ledge: double
             }
             break;
         default: break;
@@ -752,12 +773,18 @@ static NOINL void eshot(int x, int y, int tx, int ty, int speed, uint8_t kind) {
 }
 
 static void killEn(Enemy &e) {
-    static const uint16_t PTS[6] = { 0, 150, 100, 50, 200, 1000 };
+    static const uint16_t PTS[7] = { 0, 150, 100, 50, 200, 1000, 5000 };
     const int x = e.x >> 4, y = e.y >> 4;
     addScore(PTS[e.kind] * (sector + 1), x, y - 8);
     if (killT) { kills++; if (kills >= 2) { say(kills == 2 ? MS_DOUBLE : kills == 3 ? MS_TRIPLE : MS_RAMPAGE, 40); addScore(100 * kills, -1, 0); } } else kills = 1;
     killT = 45;
     if (e.kind == E_UFO) flashT = 3;
+    if (e.kind == E_MOTHER) {                                                          // it bursts: everyone it took jets down
+        for (int k = 0; k < 5; k++) blast(x + rnd(41) - 20, y + rnd(13) - 6, 10 + rnd(8), k * 4);
+        int n = 0;
+        for (auto &m : men) if (m.st == M_LOST && m.by == 255) { m.st = M_JET; m.x = (int16_t)(x + n * 5 - 20); m.y = (int16_t)(y << 2); m.vy = -6; m.by = 0; nLost--; n++; }
+        say(MS_FREED, 70); flashT = 8; shake = 20;
+    }
     boom(x, y, 16, 10);
     sfx(S_BOOM);
     if (e.kind == E_UFO) {
@@ -789,14 +816,14 @@ static void updateEnemies() {
     }
     bool idle = false;
     for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE) idle = true;
-    const int want = clampi(2 + stage * 2 / 3, 2, 9);
+    const int want = clampi(1 + stage * 2 / 3, 1, 8);
     if (spawnT) spawnT--;
     else if (fliers < want) {
         const int side = rnd(2) ? 1 : -1;
         const int x = clampi(cam + 64 + side * (150 + rnd(110)), 20, W - 20);
         uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) ? E_STINGER : E_MINE);
         if (Enemy *e = spawnEn(k, x, 28 + rnd(30))) { if (k == E_UFO) { sfx(S_UFO); } e->vx = (int8_t)(-side * 8); }
-        spawnT = clampi(130 - stage * 6, 40, 130);
+        spawnT = clampi(170 - stage * 6, 50, 170);
     }
     for (int ei = 0; ei < ENS; ei++) {
         Enemy &e = en[ei];
@@ -874,7 +901,7 @@ static void updateEnemies() {
             const int tx = X + (ex < X ? -48 : 48), ty = Y - 6 + isin(e.t * 3) / 16;
             e.vx = (int8_t)clampi(e.vx + sgn(tx - ex), -14 - sector * 4, 14 + sector * 4);
             e.vy = (int8_t)clampi(e.vy + sgn(ty - ey), -10, 10);
-            const int rate = clampi(96 - planet * 6 - sector * 20, 40, 96);
+            const int rate = clampi(130 - planet * 6 - sector * 20, 50, 130);
             if (lst != 2 && absi(X - ex) < 110 && (e.t % rate) == 0) eshot(ex, ey, X, Y, 22 + sector * 6, 0);
             break;
         }
@@ -907,6 +934,13 @@ static void updateEnemies() {
             }
             break;
         }
+        case E_MOTHER:                                                        // sways over the collector, fires, sends out saucers
+            e.x = (int16_t)((alienX + 20 + isin(e.t + frameNo / 2) / 4) * 16);
+            e.y = (int16_t)((34 + isin(frameNo * 3) / 32) * 16);
+            e.vx = e.vy = 0;
+            if (lst != 2 && absi(X - ex) < 120 && (frameNo % 40) == 0) { eshot(ex - 8, ey + 6, X, Y, 24, 1); eshot(ex + 8, ey + 6, X, Y, 24, 1); }
+            if ((frameNo % 300) == 150 && fliers < 9) if (Enemy *u = spawnEn(E_UFO, ex, ey + 8)) { (void)u; sfx(S_UFO); }
+            break;
         case E_TURRET:
             if (lst != 2 && absi(X - ex) < 100 && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, 26 + sector * 6, 1);
             break;
@@ -934,12 +968,12 @@ static void updateShots() {
             if (s.y >= groundAt(s.x)) { part(s.x, s.y, -s.dir * 8, -10, 8, C_GOLD); s.life = 0; break; }
             for (auto &e : en) {
                 if (!e.kind) continue;
-                const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : 6;
+                const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : e.kind == E_MOTHER ? 18 : 6;
                 if (e.kind == E_UFO && ey < TOP) continue;
                 if (absi(s.x - ex) <= hw && absi(s.y - ey) <= 5) {
                     s.life = 0;
                     e.hit = 4;
-                    if (s.kind && (frameNo & 1)) break;                    // a cannon round does half a laser's damage
+                    if (s.kind && ((frameNo & 1) || e.kind == E_MOTHER)) break;   // a cannon round does half a laser's damage, and nothing to a mothership's armour
                     part(s.x, s.y, -s.dir * 10, -8, 8, C_WHITE);
                     if (e.kind == E_WORM && e.st == 0) { s.life = 1; e.hit = 0; e.hp++; }   // under the sand: the shot goes into the ground
                     if (--e.hp == 0) killEn(e); else { sfx(S_HIT); if (e.kind == E_WORM && e.st == 1) { e.st = 3; e.t = 0; } }
@@ -973,11 +1007,13 @@ static void updateShots() {
 // ---- weather --------------------------------------------------------------------------------------------------------
 static uint8_t wxX[WXN], wxY[WXN];
 static int lastCam, meteorT, meteorX, meteorY;
+// rain, (ash,) drizzle, acid: how fast a streak falls, its head and its tail
+static const uint8_t FALL[5][3] = { { 5, C_SILVER, C_STEEL }, { 0, 0, 0 }, { 2, C_GNDL, C_SKY1 }, { 0, 0, 0 }, { 4, C_GREEN, C_GREEN } };
 static void updateWeather() {
     const Planet &p = PLR;
     const int dc = cam - lastCam;
     lastCam = cam;
-    windV = isin(frameNo / 3 + stage * 50) * p.wind * (3 + (isin(frameNo * 2) > 60 ? 2 : 0)) * (wxLvl + 1) / 24;   // the wind, 1/256 px a frame: it veers and gusts, harder in a storm
+    windV = isin(frameNo / 3 + stage * 50) * p.wind * (3 + (isin(frameNo * 2) > 60 ? 2 : 0)) * (wxLvl + 1 + stage / 16) / 24;   // the wind, 1/256 px a frame: it veers and gusts, harder in a storm
     const int gust = windV / 2, nWx = WXN * wxLvl / 3;
     for (int i = 0; i < nWx; i++) {
         int x = wxX[i] - dc, y = wxY[i];
@@ -990,10 +1026,8 @@ static void updateWeather() {
             y += big || (((frameNo + i) & 1) && absi(windV) < 110);  // a strong gust holds the small ones up
             break;
         }
-        case WX_RAIN: y += 5; x -= 1; break;
         case WX_ASH: if (i & 1) { y -= 1; x += (frameNo + i) % 3 == 0; } else { y += (frameNo & 1); } break;
-        case WX_DRIZZLE: y += 2; break;
-        case WX_ACID: y += 4; break;
+        case WX_RAIN: case WX_DRIZZLE: case WX_ACID: y += FALL[p.weather - WX_RAIN][0]; x -= p.weather == WX_RAIN; break;
         default: break;
         }
         while (x < 0) x += 160;
@@ -1019,10 +1053,12 @@ static void drawWeather() {
         switch (p.weather) {
         case WX_DUST: pset(x, y, (i & 1) ? C_GNDL : C_SKY1); pset(x - 1, y, C_SKY1); if (i & 2) pset(x - 2, y, C_GNDL); break;
         case WX_SNOW: pset(x, y, C_WHITE); if ((i & 3) == 0) { pset(x + 1, y, C_WHITE); pset(x, y + 1, C_WHITE); pset(x + 1, y + 1, C_SILVER); } if (absi(windV) > 80) pset(x - sgn(windV), y, C_SILVER); break;   // a streak in a gale
-        case WX_RAIN: pset(x, y, C_SILVER); pset(x + 1, y - 1, C_STEEL); pset(x + 1, y - 2, C_STEEL); break;
+        case WX_RAIN: case WX_DRIZZLE: case WX_ACID: {                // a falling streak: its speed and colours from the table
+            const uint8_t *f = FALL[p.weather - WX_RAIN];
+            pset(x, y, f[1]); pset(x + (p.weather == WX_RAIN), y - 1, f[2]); pset(x + (p.weather == WX_RAIN), y - 2, f[2]);
+            break;
+        }
         case WX_ASH: if (i & 1) pset(x, y, ((frameNo + i) & 4) ? C_GOLD : C_RED); else pset(x, y, C_STEEL); break;
-        case WX_DRIZZLE: pset(x, y, C_GNDL); pset(x, y - 1, C_SKY1); break;
-        case WX_ACID: pset(x, y, C_GREEN); pset(x, y - 1, C_GREEN); if (y >= groundAt(cam + x) - 1) { pset(x - 1, y - 1, C_GREEN); pset(x + 1, y - 1, C_GREEN); } break;
         case WX_GLINT: {
             const int ph = (frameNo + i * 11) & 31;
             if (ph < 6) { const uint8_t c = ph < 3 ? C_WHITE : C_ACC; pset(x, y, c); if (ph == 1 || ph == 2) { pset(x - 1, y, C_ACC); pset(x + 1, y, C_ACC); pset(x, y - 1, C_ACC); pset(x, y + 1, C_ACC); } }
@@ -1271,7 +1307,7 @@ static void drawPad(int px, bool base) {
         const int fx = baseRight ? sx + 42 : sx - 6;
         blit(C_PUMP, fx, gy - 9, false);
         if (lst == 1 && onPad == 2 && (frameNo & 4)) R(fx + 1, gy - 6, 2, 2, C_GREEN);                // pumping
-        gfx_text(sx + 8, gy + 4, T(MS_BASE), C_GOLD);
+        text35(sx + 8, gy + 4, T(MS_BASE), C_GOLD);
     } else {                                                        // a launch gantry
         const int gx = baseRight ? sx - 10 : sx + 44;
         blit(C_GANTRY, gx, gy - 32, false);
@@ -1566,6 +1602,7 @@ static void drawMen() {
             switch (m.act) {
             case D_GAZE: s = &S_MAN_LOOKUP; break;
             case D_WANDER: s = (phase & 8) ? &S_MAN_RUN1 : &S_MAN_STAND; break;
+            case D_TREK: s = (phase & 4) ? &S_MAN_RUN1 : &S_MAN_RUN2; break;
             case D_WAVE: s = (phase & 4) ? &S_MAN_WAVE1 : &S_MAN_WAVE2; break;
             case D_CHEER: s = (phase & 8) ? &S_MAN_CHEER : &S_MAN_STAND; if (phase & 8) by--; break;
             case D_CHAT: {
@@ -1629,6 +1666,11 @@ static void drawEnemies() {
             }
             break;
         }
+        case E_MOTHER:
+            blit(C_MOTHERSHIP, sx - 18, sy - 7, false, solid);
+            if (frameNo & 8) pset(sx - 16 + ((frameNo >> 2) % 9) * 4, sy, C_RED);       // a light running round its rim
+            R(sx - 12, sy - 10, e.hp * 24 / clampi(40 + stage * 2, 40, 120), 1, C_RED);                 // how much it can still take
+            break;
         case E_TURRET: {
             const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);
             for (int k = 0; k < 5; k++) pset(sx + dx * k / 4, sy - 4 - k, C_STEEL);
@@ -1707,7 +1749,7 @@ static void drawShots() {
 static void drawHud() {
     R(0, 0, 128, TOP, C_INK);
     // fuel
-    gfx_text(1, 0, "F", C_SILVER);
+    text35(1, 0, "F", C_SILVER);
     R(7, 2, 26, 4, C_STEEL);
     const int fw = fuel * 24 / FUEL_MAX;
     R(8, 3, fw, 2, fuel < FUEL_MAX / 4 ? ((frameNo & 8) ? C_RED : C_GOLD) : C_GOLD);
@@ -1763,21 +1805,21 @@ static void drawWorld() {
     drawShots();
     drawWeather();
     dbg::prof(7);
-    for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); gfx_text(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
+    for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); text35(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
     cam = saved;
     drawHud();
     dbg::prof(8);
     drawPointer();
     if (PLR.wind && state == PLAY) {                                   // the wind: an arrow, longer when it blows harder
         const int len = absi(windV) / 20, dir = windV < 0 ? -1 : 1, x0 = 14;
-        text35(1, 18, "W", C_SILVER);
         if (len) { hl(dir > 0 ? x0 : x0 - len, 20, len, C_WHITE); pset(x0 + dir * len, 20, C_WHITE); pset(x0 + dir * (len - 1), 19, C_WHITE); pset(x0 + dir * (len - 1), 21, C_WHITE); }
     }
     if (bannerT) {
         char b[28];
         fmt(b, T(banner), bannerNum);
-        const int w = gfx_textWidth(b);
-        R((128 - w) / 2 - 3, 19, w + 6, 10, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD);
+        int w = text35Width(b);
+        if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
+        else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
     }
 }
 
@@ -1800,16 +1842,6 @@ static void drawTitle() {
     drawTitleScene();
 
 #ifndef SL_SLIM
-    {                                                              // a saucer drifts by, beaming a colonist up
-        const int ux = 128 - ((frameNo / 2) % 220) + 40, uy = 50 + (isin(frameNo * 5) >> 6), gy = groundAt(cam + ux);
-        if (ux > -20 && ux < 150) {
-            const int my = gy - ((frameNo / 2) % 220) / 4;
-            if (my > uy + 6) { drawBeam(ux, uy, gy); blitBC(*SPIN[(frameNo >> 2) & 7], ux, my, ((frameNo >> 4) & 1) != 0); }
-            blit(*SAUCER[(frameNo >> 2) & 3], ux - 11, uy - 5, false);
-        }
-    }
-#endif
-#ifndef SL_SLIM
     drawLogo(18);
     textCS(36, T(MS_RESCUE_THE_COLONISTS), C_WHITE);
     char s[24];
@@ -1817,8 +1849,8 @@ static void drawTitle() {
     uint8_t it[4];
     const uint8_t n = menuItems(it);
     R(30, 84, 68, n * 9 + 5, C_INK); R(30, 84, 68, 1, C_GOLD); R(30, 84 + n * 9 + 4, 68, 1, C_GOLD);
-    for (uint8_t i = 0; i < n; i++) gfx_text(40, 87 + i * 9, T(it[i]), titleSel == i ? C_WHITE : C_STEEL);
-    gfx_text(33, 87 + titleSel * 9, T(MS_X52), (frameNo & 8) ? C_GOLD : C_RED);
+    for (uint8_t i = 0; i < n; i++) text35(40, 87 + i * 9, T(it[i]), titleSel == i ? C_WHITE : C_STEEL);
+    text35(33, 87 + titleSel * 9, T(MS_X52), (frameNo & 8) ? C_GOLD : C_RED);
     text35(2, 122, "V" SL_VERSION, C_SILVER);
 #endif
 }
@@ -1840,7 +1872,8 @@ static void drawHelp() {
     panel(6, 116);
     textCS(10, T((uint8_t)(MS_CONTROLS + helpPage)), C_GOLD);
     for (int i = 0; i < HELP_LINES; i++) {                          // the text, from the card
-        const uint8_t *r = card::at(CARD_TXT + HELP_OFF[i]);
+        const uint8_t *o = card::at(CARD_TXT + i * 2u);
+        const uint8_t *r = o ? card::at(CARD_TXT + (uint32_t)(o[0] | o[1] << 8)) : nullptr;
         if (r && r[0] == helpPage) text35(r[1], r[2], (const char *)r + 4, r[3]);
     }
     char s[8];
@@ -1855,10 +1888,10 @@ static void drawOptions() {
     panel(30, 66);
     textCS(34, T(MS_OPTIONS), C_GOLD);
     for (int i = 0; i < 3; i++) {
-        gfx_text(22, 48 + i * 12, T((uint8_t)(MS_MUSIC + i)), optSel == i ? C_WHITE : C_STEEL);
+        text35(22, 48 + i * 12, T((uint8_t)(MS_MUSIC + i)), optSel == i ? C_WHITE : C_STEEL);
         if (i < 2) for (int k = 0; k < 4; k++) R(76 + k * 8, 49 + i * 12, 6, 6, k < (i ? fxV : musicV) ? (optSel == i ? C_GOLD : C_SILVER) : C_STEEL);
     }
-    gfx_text(14, 48 + optSel * 12, T(MS_X52), C_GOLD);
+    text35(14, 48 + optSel * 12, T(MS_X52), C_GOLD);
     text35(10, 88, T(MS_LEFT_RIGHT_CHANGE_A_OR_B_BACK), C_SILVER);
 #endif
 }
@@ -1868,7 +1901,7 @@ static void drawIntro() {
 #ifndef SL_SLIM
     panel(30, 68);
     char s[28];
-    fmt(s, T(MS_STAGE), stage + 1, T(MS_OF_16));
+    fmt(s, T(MS_STAGE_N), stage + 1);
     textC(34, s, C_SILVER);
     textC(44, PLR.name, C_GOLD);
     textC(53, PLR.place, C_WHITE);
@@ -1886,8 +1919,8 @@ static void drawPause() {
     R(24, 40, 80, 50, C_INK);
     R(24, 40, 80, 1, C_GOLD); R(24, 89, 80, 1, C_GOLD);
     textC(44, T(MS_PAUSED), C_GOLD);
-    for (int i = 0; i < 3; i++) gfx_text(40, 56 + i * 10, T((uint8_t)(MS_RESUME + i)), pauseSel == i ? C_WHITE : C_STEEL);
-    gfx_text(32, 56 + pauseSel * 10, T(MS_X52), C_GOLD);
+    for (int i = 0; i < 3; i++) text35(40, 56 + i * 10, T((uint8_t)(MS_RESUME + i)), pauseSel == i ? C_WHITE : C_STEEL);
+    text35(32, 56 + pauseSel * 10, T(MS_X52), C_GOLD);
     if (pauseNote) textCS(96, T(pauseNote), C_GOLD);
 #endif
 }
@@ -1940,14 +1973,6 @@ static void draw() {
 #endif
     case HELP: drawHelp(); break;
     case OPTIONS: drawOptions(); break;
-    case WIN:
-        drawTitle();
-        R(4, 44, 120, 50, C_INK);
-        textC(48, T(MS_EVERY_WORLD_VISITED), C_GOLD);
-        textC(58, T(MS_THE_COLONISTS), C_WHITE);
-        textC(67, T(MS_ARE_SAFE_AT_LAST), C_WHITE);
-        { char s[24]; fmt(s, T(MS_SCORE), score); textC(80, s, C_GREEN); }
-        break;
     default: drawWorld(); break;
     }
 }
@@ -2083,7 +2108,7 @@ static void update() {
     case INTRO:
         updateWeather(); updateCritters();
         updateCamera();
-        if (--timer <= 0 || ((edge & 4) && timer < 80)) { state = PLAY; say(wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 40); }
+        if (--timer <= 0 || ((edge & 4) && timer < 80)) { state = PLAY; say((stage & 3) == 3 ? MS_MOTHER : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
         break;
     case PLAY:
         {
@@ -2116,20 +2141,14 @@ static void update() {
             if (missed) {                                               // the quota missed: a lander is lost and the world is tried again
                 if (--lives <= 0) { lives = 0; gameOver(); break; }
             } else stage++;
-            if (stage >= 16) { state = WIN; timer = 90; synth::music(0); saveProgress(false); }
-            else { newStage(); saveProgress(true); }
+            newStage(); saveProgress(true);
+            if (stage && (stage & 15) == 0) say(MS_LOOP, 90, stage / 16 + 1);   // round again, harder
         }
         break;
     case OVER:
         updateShots(); updateWeather();
         if (overT < 2000) overT++;
         if (overT > 90 && (edge & 4)) toTitle();
-        break;
-    case WIN:
-        cam += 1; if (cam > W - 300) cam = 200;
-        updateWeather();
-        if (timer > 0) timer--;
-        else if (edge & 4) toTitle();
         break;
     }
 #ifdef SL_TRACE
@@ -2163,7 +2182,7 @@ void setup() {
     if (save::load(MAGIC, 1, dsv, &flag)) {
 #endif
         hiScore = dsv.hi;
-        if (flag == 1 && dsv.stage < 16) hasSave = true;
+        if (flag == 1) hasSave = true;
         sv = dsv;
         musicV = dsv.musicV <= 4 ? dsv.musicV : 4; fxV = dsv.fxV <= 4 ? dsv.fxV : 4;
     }

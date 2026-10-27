@@ -165,3 +165,18 @@ DESCENT = ['..wyyyyyyyyyyr..',                              # the old descent st
 GANTRY = ['..r...',                                         # the launch gantry by the start pad (the game blinks its light)
           '..n...'] + ['nnnnnn', 'n.n..n', 'n..n.n', 'n.n..n', 'n..n.n'] * 6
 PUMP = ['wwww', 'yyyy', 'yyyy', 'ykky', 'ykky', 'yyyy', 'yyyy', 'ynny', 'yyyy']   # the fuel pump by the base pad
+
+MOTHERSHIP = ['...............kkkkkkk...............',      # the boss: a mothership over the aliens' collector
+              '.............kkcwwgggckk.............',
+              '............kcwwgggggggck............',
+              '............kggggggggggggk...........',
+              '......kkkkkkkkkkkkkkkkkkkkkkkkk......',
+              '...kkkwwssssssssssssssssssssssnnkkk..',
+              '.kkwwssssssssssssssssssssssssssssnnkk',
+              'kwsysssysssysssysssysssysssysssyssnnk',
+              'knnsssssssssssssssssssssssssssssssnnk',
+              '.kknnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnkk.',
+              '...kkknnnnrnnnnnnnrnnnnnnnrnnnnkkk...',
+              '......kkkkkkknngggggggnnkkkkkkk......',
+              '............kkgglllllggkk............',
+              '..............kkgggggkk..............']
