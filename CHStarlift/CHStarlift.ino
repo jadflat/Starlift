@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.8"
+#define SL_VERSION "0.9"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -642,12 +642,12 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     // Newton: gravity, the engine along the hull, a little drag in an atmosphere, the wind
     const Planet &p = PLR;
     static uint8_t gacc;                                             // gravity in 1/1024 px a frame squared: carry the quarters
-    gacc = (uint8_t)(gacc + p.grav * 5 / 2 + (sector ? p.grav / 4 : 0));     // a heavy lander: two and a half times the worlds' gravity
+    gacc = (uint8_t)(gacc + p.grav * 11 / 4 + (sector ? p.grav / 4 : 0));    // a heavy lander: two and three quarter times the worlds' gravity
     lvy += gacc >> 2; gacc &= 3;
     if (thrusting) {
-        int t = (142 + engineUp * 7) * 32 / (32 + seats) * thrLvl / 6;                  // passengers are heavy; the engine takes a moment to spool up
+        int t = (104 + p.grav * 5 / 4 + engineUp * 7) * 48 / (48 + seats) * thrLvl / 6;   // the engine suits the world (a full load still climbs on the heaviest); passengers are heavy; it spools up
         if (LY() < TOP) t = LY() > -24 ? t * (LY() + 24) / (TOP + 24) : 0;            // above the screen the air thins fast: no hanging up there
-        lvx += (int16_t)((t * 3 * sinA(ang)) >> 11);                          // the push sideways half as strong again: tilting carries you across
+        lvx += (int16_t)((t * 5 * sinA(ang)) >> 12);                          // the push sideways a quarter as strong again
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
         if (thr && (diff || (frameNo & 1))) fuel--;                         // (easy: half the fuel)
         if (fuel == FUEL_MAX / 3) { sfx(S_LOW); say(MS_LOW_FUEL, 50); }

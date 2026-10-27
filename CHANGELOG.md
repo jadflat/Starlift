@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9 (2026-10-27)
+
+- Heavier: gravity 2.75 times each world's (was 2.5).
+- Less sideways push: tilting adds a quarter (was a half) again to the sideways thrust.
+- Weaker engine, now matched to each world: 104 + 1.25 x the world's gravity (was 142 everywhere), so it is weaker
+  against gravity on every world but a full load can still climb on the heaviest; passengers weigh a little less.
+
 ## 0.8 (2026-10-27)
 
 - A charge shot: hold B (the guns keep firing) and sparks gather at the nose until it glows; let go for a plasma ball that
