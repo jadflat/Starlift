@@ -1616,17 +1616,24 @@ static void drawEnemies() {
         case E_MINE: blit((frameNo & 4) ? C_MINE0 : C_MINE1, sx - 4, sy - 4, false, solid); break;
         case E_WORM: {
             const int gy = groundAt(e.x >> 4);
+#ifdef SL_TRACE
+            if ((frameNo & 15) == 0) fprintf(stderr, "wormdraw f%d sx%d gy%d st%d\n", frameNo, sx, gy, e.st);
+#endif
             if (e.st == 0) {                                            // the sand heaves and ripples above it
-                for (int k = -9; k <= 9; k++) { const int h = (10 - absi(k)) / 3 + (isin(frameNo * 16 + k * 40) > 60); if (h > 0) R(sx + k, gy - h, 1, h, absi(k) < 4 ? C_GNDL : C_GND); }
-                for (int k = 1; k < 4; k++) pset(sx - sgn(e.vx) * (12 + k * 5 + (frameNo >> 1) % 5), gy - 1, C_GNDL);
+                for (int k = -9; k <= 9; k++) { const int h = (11 - absi(k)) / 2 + (isin(frameNo * 16 + k * 40) > 60); if (h > 0) { R(sx + k, gy - h, 1, h, C_GNDL); pset(sx + k, gy - h, C_GNDD); } }   // a dark crest you can follow
                 if ((frameNo & 3) == 0) part((e.x >> 4) + rnd(9) - 4, gy - 2, rnd(10) - 5, -6 - rnd(8), 12, C_GNDL);
             } else {                                                    // risen: a ringed body and a mouth of teeth
-                const int h = e.st == 1 ? e.t * 3 / 2 : e.st == 2 ? 30 : 30 - e.t * 3 / 2;
-                for (int y = 0; y < h; y += 3) { R(sx - 6, gy - y - 3, 13, 3, ((y / 3) & 1) ? C_GND : C_GNDD); R(sx - 6, gy - y - 3, 2, 3, solid != 255 ? C_WHITE : C_GNDL); }
-                const int ty = gy - h;
-                R(sx - 7, ty - 3, 15, 4, C_INK);
-                for (int k = 0; k < 7; k++) pset(sx - 6 + k * 2, ty - 3 + (k & 1), C_WHITE);
-                R(sx - 3, ty - 2, 7, 2, (frameNo & 4) ? C_RED : C_ACC);
+                const int h = e.st == 1 ? e.t * 7 / 4 : e.st == 2 ? 34 : 34 - e.t * 7 / 4;
+                int ox = 0;
+                for (int y = 0; y < h; y += 3) {                         // steel-grey rings, swaying, lit on the left
+                    ox = isin(frameNo * 4 + y * 8) / 64;
+                    const int x0 = sx - 7 + ox;
+                    R(x0, gy - y - 3, 15, 3, solid != 255 ? C_WHITE : C_STEEL); R(x0, gy - y - 3, 3, 3, C_SILVER); hl(x0, gy - y - 3, 15, C_INK);
+                }
+                const int ty = gy - h, mx = sx - 8 + ox;
+                R(mx, ty - 4, 17, 5, C_INK);                              // the maw: a red-gold throat, teeth above and below
+                R(mx + 3, ty - 3, 11, 3, (frameNo & 4) ? C_RED : C_GOLD);
+                for (int k = 1; k < 17; k += 2) pset(mx + k, ty - 4, C_WHITE);
                 if (frameNo & 1) part((e.x >> 4) + rnd(17) - 8, gy - 1, rnd(16) - 8, -8 - rnd(10), 14, C_GNDL);
             }
             break;
