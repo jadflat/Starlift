@@ -2,7 +2,7 @@
 synth (CHStarlift/Synth.cpp). A theremin (a near-sine voice that glides between notes and wavers), vibraphones, bells
 and a soft bass, mostly over light drums.
 
-  0 title     MARCH      C major, 116 bpm             a simple loud march (THEREMIN, C lydian augmented, is kept for later)
+  0 title     STARRISE   C major, 100 bpm             a singing tune over C, Am, F, G (THEREMIN, C lydian augmented, is kept for later)
   1 the moon  TRANQUIL   F lydian, 80 bpm             slow bells and a drone, almost no drums
   2 ruins     SANDS      E double harmonic, 100 bpm   an exotic theremin line over a half-time groove
   3 bases     OUTPOST    D dorian, 120 bpm            a busy sequencer and a pulse, four on the floor
@@ -205,23 +205,23 @@ add('COSMOS', 88, 10, [THEREMIN, SOFT_BASS, BELL_ECHO], lead_stream(57, 'mixolyd
     bass_stream(57, 'pulse', sh), 4, drums('soft'), shift=19)
 
 
-# ---- the title: MARCH. A simple, loud space march in C major to hear across the room: a bright lead, a pumping bass,
-# the vibes an octave up, four on the floor
-LEAD_LOUD = (1, 64, 1, 44, 114, 0, 104, 26, 4, 0, 6)
-BASS_PUMP = (1, 60, 6, 12, 112, 4, 44, 18, 0, 0, 16)
-VIBES_ECHO = (4, 80, 5, 0, 70, 3, 0, 16, 2, 0, 10)
-P = {'A': [0, N, 2, N, 4, N, 7, N, 9, N, 7, N, 4, N, N, N],
-     'B': [5, N, 4, N, 2, N, 4, N, 0, H, H, H, N, N, N, N],
-     'C': [7, N, 7, N, 9, N, 7, N, 11, N, 9, N, 7, N, N, N],
-     'D': [9, N, 7, N, 4, N, 2, N, 0, H, H, H, N, N, N, N]}
-order = list('ABAB' + 'CDCD' + 'ABAB' + 'CDAD')
-sh = [0, 0, 0, 0, 5, 5, 7, 7]
-add('MARCH', 116, 10, [LEAD_LOUD, BASS_PUMP, VIBES_ECHO], lead_stream(72, 'major', P, order, [0] * 8),
-    bass_stream(60, 'seq', sh), 2, drums('four'), shift=12)
+# ---- the title: STARRISE. A pleasant, singing tune in C major over C, Am, F, G: a round lead with a gentle vibrato,
+# a warm pulsing bass, the vibes echoing an octave up, light drums; still loud enough to hear across a room
+LEAD_SING = (1, 40, 1, 22, 116, 0, 100, 16, 6, 3, 5)
+BASS_WARM = (1, 34, 2, 8, 108, 2, 60, 16, 0, 0, 12)
+VIBES_ECHO = (4, 76, 5, 0, 66, 3, 0, 16, 2, 0, 10)
+P = {'A': [4, H, H, 2, 0, H, 2, H, 4, H, 7, H, 4, H, H, H],
+     'B': [5, H, 4, H, 2, H, 4, H, 2, H, H, H, N, N, N, N],
+     'C': [7, H, H, 9, 7, H, 4, H, 5, H, 4, H, 2, H, H, H],
+     'D': [4, H, 2, H, 0, H, H, H, H, H, H, H, N, N, N, N]}
+order = list('ABAC' + 'ABAD' + 'CCAB' + 'ACAD')
+sh = [0, 0, -3, -3, 5, 5, 7, 7]
+add('STARRISE', 100, 6, [LEAD_SING, BASS_WARM, VIBES_ECHO], lead_stream(72, 'major', P, order, [0] * 8),
+    bass_stream(60, 'pulse', sh), 4, drums('soft'), shift=12)
 
 # 0 the title; 1..8 the planets in order (Moon, Ares, Cryo, Verda, Vulcan, Titan, Prism, Zorg)
 byname = {sg['name']: sg for sg in SONGS}
-ORDER = ('MARCH', 'TRANQUIL', 'SANDS', 'OUTPOST', 'JUNGLE', 'INVASION', 'COSMOS', 'SANDS', 'INVASION')
+ORDER = ('STARRISE', 'TRANQUIL', 'SANDS', 'OUTPOST', 'JUNGLE', 'INVASION', 'COSMOS', 'SANDS', 'INVASION')
 SONGS = [byname[n] for n in ORDER]
 
 # Each song is one self-contained blob in STARLIFT.DAT (tools/make_card.py puts it there); the game loads the one it

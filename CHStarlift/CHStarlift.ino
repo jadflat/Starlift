@@ -560,11 +560,11 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
             fireCd = 12; sfx(S_LASER);
         }
     }
-    if (thr && fuel > 0) { if (thrLvl < 6) thrLvl++; } else if (thrLvl) thrLvl = thrLvl > 2 ? thrLvl - 2 : 0;   // the engine spools up and down
+    if (thr && fuel > 0) { if (thrLvl < 8) thrLvl++; } else if (thrLvl) thrLvl = thrLvl > 2 ? thrLvl - 2 : 0;   // the engine spools up and down
     thrusting = thrLvl > 0;
     if (lst == 1) {                                                  // on the ground
         rotT = 0;
-        if (thrLvl >= 4) { lst = 0; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
+        if (thrLvl >= 6) { lst = 0; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
         else {
             synth::engine(0);
             for (auto &it : items)                                   // things beside the lander are loaded
@@ -612,10 +612,11 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     // Newton: gravity, the engine along the hull, a little drag in an atmosphere, the wind
     const Planet &p = PLR;
     static uint8_t gacc;                                             // gravity in 1/1024 px a frame squared: carry the quarters
-    gacc = (uint8_t)(gacc + p.grav + (sector ? p.grav / 8 : 0));
+    gacc = (uint8_t)(gacc + p.grav * 11 / 8 + (sector ? p.grav / 6 : 0));   // a heavy lander: the worlds' gravity, a third more
     lvy += gacc >> 2; gacc &= 3;
     if (thrusting) {
-        const int t = (64 + engineUp * 5) * 32 / (32 + seats) * thrLvl / 6;           // passengers are heavy; the engine takes a moment to spool up
+        int t = (76 + engineUp * 5) * 32 / (32 + seats) * thrLvl / 8;                  // passengers are heavy; the engine takes a moment to spool up
+        if (LY() < TOP) t = t * (LY() + 200) / (TOP + 200);                          // above the screen the air thins and the engine fades
         lvx += (int16_t)((t * sinA(ang)) >> 10);
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
         if (thr) fuel--;
@@ -632,7 +633,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     }
     lvx = (int16_t)clampi(lvx, -700, 700); lvy = (int16_t)clampi(lvy, -600, 700);
     lx += lvx; ly += lvy;
-    if (LY() < CEIL) { ly = (int32_t)CEIL << 8; if (lvy < 0) lvy = 0; }
+    if (LY() < -200) { ly = -200 << 8; if (lvy < 0) lvy = 0; }          // no ceiling: up and out of the screen, until the air runs out
     if (lx < (10 << 8)) { lx = 10 << 8; lvx = 0; }
     if (lx > ((W - 10) << 8)) { lx = (W - 10) << 8; lvx = 0; }
     // the ground: the feet (or, gear up, the descent stage) and the hull's other corners
@@ -1662,6 +1663,7 @@ static void drawLander() {
             for (int d = -1; d <= 1; d += 2) { const int x = sx + d * rr; pset(x, y, c); if (rr > 4) { pset(x - d, y - 1, c); if ((x + frameNo) & 1) pset(x + d, y - 2, C_GND); } }
         }
     }
+    if (sy < TOP - 8 && (frameNo & 4)) { const int ax = clampi(sx, 3, 124); pset(ax, 17, C_GOLD); hl(ax - 1, 18, 3, C_GOLD); }   // above the screen: an arrow
     const int a = absi(ang);
     if (!gear) blit(*LANDER_UP[a], sx - 11, sy - 11, ang < 0); else if (a < 3) blit(*LANDER[a], sx - 11, sy - 11, ang < 0); else blit(*LANDER_STEEP[a - 3], sx - 11, sy - 11, ang < 0);
     if (absi(ang) < 3) {                                             // the gun pod
@@ -1730,7 +1732,7 @@ static void drawHud() {
     }
     for (const auto &it : items) if (it.st == 1 && (frameNo & 8)) pset(4 + it.x / 16, 13, C_GOLD);
     for (const auto &e : en) if (e.kind) pset(4 + (e.x >> 4) / 16, 9 + ((e.y >> 4) - TOP) * 6 / 112, e.kind == E_UFO ? C_GREEN : C_RED);
-    if (frameNo & 4) pset(4 + LX() / 16, 9 + (LY() - TOP) * 6 / 112, C_GOLD);
+    if (frameNo & 4) pset(4 + LX() / 16, 9 + (LY() > TOP ? (LY() - TOP) * 6 / 112 : 0), C_GOLD);
 }
 
 static void drawWorld() {
