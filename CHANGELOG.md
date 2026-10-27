@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16 (2026-10-27)
+
+- Smoother late stages: each stage now draws three of its world's six buildings (the other stage the other three), packed
+  into two SD-card blocks, and the mothership comes from the stage's own pictures; a frame now needs about as many card
+  blocks as the cache holds. Simulator, autopilot, play only: card reads per frame on stage 15 (Prism) ~0.3 and stage
+  16 (Zorg) ~0.5, from about one or more.
+- The takeaway: a saucer's order now takes four times as long to come up, and a single bump knocks it loose (the
+  speeder comes for it, as when the saucer is shot down).
+- Bumps are gentler: a bump from below pushes the lander sideways only (no more being slammed into the ground), from
+  above it bounces up.
+- To make room: the who's-who card's mothership row (the stage opens with its call-out), two flashing texts steady.
+
 ## 0.15 (2026-10-27)
 
 - Smoother on busy worlds: the pictures drawn every frame now share three SD-card blocks, the card cache has a seventh

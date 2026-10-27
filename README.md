@@ -34,7 +34,7 @@ Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
 - **The scanner** at the top shows the whole stage: colonists, enemies, items, the base. An arrow at the screen's edge
   points to the next job.
 
-- **Takeaway.** Shoot down a saucer while its order is coming up from the takeaway and the bag drops: a speeder bike
+- **Takeaway.** Shoot down a saucer while its order is coming up from the takeaway, or just bump it, and the bag drops: a speeder bike
   races out, grabs it and tosses it into the lander's flip-top lid. Stingers go for the speeder, so cover it. Bring the
   food home for a **FEAST FIESTA**: fireworks, points and a treat from that world's food (an extra lander, a better
   engine or a mended hull).

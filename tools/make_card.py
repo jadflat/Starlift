@@ -141,26 +141,77 @@ CRAWL_N = ['', 'HOPPER', 'BEETLE', 'SNAIL']
 PLANT_N = ['ROCK', 'SPIKES', 'BULB', 'FERN', 'FLOWER', 'TUBE', 'EYE', 'CACTUS', 'MUSH']
 SKY_N = [n if f else None for n, f, x, y in skies.SKIES]
 FOOD_N = ['BURGER', 'NOODLES', 'ICECREAM', 'PIZZA', 'HOTDOG', 'FISH', 'SUSHI', 'PIE']
-index = bytearray()
+import itertools
+
+
+def put(names):
+    """Copy pictures into the picture section from the current block on (none straddling a block); their index entries."""
+    global pics
+    ent = {}
+    for n in names:
+        o, pw, ph, ln = where[n]
+        if ln <= 512 and (len(pics) % 512) + ln > 512:
+            pics += bytes(512 - len(pics) % 512)
+        assert len(pics) < 65536
+        ent[n] = struct.pack('<HBB', len(pics), pw, ph)
+        pics += pics[o:o + ln]
+    return ent
+
+
+def blocks(names):                                                # blocks a group takes, packed largest first
+    used = []
+    for ln in sorted((where[n][3] for n in names), reverse=True):
+        for k in range(len(used)):
+            if used[k] + ln <= 512:
+                used[k] += ln
+                break
+        else:
+            used.append(ln)
+    return used
+
+
+# one index per stage (Pack, 23 pictures): the two stages of a world share its pictures, but each draws three of its six
+# buildings, packed into as few blocks as they go (a frame then reads about seven blocks: the cache holds seven)
+idx = [None] * 16
 for wi, w in enumerate(WORLDS):
     names = ['SKY_' + SKY_N[SKY[w['sky']]] if SKY_N[SKY[w['sky']]] else None, 'GI_' + life.GIANT_OF[wi]]
     names += ['PL_%s%d' % (pn, f) for pn in w['plants'] for f in (0, 1)]
     names += ['CR_%s%d' % (FLY_N[FLY[w['fly']]], f) if FLY[w['fly']] else None for f in (0, 1)]
     names += ['CR_%s%d' % (CRAWL_N[CRAWL[w['crawl']]], f) if CRAWL[w['crawl']] else None for f in (0, 1)]
-    names += structures.THEMES[TH[w['theme']]] if TH[w['theme']] else [None] * 6
-    names += ['BURGER', 'FOOD%d' % FOOD[w['food']], ['BASE', 'BASE1', 'BASE2', 'BASE3'][w['base']], ['BUCKET', 'COLL1', 'COLL2', 'COLL3'][w['coll']]]
-    assert len(names) == 22
+    st = structures.THEMES[TH[w['theme']]] if TH[w['theme']] else []
+    rest = ['BURGER', 'FOOD%d' % FOOD[w['food']], ['BASE', 'BASE1', 'BASE2', 'BASE3'][w['base']], ['BUCKET', 'COLL1', 'COLL2', 'COLL3'][w['coll']]]
     pics += bytes(-len(pics) % 512)                               # each pack starts on a block
-    for n in names:
-        if n is None:
-            index += bytes(4)
-            continue
-        o, pw, ph, ln = where[n]
-        if ln <= 512 and (len(pics) % 512) + ln > 512:
-            pics += bytes(512 - len(pics) % 512)
-        assert len(pics) < 65536
-        index += struct.pack('<HBB', len(pics), pw, ph)
-        pics += pics[o:o + ln]
+    ent = put([n for n in names if n] + ['MOTHERSHIP'])              # (the mothership: in the critters' block, which has room)
+    groups = [[], []]
+    if st:                                                        # the split of the six with the fewest blocks a stage
+        best = min((c for c in itertools.combinations(st, 3) if st[0] in c),
+                   key=lambda c: (max(len(blocks(c)), len(blocks([n for n in st if n not in c]))), len(blocks(c)) + len(blocks([n for n in st if n not in c]))))
+        groups = [list(best), [n for n in st if n not in best]]
+        for gr in groups:
+            pics += bytes(-len(pics) % 512)
+            gr.sort(key=lambda n: -where[n][3])
+            order = []                                            # largest first, each block filled up with the next that fit
+            left = list(gr)
+            while left:
+                room, blk = 512, []
+                for n in list(left):
+                    if where[n][3] <= room:
+                        blk.append(n); room -= where[n][3]; left.remove(n)
+                order += blk
+                ent.update(put(blk))
+                pics += bytes(-len(pics) % 512) if left else b''
+    ent.update(put(rest))
+    for sec in (0, 1):
+        r = bytearray()
+        for n in names:
+            r += ent[n] if n else bytes(4)
+        for k in range(6):
+            r += ent[groups[sec][k % 3]] if st else bytes(4)
+        for n in rest + ['MOTHERSHIP']:
+            r += ent[n]
+        assert len(r) == 92
+        idx[sec * 8 + wi] = r
+index = bytearray(b''.join(idx))
 pics = padded(bytes(pics))
 songs = padded(open(os.path.join(CARD, 'songs.bin'), 'rb').read())
 txt = padded(bytes(txt))
@@ -183,7 +234,7 @@ open(os.path.join(ROOT, 'CHStarlift', 'CardIndex.h'), 'w', newline='').write(
     "static const uint32_t CARD_HASH = 0x%08Xu;\n"
     "static const uint32_t CARD_PIC = %d, CARD_SONG = %d, CARD_TXT = %d;\n"
     "// the how-to-play lines: page, x, y, colour, then the text (ending in 0)\n"
-    "static const uint32_t CARD_PACK = %d;   // each world's pack index: 88 bytes\n"
+    "static const uint32_t CARD_PACK = %d;   // each stage's pack index (stage & 15): 92 bytes\n"
     "static const uint32_t CARD_MSG = %d;\n"
     "enum : uint8_t { %s };\n"
     "static const uint32_t CARD_PLANET = %d;\n#define PLANET_LEN %d\n"

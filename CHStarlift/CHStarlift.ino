@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.15"
+#define SL_VERSION "0.16"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -78,7 +78,7 @@ static NOINL void sfx(uint8_t id) { synth::sfx(SOUNDS[id]); }
 // ---- the planets ------------------------------------------------------------------------------------------------
 //                 SKY0           SKY1             FAR              MID              NEAR            GNDD            GND              GNDL             ACC
 // the pictures this world draws, from its pack on the card (tools/make_card.py), the ones every frame needs first
-struct Pack { CSpr sky, giant, plant[3][2], crit[2][2], st[6], shop, food, base, coll; };
+struct Pack { CSpr sky, giant, plant[3][2], crit[2][2], st[6], shop, food, base, coll, mother; };
 static Pack PK;
 static Planet PLR;                                         // the world being shown, loaded from the card (CARD_PLANET)
 static_assert(sizeof(Planet) == PLANET_LEN, "Planet must match tools/make_card.py");
@@ -814,6 +814,15 @@ static NOINL void eshot(int x, int y, int tx, int ty, int speed, uint8_t kind) {
     }
 }
 
+// a saucer collecting its order (4), or away with it (5, cargo 0), loses it: a shot or a bump knocks the bag loose
+static NOINL void snatch(Enemy &e, int x, int y) {
+    if (e.st != 4 && (e.st != 5 || e.cargo)) return;
+    const int by = e.st == 4 ? groundAt(burgerX + 35) - 8 - e.cargo / 2 : y + 6;   // the bag where it was: in the beam, or aboard
+    addScore(500 * (sector + 1), x, by - 16); say(MS_FOOD_SNATCHED, 60);
+    if (!dlv && !foodOn) { dlv = 1; bagX = x; bagY = by; }
+    e.st = 5; e.cargo = 1;                                              // off it goes, empty-handed
+}
+
 static void killEn(Enemy &e) {
     static const uint16_t PTS[7] = { 0, 150, 100, 50, 200, 1000, 5000 };
     const int x = e.x >> 4, y = e.y >> 4;
@@ -841,10 +850,7 @@ static void killEn(Enemy &e) {
                 m.st = M_JET; m.x = (int16_t)(x + (k & 1 ? 1 : -1) * (k * 3)); m.y = (int16_t)(sy << 2); m.vy = -6; k++;
             }
         if (k) { say(k > 1 ? MS_JETPACKS_GO : MS_BAIL_OUT, 50); sfx(S_CATCH); }
-        if (e.st == 4 || e.st == 5) {                                                   // its takeaway order drops: the speeder will bring it
-            addScore(500 * (sector + 1), x, y - 16); say(MS_FOOD_SNATCHED, 60);
-            if (!dlv && !foodOn) { dlv = 1; bagX = x; bagY = y + 6; }
-        }
+        snatch(e, x, y);
         for (int i = 0; i < 10; i++) part(x, y, rnd(64) - 32, rnd(30) - 24, 30, i & 1 ? C_SILVER : C_GREEN);   // the saucer's plates
         shake = 6;
     }
@@ -936,7 +942,7 @@ static void updateEnemies() {
             } else if (e.st == 4) {                                           // the order comes up in the beam
                 e.vx = e.vy = 0;
                 if ((e.t % 14) == 0 && absi(ex - X) < 90) sfx(S_BEAM);
-                if (++e.cargo >= 2 * (groundAt(burgerX + 35) - 8 - ey)) { e.st = 5; e.cargo = 0; }
+                if ((frameNo & 3) == 0 && ++e.cargo >= 2 * (groundAt(burgerX + 35) - 8 - ey)) { e.st = 5; e.cargo = 0; }   // slowly
             } else {                                                          // away up into the sky
                 e.vx = 0; e.vy = -22;
                 if (ey < -10) { e.kind = E_NONE; break; }
@@ -1002,8 +1008,9 @@ static void updateEnemies() {
         if (e.kind == E_WORM) { if (e.x < 160) e.x = 160; if (e.x > (W - 10) * 16) e.x = (W - 10) * 16; if (e.st != 2) continue; }
         if (lst != 2 && absi(nx - X) < 10 && absi(ny - Y) < (e.kind == E_WORM ? 20 : 9)) {
             if (e.kind == E_UFO) {                                            // a bump: no harm done, the ships bounce apart
-                lvx = X >= nx ? 300 : -300; lvy = Y >= ny ? 220 : -220;
-                e.x = (int16_t)(e.x - lvx / 6);
+                snatch(e, nx, ny);
+                lvx = X >= nx ? 160 : -160; if (Y < ny) lvy = -160;   // (from above: up; from below: sideways only, never slammed into the ground)
+                e.x = (int16_t)(e.x - lvx / 3);
                 if (!bumpT) {
                     if (rnd(5) == 0) for (auto &c : crit) if (!c.kind) { c = { (int16_t)nx, (int16_t)(ny + 4), (int8_t)(X < nx ? 1 : -1), 3, 0 }; say(MS_COW, 50); break; }
                     sfx(S_CLANG); shake = 3; bumpT = 12;
@@ -1760,7 +1767,7 @@ static void drawEnemies() {
             break;
         }
         case E_MOTHER:
-            blit(C_MOTHERSHIP, sx - 18, sy - 7, false, solid, EMAP);
+            blit(PK.mother, sx - 18, sy - 7, false, solid, EMAP);
             if (frameNo & 8) pset(sx - 16 + ((frameNo >> 2) % 9) * 4, sy, C_RED);       // a light running round its rim
             R(sx - 12, sy - 10, e.hp * 24 / clampi(40 + stage * 2, 40, 120), 1, C_RED);                 // how much it can still take
             break;
@@ -2049,7 +2056,6 @@ static void drawIntro() {
         blit(C_MINE0, 13, y + 1, false); row(MS_R_MINE, C_GOLD);
         if (has[E_TURRET]) { blit(C_TURRET, 11, y + 3, false); row(MS_R_TURRET, C_RED); }
         if (has[E_WORM]) { R(11, y + 4, 13, 6, C_GND); R(13, y + 2, 9, 3, C_RED); row(MS_R_WORM, C_RED); }
-        if (has[E_MOTHER]) { blit(C_MOTHERSHIP, -7, y, false); row(MS_R_MOTHER, C_RED); }
         return;
     }
     fmt(s, T(MS_STAGE_N), stage + 1);
@@ -2060,7 +2066,7 @@ static void drawIntro() {
     textC(64, s, C_GREEN);
     fmt(s, T(MS_GRAVITY_0), gHund(), T(MS_G));
     textC(74, s, C_SILVER);
-    textC(85, T(baseRight ? MS_BASE_IS_EAST : MS_BASE_IS_WEST), (frameNo & 8) ? C_ACC : C_WHITE);
+    textC(85, T(baseRight ? MS_BASE_IS_EAST : MS_BASE_IS_WEST), C_ACC);
 #endif
 }
 
@@ -2097,7 +2103,7 @@ static void draw() {
         fmt(s, T(MS_FUEL_BONUS), fuel / 4);
         textC(54, s, C_SILVER);
         textC(64, fmt(s, T(MS_TALLY), feasts, T(MS_COWS), cowsN), C_GOLD);
-        if (nSaved == nMen) textC(76, T(MS_ALL_HOME_2000), (frameNo & 4) ? C_GREEN : C_WHITE);
+        if (nSaved == nMen) textC(76, T(MS_ALL_HOME_2000), C_GREEN);
 #endif
         break;
     }
@@ -2178,6 +2184,9 @@ static void botInput(bool &l, bool &r, bool &u, bool &d, bool &a, bool &b) {
 
 static void update() {
     frameNo++;
+#ifdef SL_TRACE
+    { static uint8_t ls = 255; if (state != ls) { fprintf(stderr, "state %d\n", (int)state); ls = state; } }
+#endif
     bool l = chgame.pressed(LEFT_BUTTON), r = chgame.pressed(RIGHT_BUTTON), u = chgame.pressed(UP_BUTTON), d = chgame.pressed(DOWN_BUTTON);
     bool a = chgame.pressed(A_BUTTON), b = chgame.pressed(B_BUTTON);
 #ifdef SL_BOT
@@ -2269,6 +2278,7 @@ static void update() {
             if (!once) {
                 once = true;
                 if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
+                else if (SL_DLV == 4) { if (Enemy *e = spawnEn(E_UFO, LX(), LY() - 26)) { e->st = 4; e->cargo = 10; } }
                 else if (SL_DLV == 3) { crit[0] = { (int16_t)(LX() + 40), (int16_t)groundAt(LX() + 40), 1, 4, 100 }; spawnEn(E_UFO, LX() + 40, 40); }
                 else { dlv = 2; bagX = LX() + 40; bagY = groundAt(bagX) - 3; scX = LX() - 70; scY = groundAt(scX) - 7; crit[0] = { (int16_t)(LX() + 20), 30, 1, 3, 0 }; }
             }
@@ -2380,7 +2390,7 @@ void loop() {
     card::frame();
     if (!card::ok() && (frameNo % 60) == 2) card::open();
     if (loadReq && card::ok() && card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)
-        && card::copy((uint8_t *)&PK, CARD_PACK + (uint32_t)(stage & 7) * sizeof(Pack), sizeof(Pack))) {
+        && card::copy((uint8_t *)&PK, CARD_PACK + (uint32_t)(stage & 15) * sizeof(Pack), sizeof(Pack))) {
         loadReq = false;
         genStage();
         applyPalette();
