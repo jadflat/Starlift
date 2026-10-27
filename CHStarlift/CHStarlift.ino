@@ -433,7 +433,7 @@ static void genStage() {
     memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
     placeLanderOnPad(startPadX);
     cam = clampi(LX() - 64, 0, W - 128);
-    spawnT = 300; endT = 0; lightT = 0; warnT = 0;
+    spawnT = 450; endT = 0; lightT = 0; warnT = 0;
     for (auto &t : topsAt) t = -9999;                              // a new world: the layers' tops are made afresh
     wxLvl = (uint8_t)rnd(4);
 #ifdef SL_STORM
@@ -625,7 +625,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     if (thrusting) {
         int t = (120 + engineUp * 6) * 32 / (32 + seats) * thrLvl / 6;                  // passengers are heavy; the engine takes a moment to spool up
         if (LY() < TOP) t = t * (LY() + 200) / (TOP + 200);                          // above the screen the air thins and the engine fades
-        lvx += (int16_t)((t * sinA(ang)) >> 10);
+        lvx += (int16_t)((t * 3 * sinA(ang)) >> 11);                          // the push sideways half as strong again: tilting carries you across
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
         if (thr) fuel--;
         if (fuel == FUEL_MAX / 4) { sfx(S_LOW); say(MS_LOW_FUEL, 50); }
@@ -816,14 +816,14 @@ static void updateEnemies() {
     }
     bool idle = false;
     for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE) idle = true;
-    const int want = clampi(1 + stage * 2 / 3, 1, 8);
+    const int want = clampi(1 + stage / 2, 1, 6);
     if (spawnT) spawnT--;
     else if (fliers < want) {
         const int side = rnd(2) ? 1 : -1;
         const int x = clampi(cam + 64 + side * (150 + rnd(110)), 20, W - 20);
         uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) ? E_STINGER : E_MINE);
         if (Enemy *e = spawnEn(k, x, 28 + rnd(30))) { if (k == E_UFO) { sfx(S_UFO); } e->vx = (int8_t)(-side * 8); }
-        spawnT = clampi(170 - stage * 6, 50, 170);
+        spawnT = clampi(240 - stage * 8, 90, 240);                   // enemies come spaced out: time for a rescue between them
     }
     for (int ei = 0; ei < ENS; ei++) {
         Enemy &e = en[ei];
@@ -833,7 +833,7 @@ static void updateEnemies() {
         const int ex = e.x >> 4, ey = e.y >> 4;
         switch (e.kind) {
         case E_UFO: {
-            const int sp = (12 + stage / 2) * (8 - e.cargo) / 8;            // slower with each colonist aboard
+            const int sp = (9 + stage / 2) * (8 - e.cargo) / 8;            // slower with each colonist aboard
             if (e.st == 0) {                                                  // seek a colonist on the ground
                 if (e.target == 255 || men[e.target].st != M_IDLE) {
                     e.target = 255;
