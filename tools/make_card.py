@@ -1,0 +1,152 @@
+"""Builds STARLIFT.DAT, the game's file on the SD card, and CHStarlift/CardIndex.h, which the game is compiled against.
+
+  block 0           "STARLIFT", the build's hash (a CRC-32 of the rest), the sections' first blocks
+  CARD_PIC blocks   the big pictures (tools/make_sprites.py: out/card/pics.bin)
+  CARD_SONG blocks  the songs, one blob each (tools/make_music.py: out/card/songs.bin)
+  CARD_TXT blocks   the how-to-play text
+  CARD_PLANET       the eight worlds, PLANET_LEN bytes each
+
+Runs both generators first. Run: python tools/make_card.py   (copy out/card/STARLIFT.DAT to the card's root)
+"""
+import os
+import struct
+import subprocess
+import sys
+import zlib
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.join(HERE, '..')
+CARD = os.path.join(ROOT, 'out', 'card')
+
+for g in ('make_sprites.py', 'make_music.py'):
+    subprocess.run([sys.executable, os.path.join(HERE, g)], check=True)
+
+
+def padded(b):
+    return b + bytes(-len(b) % 512)
+
+
+# the how-to-play pages: (page, x, y, colour, text); colours are the game's (Game.h: 1 white, 4 green, 11 accent, 12 silver, 14 gold, 15 red)
+WH, GR, AC, SI, GO, RE = 1, 4, 11, 12, 14, 15
+HELP = [
+    (0, 9, 24, WH, "LEFT/RIGHT  TURN THE LANDER"), (0, 9, 32, SI, "A           MAIN ENGINE"), (0, 9, 40, WH, "B           LANDING GEAR"),
+    (0, 9, 48, SI, "UP          LASER"), (0, 9, 56, WH, "START       PAUSE MENU"), (0, 9, 64, SI, "HOLD START  CHGAME MENU"),
+    (0, 9, 102, AC, "NEWTON RULES: NO BRAKES IN SPACE"),
+    (1, 8, 24, WH, "COLONISTS WAIT ON FLAT GROUND."), (1, 8, 32, GO, "LAND BESIDE THEM - NOT ON THEM!"),
+    (1, 8, 40, WH, "THEY RUN ABOARD: 8 SEATS."), (1, 8, 48, WH, "FLY THEM TO THE BASE PAD AT"), (1, 8, 56, WH, "THE FAR END. IT REFUELS AND"),
+    (1, 8, 64, WH, "REPAIRS THE LANDER."), (1, 8, 72, GO, "TO LAND: GEAR DOWN, LEVEL,"), (1, 8, 80, WH, "SLOW. EACH WORLD HAS ITS OWN"),
+    (1, 8, 88, WH, "GRAVITY AND SOME HAVE WIND."), (1, 8, 96, WH, "FULL SEATS ARE HEAVY."),
+    (2, 34, 22, WH, "UFOS BEAM COLONISTS UP AND"), (2, 34, 29, WH, "TAKE 5 HOME TO THEIR BUCKET."), (2, 34, 36, GR, "SHOOT ONE: THEY JET DOWN."),
+    (2, 34, 52, WH, "STINGERS SPIT PLASMA."), (2, 34, 70, WH, "MINES DRIFT TOWARDS YOU."), (2, 34, 86, WH, "TURRETS FIRE FLAK."),
+    (2, 9, 102, RE, "3 HITS AND THE LANDER IS LOST."),
+]
+
+# ---- the eight worlds: everything that makes each one itself (Game.h's struct Planet has the same layout, byte for byte)
+C = dict(INK=0, WHITE=1, SKY0=2, SKY1=3, GREEN=4, FAR=5, MID=6, NEAR=7, GNDD=8, GND=9, GNDL=10, ACC=11, SILVER=12, STEEL=13, GOLD=14, RED=15)
+TH = dict(MOON=0, RUINS=1, BASE=2, ALIEN=3)
+WX = dict(METEOR=0, DUST=1, SNOW=2, RAIN=3, ASH=4, DRIZZLE=5, GLINT=6, ACID=7)
+STY = dict(SMOOTH=0, JAGGED=1, MESA=2, SPIKES=3, CONES=4)
+SKY = dict(EARTH=0, SUN=1, AURORA=2, GIANT=3, REDSUN=4, RINGED=5, TWINSUN=6, MOONS=7)
+TL = dict(STONES=0, BRICKS=1, STRATA=2, CRYSTAL=3)
+FOOD = dict(BURGER=0, NOODLES=1, ICECREAM=2, PIZZA=3, HOTDOG=4, FISH=5, SUSHI=6, PIE=7)
+PL = dict(ROCK=0, SPIKES=1, BULB=2, FERN=3, FLOWER=4, TUBE=5, EYE=6, CACTUS=7, MUSH=8)
+FLY = dict(NONE=0, BAT=1, JELLY=2, RAY=3)
+CRAWL = dict(NONE=0, HOPPER=1, BEETLE=2, SNAIL=3)
+WORLDS = [
+    dict(name="THE MOON", base=0, coll=0, place="SEA OF TRANQUILITY", shop="BURGERS", food='BURGER', shopc='RED', basec='SILVER',
+         pal=[(2, 2, 10), (14, 14, 34), (92, 92, 104), (132, 132, 140), (74, 74, 84), (40, 40, 48), (112, 112, 120), (184, 184, 192), (40, 90, 230)],
+         grav=11, theme='MOON', wx='METEOR', sky='EARTH', style=('JAGGED', 'SMOOTH', 'SMOOTH'), tile='STONES', air=0, clouds='INK', crack='INK',
+         fly='NONE', crawl='NONE', plants=('ROCK', 'ROCK', 'ROCK'), wind=0, ads=("LUNA COLA", "CRATER WAX", "MOON PIES")),
+    dict(name="ARES", base=2, coll=2, place="VALLEY OF THE KINGS", shop="NOODLES", food='NOODLES', shopc='GOLD', basec='GNDL',
+         pal=[(120, 50, 50), (236, 150, 100), (190, 104, 84), (140, 60, 46), (92, 36, 32), (66, 24, 22), (152, 66, 40), (224, 128, 74), (255, 210, 110)],
+         grav=24, theme='RUINS', wx='DUST', sky='SUN', style=('SPIKES', 'MESA', 'JAGGED'), tile='BRICKS', air=1, clouds='SKY1', crack='INK',
+         fly='BAT', crawl='BEETLE', plants=('CACTUS', 'ROCK', 'FLOWER'), wind=3, ads=("RED SODA", "MUMMY WRAPS", "SAND SPA")),
+    dict(name="CRYO", base=1, coll=1, place="POLAR OUTPOST", shop="ICE CREAM", food='ICECREAM', shopc='ACC', basec='WHITE',
+         pal=[(4, 10, 40), (34, 70, 140), (150, 186, 228), (96, 132, 192), (56, 86, 146), (64, 92, 146), (172, 210, 240), (244, 250, 255), (0, 230, 255)],
+         grav=19, theme='BASE', wx='SNOW', sky='AURORA', style=('SPIKES', 'JAGGED', 'SMOOTH'), tile='STONES', air=1, clouds='INK', crack='GNDD',
+         fly='RAY', crawl='HOPPER', plants=('SPIKES', 'ROCK', 'TUBE'), wind=2, ads=("ICE-O-MATIC", "FROST FUEL", "SNOW TIRES")),
+    dict(name="VERDA", base=2, coll=3, place="THE LOST TEMPLE", shop="PIZZA", food='PIZZA', shopc='GREEN', basec='GNDL',
+         pal=[(64, 22, 96), (222, 112, 160), (130, 84, 148), (44, 112, 76), (22, 70, 46), (50, 34, 26), (44, 140, 60), (148, 224, 94), (255, 170, 60)],
+         grav=33, theme='RUINS', wx='RAIN', sky='GIANT', style=('SMOOTH', 'JAGGED', 'SMOOTH'), tile='STONES', air=2, clouds='FAR', crack='INK',
+         fly='JELLY', crawl='HOPPER', plants=('BULB', 'FERN', 'MUSH'), wind=0, ads=("VINE JUICE", "TEMPLE TOURS", "SPORE-TEX")),
+    dict(name="VULCAN", base=3, coll=0, place="THE FORGE", shop="HOT DOGS", food='HOTDOG', shopc='ACC', basec='STEEL',
+         pal=[(24, 0, 2), (150, 32, 12), (84, 24, 22), (50, 16, 18), (28, 10, 14), (22, 10, 10), (64, 32, 28), (124, 62, 42), (255, 124, 0)],
+         grav=41, theme='ALIEN', wx='ASH', sky='REDSUN', style=('CONES', 'JAGGED', 'JAGGED'), tile='STRATA', air=1, clouds='FAR', crack='ACC',
+         fly='BAT', crawl='BEETLE', plants=('FLOWER', 'ROCK', 'SPIKES'), wind=1, ads=("LAVA LAMPS", "MAGMA MINTS", "HOT ROCKS")),
+    dict(name="TITAN", base=1, coll=2, place="RING STATION", shop="FISH+CHIPS", food='FISH', shopc='STEEL', basec='GNDL',
+         pal=[(112, 60, 12), (232, 172, 72), (174, 114, 54), (124, 78, 42), (84, 52, 30), (70, 46, 26), (162, 112, 62), (222, 172, 104), (120, 230, 255)],
+         grav=9, theme='BASE', wx='DRIZZLE', sky='RINGED', style=('SMOOTH', 'MESA', 'SMOOTH'), tile='STRATA', air=2, clouds='SKY1', crack='INK',
+         fly='JELLY', crawl='SNAIL', plants=('TUBE', 'MUSH', 'ROCK'), wind=2, ads=("RING RENTALS", "GAS-O-LINE", "METHANE FIZZ")),
+    dict(name="PRISM", base=3, coll=1, place="CRYSTAL SANCTUM", shop="SUSHI", food='SUSHI', shopc='WHITE', basec='GNDL',
+         pal=[(20, 0, 40), (122, 40, 144), (94, 52, 146), (144, 72, 176), (72, 30, 104), (50, 20, 72), (150, 92, 194), (232, 172, 255), (90, 255, 230)],
+         grav=29, theme='RUINS', wx='GLINT', sky='TWINSUN', style=('SPIKES', 'SPIKES', 'JAGGED'), tile='CRYSTAL', air=0, clouds='INK', crack='ACC',
+         fly='RAY', crawl='SNAIL', plants=('SPIKES', 'BULB', 'EYE'), wind=0, ads=("GEM SHINE", "PRISM TV", "SPARKLE-OS")),
+    dict(name="ZORG", base=0, coll=3, place="ZORG PRIME", shop="GLORP PIES", food='PIE', shopc='GREEN', basec='STEEL',
+         pal=[(0, 10, 18), (22, 72, 72), (34, 64, 76), (22, 46, 56), (12, 28, 38), (14, 20, 26), (52, 72, 82), (112, 152, 162), (180, 255, 60)],
+         grav=37, theme='ALIEN', wx='ACID', sky='MOONS', style=('SMOOTH', 'MESA', 'SMOOTH'), tile='CRYSTAL', air=1, clouds='FAR', crack='INK',
+         fly='JELLY', crawl='BEETLE', plants=('EYE', 'TUBE', 'BULB'), wind=1, ads=("EAT GLORP", "ZORG-O-RAMA", "PROBE U")),
+]
+
+
+def fixed(t, n):
+    b = t.encode('ascii')
+    assert len(b) < n, t
+    return b + bytes(n - len(b))
+
+
+plan = bytearray()
+for w in WORLDS:
+    r = bytearray()
+    for c in w['pal']:
+        r += bytes(c)
+    r += bytes([w['grav'], TH[w['theme']], WX[w['wx']], SKY[w['sky']]] + [STY[x] for x in w['style']] +
+               [TL[w['tile']], w['air'], C[w['clouds']], C[w['crack']], FOOD[w['food']], C[w['shopc']], C[w['basec']],
+                FLY[w['fly']], CRAWL[w['crawl']]] + [PL[x] for x in w['plants']] + [w['wind'], w['base'], w['coll']])
+    r += fixed(w['name'], 12) + fixed(w['place'], 20) + fixed(w['shop'], 12)
+    for a in w['ads']:
+        r += fixed(a, 14)
+    PLANET_LEN = len(r)
+    plan += r
+
+# the game's words (tools/messages.txt): a table of 2-byte offsets, then the texts, none across a block
+MSGS = [l.rstrip('\n').split('\t', 1) for l in open(os.path.join(HERE, 'messages.txt')) if l.strip() and not l.startswith('#')]
+msg = bytearray(2 * len(MSGS))
+for k, (name, t) in enumerate(MSGS):
+    b = t.encode('ascii') + bytes(1)
+    if (len(msg) % 512) + len(b) > 512:
+        msg += bytes(512 - len(msg) % 512)
+    msg[2 * k:2 * k + 2] = struct.pack('<H', len(msg))
+    msg += b
+txt, help_off = bytearray(), []
+for page, x, y, c, t in HELP:
+    rec = bytes([page, x, y, c]) + t.encode('ascii') + bytes(1)
+    if (len(txt) % 512) + len(rec) > 512:
+        txt += bytes(512 - len(txt) % 512)
+    help_off.append(len(txt))
+    txt += rec
+pics = padded(open(os.path.join(CARD, 'pics.bin'), 'rb').read())
+songs = padded(open(os.path.join(CARD, 'songs.bin'), 'rb').read())
+txt = padded(bytes(txt))
+plan = padded(bytes(plan))
+msg = padded(bytes(msg))
+pic_blk = 1
+song_blk = pic_blk + len(pics) // 512
+txt_blk = song_blk + len(songs) // 512
+plan_blk = txt_blk + len(txt) // 512
+msg_blk = plan_blk + len(plan) // 512
+body = pics + songs + txt + plan + msg
+h = zlib.crc32(body) & 0xffffffff
+head = padded(b'STARLIFT' + struct.pack('<IHH', h, pic_blk, song_blk))
+open(os.path.join(CARD, 'STARLIFT.DAT'), 'wb').write(head + body)
+open(os.path.join(ROOT, 'CHStarlift', 'CardIndex.h'), 'w', newline='').write(
+    "// Generated by tools/make_card.py: STARLIFT.DAT's hash and where its sections start (byte offsets).\n"
+    "#pragma once\n#include <stdint.h>\n\n"
+    "static const uint32_t CARD_HASH = 0x%08Xu;\n"
+    "static const uint32_t CARD_PIC = %d, CARD_SONG = %d, CARD_TXT = %d;\n"
+    "// the how-to-play lines: page, x, y, colour, then the text (ending in 0)\n"
+    "static const uint32_t CARD_MSG = %d;\n"
+    "enum : uint8_t { %s };\n"
+    "static const uint32_t CARD_PLANET = %d;\n#define PLANET_LEN %d\n"
+    "#define HELP_LINES %d\n"
+    "static const uint16_t HELP_OFF[HELP_LINES] = { %s };\n" % (h, pic_blk * 512, song_blk * 512, txt_blk * 512, msg_blk * 512, ', '.join(n for n, t in MSGS), plan_blk * 512, PLANET_LEN, len(HELP), ", ".join(map(str, help_off))))
+print("STARLIFT.DAT: %d bytes (hash %08X)" % (len(head) + len(body), h))

@@ -1,0 +1,2189 @@
+// STARLIFT: an original lander rescue game for CHGame.
+//
+// Colonists are stranded across eight worlds. Fly a rocket lander on Newtonian physics (turn it, burn the main
+// engine against gravity, drop the gear and touch down softly), set down beside the colonists so they can run aboard,
+// and carry them to the base pad at the far end of each 15-screen stage, which refuels the lander. Flying saucers
+// beam colonists up in green tractor beams; stingers spit plasma; mines drift; turrets fire flak. All code, art and
+// music are original.
+//
+// The world is 1920 px wide and one screen tall: the ground is a height per 4 px. Behind it, three parallax layers
+// (1/8, 1/4 and 1/2 of the camera's speed) are height functions drawn column by column, each stopping where the
+// layer in front starts, with ruins, bases or alien towers standing on them. Sprites are HOUSE-palette pixel art
+// (tools/make_sprites.py) mapped onto this game's 16 colours.
+#include <CHGame.h>
+#include "Sprites.h"
+#include "Synth.h"
+#include "Game.h"
+#include "Card.h"
+#include "CardIndex.h"
+#include "Music.h"
+#include <chgame/Draw.h>
+
+#define SL_VERSION "0.1"
+
+// HOUSE index -> game colour
+static const uint8_t MAP[14] = { C_INK, C_WHITE, C_GREEN, C_GREEN, C_WHITE, C_SILVER, C_RED, C_RED, C_GOLD, C_STEEL, C_ACC, C_STEEL, C_GOLD, C_ACC };
+
+// ---- sound: 1950s science fiction. Warbling sines for ray guns and saucers, noise for blasts ------------------
+enum Sfx : uint8_t { S_LASER, S_BOOM, S_CRASH, S_HIT, S_BOARD, S_SAVED, S_LAND, S_UFO, S_BEAM, S_TAKEN, S_ZAP, S_FUEL, S_LOW,
+                     S_START, S_CLEAR, S_OVER, S_CATCH, S_SQUASH, S_GEAR, S_WARN, S_SLURP, S_ORDER, S_JET, S_PAUSE, S_RESUME, S_GUN, S_COUNT };
+AUDIO_STEPS(ST_LASER)  = { AUDIO_STEP(2600, 700, 110) };
+AUDIO_STEPS(ST_BOOM)   = { AUDIO_STEP(1400, 240, 280) };
+AUDIO_STEPS(ST_CRASH)  = { AUDIO_STEP(1200, 160, 480), AUDIO_STEP(300, 60, 500) };
+AUDIO_STEPS(ST_HIT)    = { AUDIO_STEP(320, 120, 100) };
+AUDIO_STEPS(ST_BOARD)  = { AUDIO_STEP(660, 990, 60), AUDIO_STEP(1320, 0, 60) };
+AUDIO_STEPS(ST_SAVED)  = { AUDIO_STEP(600, 1800, 160), AUDIO_STEP(1568, 0, 70), AUDIO_STEP(2093, 0, 70), AUDIO_STEP(2637, 0, 220) };   // a theremin whoop, then a chime
+AUDIO_STEPS(ST_LAND)   = { AUDIO_STEP(240, 80, 70), AUDIO_STEP(1200, 1800, 80) };
+AUDIO_STEPS(ST_UFO)    = { AUDIO_STEP(600, 1000, 300), AUDIO_STEP(1000, 600, 300) };
+AUDIO_STEPS(ST_BEAM)   = { AUDIO_STEP(380, 640, 110), AUDIO_STEP(640, 380, 110), AUDIO_STEP(380, 640, 110), AUDIO_STEP(640, 380, 110) };   // wom-wom: repeated while a beam is on
+AUDIO_STEPS(ST_TAKEN)  = { AUDIO_STEP(1500, 200, 500), AUDIO_STEP(200, 100, 200) };
+AUDIO_STEPS(ST_ZAP)    = { AUDIO_STEP(1500, 400, 70) };
+AUDIO_STEPS(ST_FUEL)   = { AUDIO_STEP(1800, 2200, 24) };
+AUDIO_STEPS(ST_LOW)    = { AUDIO_STEP(1600, 0, 80), AUDIO_REST(60), AUDIO_STEP(1600, 0, 80) };
+AUDIO_STEPS(ST_START)  = { AUDIO_STEP(400, 1400, 320), AUDIO_STEP(1400, 1400, 200) };
+AUDIO_STEPS(ST_CLEAR)  = { AUDIO_STEP(784, 0, 90), AUDIO_STEP(1047, 0, 90), AUDIO_STEP(1319, 0, 90), AUDIO_STEP(1568, 2093, 360) };
+AUDIO_STEPS(ST_OVER)   = { AUDIO_STEP(1200, 150, 500), AUDIO_STEP(150, 60, 400) };
+AUDIO_STEPS(ST_CATCH)  = { AUDIO_STEP(900, 1800, 140) };
+AUDIO_STEPS(ST_SQUASH) = { AUDIO_STEP(300, 100, 140) };
+AUDIO_STEPS(ST_GEAR)   = { AUDIO_STEP(500, 900, 90), AUDIO_STEP(900, 0, 30) };
+AUDIO_STEPS(ST_WARN)   = { AUDIO_STEP(2200, 0, 50), AUDIO_REST(50), AUDIO_STEP(2200, 0, 50) };
+AUDIO_STEPS(ST_SLURP)  = { AUDIO_STEP(1000, 160, 260), AUDIO_STEP(300, 520, 90) };
+AUDIO_STEPS(ST_ORDER)  = { AUDIO_STEP(1319, 0, 140), AUDIO_STEP(1047, 0, 260) };
+AUDIO_STEPS(ST_JET)    = { AUDIO_STEP(700, 1100, 180) };
+AUDIO_STEPS(ST_PAUSE)  = { AUDIO_STEP(1400, 500, 160) };
+AUDIO_STEPS(ST_GUN)    = { AUDIO_STEP(1100, 500, 34) };
+AUDIO_STEPS(ST_RESUME) = { AUDIO_STEP(500, 1400, 160) };
+static const audio::Effect SOUNDS[S_COUNT] = {
+    AUDIO_EFFECT(ST_LASER, 2 | synth::WOBBLE), AUDIO_EFFECT(ST_BOOM, 5 | synth::NOISE), AUDIO_EFFECT(ST_CRASH, 9 | synth::NOISE),
+    AUDIO_EFFECT(ST_HIT, 6), AUDIO_EFFECT(ST_BOARD, 4 | synth::WOBBLE), AUDIO_EFFECT(ST_SAVED, 6), AUDIO_EFFECT(ST_LAND, 5),
+    AUDIO_EFFECT(ST_UFO, 3 | synth::WOBBLE), AUDIO_EFFECT(ST_BEAM, 2 | synth::WOBBLE), AUDIO_EFFECT(ST_TAKEN, 7 | synth::WOBBLE),
+    AUDIO_EFFECT(ST_ZAP, 1 | audio::SOFT), AUDIO_EFFECT(ST_FUEL, 1 | audio::SOFT), AUDIO_EFFECT(ST_LOW, 3),
+    AUDIO_EFFECT(ST_START, 6 | synth::WOBBLE), AUDIO_EFFECT(ST_CLEAR, 8 | synth::WOBBLE), AUDIO_EFFECT(ST_OVER, 9 | synth::WOBBLE),
+    AUDIO_EFFECT(ST_CATCH, 6 | synth::WOBBLE), AUDIO_EFFECT(ST_SQUASH, 6), AUDIO_EFFECT(ST_GEAR, 3), AUDIO_EFFECT(ST_WARN, 4),
+    AUDIO_EFFECT(ST_SLURP, 5 | synth::WOBBLE), AUDIO_EFFECT(ST_ORDER, 3), AUDIO_EFFECT(ST_JET, 2 | synth::NOISE | audio::SOFT),
+    AUDIO_EFFECT(ST_PAUSE, 9 | synth::WOBBLE), AUDIO_EFFECT(ST_RESUME, 9 | synth::WOBBLE),
+    AUDIO_EFFECT(ST_GUN, 1 | synth::NOISE | audio::SOFT) };
+static void sfx(uint8_t id) { synth::sfx(SOUNDS[id]); }
+
+// ---- the planets ------------------------------------------------------------------------------------------------
+//                 SKY0           SKY1             FAR              MID              NEAR            GNDD            GND              GNDL             ACC
+static Planet PLR;                                         // the world being shown, loaded from the card (CARD_PLANET)
+static_assert(sizeof(Planet) == PLANET_LEN, "Planet must match tools/make_card.py");
+
+static void adBoard(int x, int y, const char *t, bool rockets, uint32_t h);
+static void drawPlants();
+static bool busyAt(int x);
+static void drawCritters();
+static void flag(int x, int gy, bool alien);
+static void drawAlienBase();
+static void drawDiner();
+static void drawSigns();
+
+// ---- state ------------------------------------------------------------------------------------------------------
+enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, MEN = 20, ENS = 12, SHOTS = 10, ESHOTS = 12, PARTS = 56, WXN = 44,
+       SEATS = 8, FUEL_MAX = 1200, ZONES = 8 };
+static uint8_t hgt[HN];                     // the ground's top (screen y) every 4 px
+static uint8_t tile[16][32];                // the ground's texture, 0 crack .. 3 lit, built for each planet
+static uint8_t scanY[120];                  // the scanner's ground line
+static Man men[MEN];
+static uint8_t nMen, nSaved, nLost, quota;                // quota: how many must reach the base
+enum : uint8_t { IT_SUPPLY, IT_REPAIR, IT_FUEL, IT_ENGINE };
+struct Item { int16_t x; uint8_t kind, st; };              // st 0 none, 1 waiting on the ground, 2 aboard (supplies)
+static Item items[5];
+static uint8_t engineUp, missed;                           // engine upgrades this game (each +8% thrust); the last stage missed its quota
+static Enemy en[ENS];
+static Shot shots[SHOTS];
+static EShot es[ESHOTS];
+static Part pt[PARTS];
+static int16_t zoneX[ZONES];
+static uint8_t nZones;
+struct Boom { int16_t x, y; uint8_t t, r, delay; };
+static Boom booms[8];
+struct Pop { int16_t x, y; uint16_t v; uint8_t t; };
+static Pop pops[4];
+
+static State state;
+static int stage, planet, sector, score, hiScore, lives, nextLife;
+static bool baseRight;
+static int startPadX, basePadX, buildX, doorX;          // pads: the left end of a 40-px slab; the base building's left
+static int alienX, burgerX;                               // the aliens' bucket (its left); the Moon's diner (its left, -1 elsewhere)
+static uint8_t ticket, tubeT;                             // the diner's next order number; the bucket's tubes glowing
+struct Critter { int16_t x, y; int8_t vx; uint8_t kind, t; };   // background wildlife: x px, y px
+static Critter crit[6];
+struct Sign { int16_t x, y; int8_t vx; uint8_t ad, on; };      // an advert flying on little rockets
+static Sign signs[2];
+static int frameNo, timer, cam, shake, lightT, endT, warnT, spawnT;
+static int windV;                                         // the wind's push on the lander, 1/256 px a frame
+static uint32_t rng = 1;
+static bool loadReq;                                      // the stage's world is to be read from the card and the stage built
+
+// the lander: position 1/256 px, velocity 1/256 px a frame
+static int32_t lx, ly;
+static int16_t lvx, lvy;
+static int8_t ang, facing = 1;
+static uint16_t fuel;
+static uint8_t seats, shield, lst, gear, rotT, deadT, fireCd, gunCd, onPad, unloadT, invT, dryT, thrLvl;   // thrLvl: the engine spooling, 0-6   // lst: 0 flying, 1 landed, 2 wrecked
+static bool thrusting;
+
+static uint8_t banner, bannerT;                            // a message (MS_...) shown for bannerT frames
+static int8_t bannerNum = -1;                              // a number after it (-1: none)
+static uint8_t tripN, killT, kills, flashT;               // colonists home this landing; the kill chain; the screen flash
+static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
+static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
+static bool newHi;
+static uint8_t pauseNote;                                  // a message (MS_...), 0 = none
+
+static uint32_t rnd32() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
+static int rnd(int n) { return (int)(rnd32() % (uint32_t)n); }
+#define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
+static NOINL uint32_t hash(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
+static inline int absi(int v) { return v < 0 ? -v : v; }
+static inline int sgn(int v) { return (v > 0) - (v < 0); }
+static NOINL int clampi(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
+static NOINL int isin(int a) { a &= 255; int b = a & 127, v = (b * (128 - b)) >> 5; return a < 128 ? v : -v; }   // a parabola sine, -128..128
+static int isqrtTab(int v) { if (v <= 0) return 0; int r = 0; while ((r + 1) * (r + 1) <= v) r++; return r; }   // small values only
+static inline int LX() { return lx >> 8; }
+static inline int LY() { return ly >> 8; }
+static NOINL int groundAt(int x) {
+    if (x <= 0) return hgt[0];
+    if (x >= W) return hgt[HN - 1];
+    const int i = x >> 2, f = x & 3;
+    return hgt[i] + (((hgt[i + 1] - hgt[i]) * f) >> 2);
+}
+static const int16_t SIN7[7] = { 0, 66, 128, 181, 222, 247, 256 };       // sin of 0, 15 .. 90 degrees, x 256
+static inline int sinA(int a) { return a < 0 ? -SIN7[-a] : SIN7[a]; }
+static inline int cosA(int a) { return SIN7[6 - absi(a)]; }
+
+// ---- drawing primitives -------------------------------------------------------------------------------------------
+static NOINL void pset(int x, int y, uint8_t c) {
+    if ((unsigned)x > 127 || (unsigned)y > 127) return;
+    uint8_t *b = gfx_fb + y * GFX_FB_STRIDE + (x >> 1);
+    *b = (x & 1) ? (uint8_t)((*b & 0x0F) | (c << 4)) : (uint8_t)((*b & 0xF0) | c);
+}
+#define R gfx_fillRect
+static void hl(int x, int y, int w, uint8_t c) { if (w > 0) gfx_hline(x, y, w, c); }
+
+// Run-length rows from flash or from the card. solid: 255 = the sprite's colours, else one colour for every pixel (a hit flash)
+static void blitRd(Rd &rd, int w, int h, int x, int y, bool flip, uint8_t solid, const uint8_t *map) {
+    if (x >= 128 || y >= 128 || x + w <= 0 || y + h <= 0) return;
+    uint8_t lut[16];
+    for (int k = 0; k < 14; k++) lut[k] = solid != 255 ? solid : map[k];
+    for (int r = 0; r < h; r++) {
+        const int yy = y + r;
+        const bool vis = (unsigned)yy < 128;
+        for (int c = 0; c < w;) {
+            const uint8_t b = rd.next();
+            const int n = (b >> 4) + 1, v = b & 15;
+            if (vis && v != 15) {
+                const int x0 = flip ? x + w - c - n : x + c;
+                if (n > 2) gfx_hline(x0, yy, n, lut[v]);
+                else for (int k = 0; k < n; k++) pset(x0 + k, yy, lut[v]);
+            }
+            c += n;
+        }
+    }
+}
+static void blit(const Spr &s, int x, int y, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) { Rd rd = { s.d, 0, 0, false }; blitRd(rd, s.w, s.h, x, y, flip, solid, map); }
+static void blitBC(const Spr &s, int cx, int by, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) { blit(s, cx - s.w / 2, by - s.h + 1, flip, solid, map); }
+static void blit(const CSpr &s, int x, int y, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) {    // from the card (nothing without one)
+    if (!card::ok() || x >= 128 || x + s.w <= 0 || y >= 128 || y + s.h <= 0) return;
+    Rd rd = { nullptr, CARD_PIC + s.off, 0, true };
+    blitRd(rd, s.w, s.h, x, y, flip, solid, map);
+}
+static void blitBC(const CSpr &s, int cx, int by, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) { blit(s, cx - s.w / 2, by - s.h + 1, flip, solid, map); }
+// text with a number in it, without printf (which costs about 2 KB of flash): fmt(buf, T(MS_SCORE), n, T(MS_PTS))
+static char *fmt(char *d, const char *a, int v = -1, const char *b = "", int v2 = -1, const char *c = "") {
+    char *o = d;
+    auto str = [&](const char *t) { while (*t) *o++ = *t++; };
+    auto num = [&](int n) { char tmp[11]; int k = 0; if (n < 0) { *o++ = '-'; n = -n; } do { tmp[k++] = (char)('0' + n % 10); n /= 10; } while (n); while (k) *o++ = tmp[--k]; };
+    str(a); if (v >= 0) num(v); str(b); if (v2 >= 0) num(v2); str(c);
+    *o = 0;
+    return d;
+}
+// a message from the card's table (MS_... in CardIndex.h): two bytes of offset, then the text. Only while drawing.
+static const char *T(uint8_t id) {
+    const uint8_t *p = card::at(CARD_MSG + id * 2u);
+    if (!p) return "";
+    const uint8_t *q = card::at(CARD_MSG + (uint32_t)(p[0] | p[1] << 8));
+    return q ? (const char *)q : "";
+}
+static void textC(int y, const char *s, uint8_t c) { gfx_text((128 - gfx_textWidth(s)) / 2, y, s, c); }
+static void textSh(int x, int y, const char *s, uint8_t c) { gfx_text(x + 1, y + 1, s, C_INK); gfx_text(x, y, s, c); }
+static void textCS(int y, const char *s, uint8_t c) { textSh((128 - gfx_textWidth(s)) / 2, y, s, c); }
+
+// ---- palette ------------------------------------------------------------------------------------------------------
+static const uint8_t PAL_SLOT[9] = { C_SKY0, C_SKY1, C_FAR, C_MID, C_NEAR, C_GNDD, C_GND, C_GNDL, C_ACC };
+static void applyPalette() {
+    const Planet &p = PLR;
+    for (int i = 0; i < 9; i++) gfx_setPaletteEntry(PAL_SLOT[i], gfx_rgb(p.pal[i][0], p.pal[i][1], p.pal[i][2]));
+}
+
+// ---- noise for the scenery ----------------------------------------------------------------------------------------
+// A value noise: knots every 2^sh px, a hashed height 0-255 at each, joined smoothly (or straight, for jagged rock)
+static int vn(uint32_t seed, int x, int sh, bool smooth) {
+    const int k = x >> sh;
+    int t = (x & ((1 << sh) - 1)) << (8 - sh);
+    const int a = (int)(hash(seed + (uint32_t)k * 2654435761u) & 255), b = (int)(hash(seed + (uint32_t)(k + 1) * 2654435761u) & 255);
+    if (smooth) t = (t * t * (768 - 2 * t)) >> 16;
+    return a + (((b - a) * t) >> 8);
+}
+
+// a background layer's top at layer x: 0 far (1/8 speed), 1 mid (1/4), 2 near (1/2)
+static const uint8_t LBASE[3] = { 56, 72, 86 }, LAMP[3] = { 42, 36, 28 }, LSH[3] = { 6, 5, 5 };
+static int layerH(int L, int x) {
+    const Planet &p = PLR;
+    const uint32_t seed = (uint32_t)planet * 7919u + (uint32_t)L * 104729u;
+    const int base = LBASE[L], amp = LAMP[L], sh = LSH[L];
+    switch (p.style[L]) {
+    case ST_JAGGED:
+        return base - ((vn(seed, x, sh, false) * amp) >> 8) - ((vn(seed + 1, x, sh - 2, false) * amp) >> 10) - ((vn(seed + 2, x, sh - 3, false) * amp) >> 11);
+    case ST_MESA: {                                            // flat tops and cliffs: the height in four steps
+        const int q = vn(seed, x, sh + 1, true) >> 6;
+        return base - q * amp / 4 - (vn(seed + 1, x, 3, false) >> 7);
+    }
+    case ST_SPIKES: {                                          // pyramids and crystal spires: a peak in every cell
+        const int s2 = sh - 1, k = x >> s2, t = ((x & ((1 << s2) - 1)) << 9) >> s2, tri = t < 256 ? t : 511 - t;
+        const int hk = 80 + (int)(hash(seed + (uint32_t)k * 977u) % 176u);
+        return base - ((((hk * tri) >> 8) * amp) >> 8);
+    }
+    case ST_CONES: {                                           // volcanoes: a cone with a crater in some wide cells
+        const int s2 = sh + 1, k = x >> s2, t = ((x & ((1 << s2) - 1)) << 9) >> s2;
+        int tri = t < 256 ? t : 511 - t;
+        if ((hash(seed + (uint32_t)k * 31u) & 3) == 0) { if (tri > 236) tri = 236 - (tri - 236); return base - ((tri * amp) >> 8) - 4; }
+        return base - ((vn(seed, x, sh, true) * amp) >> 9);
+    }
+    default:
+        return base - ((vn(seed, x, sh + 1, true) * amp) >> 8) - ((vn(seed + 1, x, sh - 1, true) * amp) >> 10);
+    }
+}
+
+// ---- building a stage ---------------------------------------------------------------------------------------------
+static void buildTile() {
+    const Planet &p = PLR;
+    for (int y = 0; y < 16; y++)
+        for (int x = 0; x < 32; x++) {
+            uint8_t v = 2;
+            switch (p.tile) {
+            case TL_BRICKS: {                                  // cut blocks, each row offset by half a block
+                const int row = y >> 2, bx = (x + (row & 1) * 4) & 7, by = y & 3;
+                v = (by == 3 || bx == 7) ? 0 : by == 0 ? 3 : by == 2 ? 1 : 2;
+                if (v && (hash((uint32_t)((x + (row & 1) * 4) >> 3) * 31u + row * 7u) & 7) == 0) v = v > 1 ? v - 1 : v;   // a worn block
+                break;
+            }
+            case TL_STRATA: {                                  // layered rock with wavy bands and cracks
+                const int w = y + ((isin(x * 8) * 2) >> 8), b = (w & 7);
+                v = b == 0 ? 3 : b < 3 ? 2 : b < 6 ? 1 : 2;
+                if (((x * 5 + y * 3) & 31) == 0 || (hash((uint32_t)(x * 16 + y)) & 31) == 0) v = 0;
+                break;
+            }
+            case TL_CRYSTAL: {                                 // faceted shards: diagonal planes with bright edges
+                const int a = (x + y) % 11, b = (x - y + 32) % 9;
+                v = a == 0 || b == 0 ? 0 : a < 4 ? 3 : b < 4 ? 1 : 2;
+                break;
+            }
+            default: {                                         // round stones: the nearest of nine jittered centres (wrapping)
+                int best = 9999, second = 9999, bdx = 0, bdy = 0;
+                for (int k = 0; k < 9; k++) {
+                    const uint32_t h = hash((uint32_t)k * 101u + planet);
+                    const int cx = (k % 3) * 11 + (int)(h & 7), cy = (k / 3) * 6 + (int)((h >> 3) & 3);
+                    for (int wx = -32; wx <= 32; wx += 32)
+                        for (int wy = -16; wy <= 16; wy += 16) {
+                            const int dx = x - cx - wx, dy = (y - cy - wy) * 2, d = dx * dx + dy * dy;
+                            if (d < best) { second = best; best = d; bdx = dx; bdy = dy; } else if (d < second) second = d;
+                        }
+                }
+                v = second - best < 9 ? 0 : (bdy < -1 && bdx < 2) ? 3 : bdy > 2 ? 1 : 2;
+            }
+            }
+            tile[y][x] = v;
+        }
+}
+
+static void flatten(int cx, int w) {                          // a level patch of ground w px wide, ramped at its ends
+    int i0 = (cx - w / 2) >> 2, i1 = (cx + w / 2) >> 2;
+    i0 = clampi(i0, 0, HN - 1); i1 = clampi(i1, 0, HN - 1);
+    int lv = hgt[(i0 + i1) / 2];
+    if (lv < 60) lv = 60;
+    for (int i = i0; i <= i1; i++) hgt[i] = (uint8_t)lv;
+    for (int k = 1; k <= 6; k++) {
+        if (i0 - k >= 0) hgt[i0 - k] = (uint8_t)(lv + (hgt[i0 - k] - lv) * k / 7);
+        if (i1 + k < HN) hgt[i1 + k] = (uint8_t)(lv + (hgt[i1 + k] - lv) * k / 7);
+    }
+}
+
+static Enemy *spawnEn(uint8_t k, int x, int y) {
+    for (auto &e : en) if (!e.kind) {
+        e = {};
+        e.kind = k; e.x = (int16_t)(x * 16); e.y = (int16_t)(y * 16);
+        e.hp = k == E_UFO ? 3 : k == E_TURRET ? 2 : 1;
+        e.target = 255;
+        e.t = (uint8_t)rnd(60);
+        return &e;
+    }
+    return nullptr;
+}
+
+static void placeLanderOnPad(int padX) {
+    lx = (int32_t)(padX + 20) << 8;
+    ly = (int32_t)(groundAt(padX + 20) - 8) << 8;
+    lvx = lvy = 0; ang = 0; lst = 1; gear = 1; onPad = padX == basePadX ? 2 : 1;
+    fuel = FUEL_MAX; shield = 3; deadT = 0; invT = 60; dryT = 0;
+    facing = (int8_t)(baseRight ? 1 : -1);
+    if (onPad == 2) facing = (int8_t)-facing;
+}
+
+static void genStage() {
+    planet = stage & 7;
+    sector = stage >> 3;
+    baseRight = ((stage + sector) & 1) == 0;
+    const uint32_t s = (uint32_t)stage * 977u + 13u;
+    const int rough = 10 + planet * 3 + sector * 6;
+    for (int i = 0; i < HN; i++) {
+        const int x = i * 4;
+        int h = 116 - ((vn(s, x, 7, true) * 24) >> 8) - ((vn(s + 1, x, 5, true) * 14) >> 8) - ((vn(s + 2, x, 3, false) * rough) >> 8);
+        const int pk = vn(s + 3, x, 7, true);
+        if (pk > 170) h -= (pk - 170) * (26 + planet * 3) / 85;                // ridges to climb over
+        hgt[i] = (uint8_t)clampi(h, 46, 122);
+    }
+    if (planet == 0)                                                           // the Moon's craters: a raised rim round a bowl
+        for (int c = 0; c < 14; c++) {
+            const int cx = 160 + (int)(hash(s + c * 17u) % (W - 320)), r = 4 + (int)(hash(s + c * 29u) % 5);
+            for (int k = -r - 2; k <= r + 2; k++) {
+                const int i = cx / 4 + k;
+                if (i < 0 || i >= HN) continue;
+                const int a = absi(k);
+                hgt[i] = (uint8_t)clampi(hgt[i] + (a <= r ? (r - a) * 3 / 2 + 1 - (r * r - k * k) / (r * 4) : -2), 42, 122);
+            }
+        }
+    // the pads: the start at one end, the base (pad and building) at the other
+    if (baseRight) { startPadX = 30; basePadX = W - 116; buildX = W - 54; doorX = buildX + BASE_DOOR[PLR.base]; }
+    else { startPadX = W - 70; basePadX = 76; buildX = 10; doorX = buildX + 43 - BASE_DOOR[PLR.base]; }
+    flatten(startPadX + 20, 64);
+    flatten(baseRight ? W - 70 : 70, 128);
+    alienX = baseRight ? 170 : W - 210;
+    flatten(alienX + 20, 60);
+    burgerX = W / 2 - 160 + (int)(hash(s + 5u) % 200) - 100;            // the takeaway, somewhere in the middle
+    if (burgerX >= 0) flatten(burgerX + 50, 130);
+    // the colonists' camps: flat ground, the colonists on one half, room to land on the other
+    nZones = (uint8_t)clampi(4 + stage / 3, 4, ZONES);
+    const int span = W - 360;
+    for (int z = 0; z < nZones; z++) {
+        int cx = 200 + span * (2 * z + 1) / (2 * nZones) + (int)(hash(s + z * 7u) % 60) - 30;
+        if (burgerX >= 0 && cx > burgerX - 50 && cx < burgerX + 150) cx = cx < burgerX + 50 ? burgerX - 50 : burgerX + 150;   // not in the diner's lot
+        zoneX[z] = (int16_t)cx;
+        flatten(cx, 60);
+    }
+    memset(men, 0, sizeof men);
+    nMen = (uint8_t)clampi(8 + stage, 8, MEN);
+    quota = (uint8_t)((nMen * clampi(50 + stage * 3, 50, 90) + 99) / 100);   // half of them at first, nine in ten by the end
+    memset(items, 0, sizeof items);
+    for (int k = 0; k < clampi((stage + 2) / 3, 0, 5); k++) {                // things to pick up: supplies, repairs, fuel, now and then an engine part
+        int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
+        while (busyAt(x)) x += 23;
+        items[k] = { (int16_t)x, (uint8_t)(k == 0 ? IT_SUPPLY : (stage % 5 == 4 && k == 1) ? IT_ENGINE : (k & 1) ? IT_REPAIR : IT_FUEL), 1 };
+        flatten(x, 24);
+    }
+    for (int i = 0; i < nMen; i++) {
+        Man &m = men[i];
+        const int z = i % nZones;
+        const int side = baseRight ? -1 : 1;                                  // camp on the side away from the base
+        m.home = (uint8_t)z;
+        m.x = (int16_t)(zoneX[z] + side * (6 + (int)(hash(s + i * 13u) % 18)));
+        m.y = (int16_t)groundAt(m.x);
+        m.st = M_IDLE; m.act = D_STAND; m.t = (uint8_t)rnd(60); m.face = (int8_t)(rnd(2) ? 1 : -1); m.look = (uint8_t)(hash(s + i * 71u) & 31);
+    }
+    nSaved = nLost = 0;
+    memset(en, 0, sizeof en);
+    const int turrets = clampi(planet / 2 + sector * 2, 0, 4);
+    for (int k = 0; k < turrets; k++) {                                       // turrets on open ground between the camps
+        int x = 260 + (int)(hash(s + k * 41u) % (W - 520));
+        for (int z = 0; z < nZones; z++) if (absi(x - zoneX[z]) < 60) x += 70;
+        spawnEn(E_TURRET, x, groundAt(x) - 3);
+    }
+    for (int i = 0; i < 120; i++) {                                           // the scanner's ground line
+        int m = 127;
+        for (int x = i * 16; x < i * 16 + 16; x += 4) m = m < groundAt(x) ? m : groundAt(x);
+        scanY[i] = (uint8_t)(9 + (m - TOP) * 6 / 112);
+    }
+    buildTile();
+    memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
+    placeLanderOnPad(startPadX);
+    cam = clampi(LX() - 64, 0, W - 128);
+    spawnT = 150; endT = 0; lightT = 0; warnT = 0; ticket = 0; tubeT = 0;
+    memset(crit, 0, sizeof crit); memset(signs, 0, sizeof signs);
+}
+
+// ---- effects ------------------------------------------------------------------------------------------------------
+static NOINL void part(int x, int y, int vx, int vy, uint8_t life, uint8_t col) {          // x, y px; vx, vy 1/16 px a frame
+    for (auto &q : pt) if (!q.life) { q = { (int16_t)(x * 16), (int16_t)(y * 16), (int8_t)vx, (int8_t)vy, life, col }; return; }
+}
+static void blast(int x, int y, int r, int delay) {
+    for (auto &b : booms) if (!b.t) { b = { (int16_t)x, (int16_t)y, 16, (uint8_t)r, (uint8_t)delay }; break; }
+}
+// an explosion: a fireball and its shock ring, sparks and debris thrown out, smoke rising after
+static void boom(int x, int y, int n, int r) {
+    static const uint8_t COLS[4] = { C_GOLD, C_RED, C_WHITE, C_GOLD };
+    for (int i = 0; i < n; i++) part(x, y, rnd(56) - 28, rnd(56) - 36, (uint8_t)(12 + rnd(22)), COLS[rnd(4)]);
+    for (int i = 0; i < n / 3; i++) part(x + rnd(9) - 4, y + rnd(7) - 3, rnd(9) - 4, -4 - rnd(6), (uint8_t)(24 + rnd(24)), i & 1 ? C_STEEL : C_SILVER);   // smoke
+    blast(x, y, r, 0);
+}
+static void addScore(int v, int x, int y) {
+    score += v;
+    if (score > hiScore) hiScore = score;
+    if (score >= nextLife) { nextLife += 20000; if (lives < 9) lives++; banner = MS_EXTRA_LANDER; bannerT = 50; bannerNum = -1; }
+    if (x >= 0) for (auto &q : pops) if (!q.t) { q = { (int16_t)x, (int16_t)y, (uint16_t)v, 30 }; break; }
+}
+static void say(uint8_t id, uint8_t t = 50, int num = -1) { banner = id; bannerT = t; bannerNum = (int8_t)num; }
+static int gHund() { const int g = PLR.grav + (sector ? PLR.grav / 8 : 0); return g * 100 / 64; }   // gravity in hundredths of a G
+
+// ---- save ---------------------------------------------------------------------------------------------------------
+static const uint32_t MAGIC = save::magic("SLFT");
+static SaveData sv;
+static bool saveDue, saveFlag, hasSave;
+static void saveProgress(bool inGame) {
+    sv = { hiScore, score, (uint8_t)stage, (uint8_t)lives, musicV, fxV };
+    saveFlag = inGame; saveDue = true;
+}
+
+static void newStage() {
+    planet = stage & 7;
+    loadReq = true;
+    state = INTRO; timer = 110;
+    synth::music(1 + planet);
+}
+static void newGame() {
+    stage = 0;
+#ifdef SL_START
+    stage = SL_START - 1;
+#endif
+    score = 0; lives = 3; nextLife = 20000; gSaved = 0; newHi = false;
+    sfx(S_START);
+    newStage();
+    saveProgress(true);
+}
+static void gameOver() { state = OVER; overT = 0; newHi = score > 0 && score >= hiScore; sfx(S_OVER); synth::music(0); synth::engine(0); saveProgress(false); }
+
+// ---- the lander -----------------------------------------------------------------------------------------------------
+static void wreck() {
+    lst = 2; deadT = 80; shake = 18; flashT = 6;
+    boom(LX(), LY(), 34, 20);
+    for (int k = 0; k < 4; k++) blast(LX() + rnd(25) - 12, LY() + rnd(15) - 9, 8 + rnd(8), 4 + k * 5);   // the tanks go one after another
+    for (int i = 0; i < 14; i++) part(LX(), LY(), rnd(60) - 30, -rnd(50) - 10, 50, i & 1 ? C_SILVER : C_GOLD);   // the hull in pieces
+    sfx(S_CRASH);
+    synth::engine(0);
+    int lost = 0;
+    for (auto &m : men) if (m.st == M_ABOARD) { m.st = M_LOST; nLost++; lost++; }
+    for (auto &it : items) if (it.st == 2) it.st = 0;                // the supplies go down with it
+    seats = 0;
+    say(lost ? MS_CREW_LOST : MS_LANDER_LOST, 60);
+}
+static void damage(int n) {
+    if (invT || lst == 2) return;
+    sfx(S_HIT); shake = 6; invT = 30;
+    if (shield <= n) { shield = 0; wreck(); } else shield -= (uint8_t)n;
+}
+
+// a point of the hull, turned with the lander: local (dx, dy) from its centre
+static void hullPt(int dx, int dy, int &x, int &y) {
+    const int s = sinA(ang), c = cosA(ang);
+    x = LX() + ((dx * c - dy * s) >> 8);
+    y = LY() + ((dx * s + dy * c) >> 8);
+}
+
+static void touchDown() {
+    const int x = LX();
+    const int gl = groundAt(x - 7), gr = groundAt(x + 7);
+    const bool level = absi(gl - gr) <= 2, upright = absi(ang) <= 1, soft = lvy <= 176 && absi(lvx) <= 110;
+    if (!gear || !level || !upright || !soft) {
+        if (!gear) say(MS_GEAR_UP, 60);
+        else if (!level) say(MS_TOO_STEEP, 60);
+        else if (!upright) say(MS_NOT_LEVEL, 60);
+        wreck();
+        return;
+    }
+    const int pts = lvy < 80 ? 100 : 25;
+    ang = 0; lvx = lvy = 0; lst = 1;
+    ly = (int32_t)((gl < gr ? gl : gr) - 8) << 8;
+    onPad = (x >= basePadX && x < basePadX + 40) ? 2 : (x >= startPadX && x < startPadX + 40) ? 1 : 0;
+    addScore(pts, x, LY() - 14);
+    say(pts == 100 ? MS_PERFECT_LANDING : MS_LANDED, 40);
+    sfx(S_LAND);
+    for (int i = 0; i < 8; i++) part(x + (i & 1 ? 6 : -6), gl, (i & 1 ? 1 : -1) * (8 + rnd(10)), -rnd(6), 14, C_GNDL);
+    for (auto &m : men)                                                  // landing on a colonist
+        if (m.st == M_IDLE && absi(m.x - x) <= 9) { m.st = M_LOST; nLost++; sfx(S_SQUASH); say(MS_SQUASHED, 50); part(m.x, m.y - 4, 0, -12, 20, C_WHITE); }
+}
+
+static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
+    if (invT) invT--;
+    if (fireCd) fireCd--;
+    if (lst == 2) {
+        if (--deadT == 0) {
+            if (lives <= 1) { lives = 0; gameOver(); return; }
+            lives--;
+            placeLanderOnPad(basePadX);
+            say(MS_NEW_LANDER, 50);
+        }
+        return;
+    }
+    if (gearEdge && lst == 0) { gear ^= 1; sfx(S_GEAR); say(gear ? MS_GEAR_DOWN : MS_GEAR_UP_22, 30); }
+    if (gunCd) gunCd--;
+    if (fire) {                                                      // B: the rotary cannon chatters, the laser fires with it
+        for (auto &s : shots) if (!s.life && !gunCd) {
+            s = { (int16_t)(LX() + facing * 8), (int16_t)(LY() + 2 + ((frameNo >> 1) & 1) - (frameNo & 1)), facing, 9, 1 };
+            gunCd = 3; sfx(S_GUN);
+        }
+        for (auto &s : shots) if (!s.life && !fireCd) {
+            s = { (int16_t)(LX() + facing * 9), (int16_t)(LY() - 1), facing, 20, 0 };
+            fireCd = 12; sfx(S_LASER);
+        }
+    }
+    if (thr && fuel > 0) { if (thrLvl < 6) thrLvl++; } else if (thrLvl) thrLvl = thrLvl > 2 ? thrLvl - 2 : 0;   // the engine spools up and down
+    thrusting = thrLvl > 0;
+    if (lst == 1) {                                                  // on the ground
+        rotT = 0;
+        if (thrLvl >= 4) { lst = 0; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
+        else {
+            synth::engine(0);
+            for (auto &it : items)                                   // things beside the lander are loaded
+                if (it.st == 1 && absi(it.x - LX()) < 20) {
+                    it.st = it.kind == IT_SUPPLY ? 2 : 0;
+                    sfx(S_CATCH);
+                    for (int k = 0; k < 8; k++) part(it.x, groundAt(it.x) - 3, rnd(20) - 10, -rnd(20), 16, k & 1 ? C_GOLD : C_WHITE);
+                    if (it.kind == IT_REPAIR) { shield = 3; say(MS_HULL_REPAIRED); }
+                    else if (it.kind == IT_FUEL) { fuel = (uint16_t)(fuel + FUEL_MAX / 2 > FUEL_MAX ? FUEL_MAX : fuel + FUEL_MAX / 2); say(MS_FUEL_CELL); }
+                    else if (it.kind == IT_ENGINE) { if (engineUp < 3) engineUp++; say(MS_ENGINE_UP); }
+                    else say(MS_SUPPLIES);
+                    addScore(100, it.x, groundAt(it.x) - 12);
+                }
+            if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
+                for (auto &it : items) if (it.st == 2) { it.st = 0; addScore(500 * (sector + 1), doorX, groundAt(doorX) - 20); say(MS_DELIVERED); sfx(S_SAVED); }
+                if (fuel < FUEL_MAX) { fuel = (uint16_t)(fuel + 10 > FUEL_MAX ? FUEL_MAX : fuel + 10); if ((frameNo & 3) == 0) sfx(S_FUEL); }
+                if ((frameNo & 31) == 0 && shield < 3) shield++;
+                if (seats && ++unloadT >= 12) {
+                    unloadT = 0;
+                    for (auto &m : men) if (m.st == M_ABOARD) {
+                        m.st = M_WALK; m.x = (int16_t)(LX() + (doorX > LX() ? 5 : -5)); m.y = (int16_t)groundAt(m.x); m.face = (int8_t)sgn(doorX - m.x); seats--;
+                        break;
+                    }
+                }
+            } else if (!fuel) {                                      // stranded: the colonists get off and a new lander comes
+                if (++dryT > 90) {
+                    for (auto &m : men) if (m.st == M_ABOARD) { m.st = M_IDLE; m.act = D_STAND; m.x = (int16_t)(LX() + rnd(24) - 12); m.y = (int16_t)groundAt(m.x); }
+                    seats = 0;
+                    say(MS_OUT_OF_FUEL, 60);
+                    lst = 2; deadT = 1;
+                }
+            }
+            return;
+        }
+    }
+    // rotation: a step at once, then one every four frames while held
+    if (l || r) {
+        if (rotT == 0 || rotT >= 6) {
+            ang = (int8_t)clampi(ang + (r ? 1 : -1), -6, 6);
+            if (rotT >= 6) rotT = 3;
+        }
+        rotT++;
+    } else rotT = 0;
+    if (ang) facing = (int8_t)sgn(ang);
+    // Newton: gravity, the engine along the hull, a little drag in an atmosphere, the wind
+    const Planet &p = PLR;
+    static uint8_t gacc;                                             // gravity in 1/1024 px a frame squared: carry the quarters
+    gacc = (uint8_t)(gacc + p.grav + (sector ? p.grav / 8 : 0));
+    lvy += gacc >> 2; gacc &= 3;
+    if (thrusting) {
+        const int t = (64 + engineUp * 5) * 32 / (32 + seats) * thrLvl / 6;           // passengers are heavy; the engine takes a moment to spool up
+        lvx += (int16_t)((t * sinA(ang)) >> 10);
+        lvy -= (int16_t)((t * cosA(ang)) >> 10);
+        if (thr) fuel--;
+        if (fuel == FUEL_MAX / 4) { sfx(S_LOW); say(MS_LOW_FUEL, 50); }
+        if (!fuel) say(MS_FUEL_EMPTY, 60);
+        if (frameNo & 1) { int nx, ny; hullPt(0, 10, nx, ny); part(nx, ny, (-sinA(ang) >> 5) + rnd(5) - 2, (cosA(ang) >> 5) + rnd(3), 10, (frameNo & 2) ? C_STEEL : C_SILVER); }
+        const int gy = groundAt(LX());
+        if (gy - LY() < 34 && (frameNo & 1)) for (int k = -1; k <= 1; k += 2) part(LX(), gy - 1, k * (12 + rnd(14)), -rnd(5), 16, (frameNo & 4) ? C_GNDL : C_GND);   // dust kicked up
+    }
+    synth::engine(thrusting ? 200 : 0);
+    if (p.air) {                                                     // the air drags the lander towards the wind's speed (and the gear drags more)
+        lvx += (int16_t)((windV - lvx) >> (8 - p.air + (gear ? 0 : 1)));
+        lvy -= lvy >> 8;
+    }
+    lvx = (int16_t)clampi(lvx, -700, 700); lvy = (int16_t)clampi(lvy, -600, 700);
+    lx += lvx; ly += lvy;
+    if (LY() < CEIL) { ly = (int32_t)CEIL << 8; if (lvy < 0) lvy = 0; }
+    if (lx < (10 << 8)) { lx = 10 << 8; lvx = 0; }
+    if (lx > ((W - 10) << 8)) { lx = (W - 10) << 8; lvx = 0; }
+    // the ground: the feet (or, gear up, the descent stage) and the hull's other corners
+    static const int8_t PTS[6][2] = { { -7, 8 }, { 7, 8 }, { 0, 7 }, { -7, 0 }, { 7, 0 }, { 0, -9 } };
+    bool hit = false, body = false;
+    for (int k = 0; k < 6; k++) {
+        int x, y;
+        hullPt(PTS[k][0], PTS[k][1] - (k < 2 && !gear ? 2 : 0), x, y);
+        if (y >= groundAt(x)) { hit = true; if (k >= 3 || (k == 2 && gear)) body = true; }
+        if (x >= buildX + 2 && x < buildX + 42 && y > groundAt(buildX + 22) - BASEPIC[PLR.base]->h + 4) body = true;   // the base building
+    }
+    if (body && LY() < groundAt(LX()) - 4) { say(MS_CRASHED, 60); wreck(); return; }
+    if (hit) {
+        if (lvy <= 0) { ly -= 256; lvy = 0; return; }                       // rising (or just lifted off): pushed clear, not landed
+        touchDown(); return;
+    }
+    // a warning: low, falling and the gear up
+    if (!gear && lvy > 40 && groundAt(LX()) - LY() < 30) { if (++warnT % 20 == 1) { sfx(S_WARN); say(MS_GEAR_TAP_DOWN_TWICE, 20); } } else warnT = 0;
+}
+
+// ---- the colonists --------------------------------------------------------------------------------------------------
+static int nearestIdle(int x, int maxd) {
+    int best = -1, bd = maxd;
+    for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE && absi(men[i].x - x) < bd) { bd = absi(men[i].x - x); best = i; }
+    return best;
+}
+
+static void updateMen() {
+    const int X = LX(), Y = LY();
+    for (int i = 0; i < nMen; i++) {
+        Man &m = men[i];
+        switch (m.st) {
+        case M_IDLE: {
+            const int dx = X - m.x;
+            if (lst == 1 && absi(dx) < 64 && absi(groundAt(X) - m.y) < 10 && seats < SEATS) {   // run for it
+                m.st = M_RUN; m.face = (int8_t)sgn(dx); m.t = 0; break;
+            }
+            if (lst == 0 && absi(dx) < 80 && Y < m.y - 10) {                                     // the lander is near: wave
+                if (m.act != D_WAVE) { m.act = D_WAVE; m.face = (int8_t)(sgn(dx) ? sgn(dx) : 1); }
+                m.t = 8;
+                break;
+            }
+            if (lst == 1 && absi(dx) < 90 && seats >= SEATS) { m.act = D_CHEER; m.t = 10; break; }
+            if (m.t) { m.t--; }
+            if (m.act == D_LOOK && (m.t % 24) == 12) m.face = (int8_t)-m.face;
+            if (m.act == D_WANDER && (frameNo & 3) == 0) {
+                const int nx = m.x + m.face, zx = zoneX[m.home];
+                if (absi(nx - zx) > 26 || absi(nx - X) < 12) m.face = (int8_t)-m.face; else m.x = (int16_t)nx;
+                m.y = (int16_t)groundAt(m.x);
+            }
+            if (!m.t) {                                                                         // something else to do
+                const int r = rnd(10);
+                int buddy = -1;
+                for (int j = 0; j < nMen; j++) if (j != i && men[j].st == M_IDLE && absi(men[j].x - m.x) < 18 && absi(men[j].x - m.x) > 3) buddy = j;
+                if (buddy >= 0 && r < 4) {                                                       // a chat: turn to each other
+                    Man &b = men[buddy];
+                    m.act = D_CHAT; m.t = (uint8_t)(90 + rnd(60)); m.face = (int8_t)sgn(b.x - m.x);
+                    if (b.act != D_CHAT) { b.act = D_CHAT; b.t = m.t; b.face = (int8_t)-m.face; }
+                    m.by = (uint8_t)(i < buddy ? 0 : 1);                                           // who speaks first
+                } else if (r < 6) { m.act = D_LOOK; m.t = 72; }
+                else if (r < 7) { m.act = D_GAZE; m.t = (uint8_t)(50 + rnd(40)); }
+                else if (r < 9) { m.act = D_WANDER; m.t = (uint8_t)(40 + rnd(60)); m.face = (int8_t)(rnd(2) ? 1 : -1); }
+                else { m.act = D_STAND; m.t = (uint8_t)(40 + rnd(60)); }
+            }
+            break;
+        }
+        case M_RUN:
+            if (lst != 1) { m.st = M_IDLE; m.act = D_STAND; m.t = 30; break; }
+            if ((frameNo & 3) != 3) { m.x = (int16_t)(m.x + sgn(X - m.x)); m.y = (int16_t)groundAt(m.x); }
+            if (absi(X - m.x) <= 2) {
+                if (seats < SEATS) { m.st = M_ABOARD; seats++; sfx(S_BOARD); addScore(10, -1, 0); if (seats == SEATS) say(MS_SEATS_FULL, 40); }
+                else { m.st = M_IDLE; m.act = D_STAND; m.t = 40; }
+            }
+            break;
+        case M_JET: {                                                          // jet-packing down (1/4 px): the burners fire near the ground
+            const int alt = groundAt(m.x) - (m.y >> 2);
+            if (alt > 22) { if (m.vy < 8 && (frameNo & 1)) m.vy++; }
+            else { if (m.vy > 2) m.vy -= 2; if (((frameNo + i * 5) & 15) == 0) sfx(S_JET); }
+            m.y = (int16_t)(m.y + m.vy);
+            if ((frameNo & 7) == 0) m.x = (int16_t)(m.x + (isin(frameNo * 4 + i * 40) > 0 ? 1 : -1));
+            if (lst == 0 && seats < SEATS && absi(m.x - X) < 9 && absi((m.y >> 2) - Y) < 12) {   // caught in the air
+                m.st = M_ABOARD; seats++; sfx(S_CATCH); addScore(500, X, Y - 14); say(MS_NICE_CATCH, 40);
+            } else if ((m.y >> 2) >= groundAt(m.x)) { m.st = M_IDLE; m.y = (int16_t)groundAt(m.x); m.act = D_CHEER; m.t = 40; m.home = 0;
+                int bz = 0; for (int z = 0; z < nZones; z++) if (absi(zoneX[z] - m.x) < absi(zoneX[bz] - m.x)) bz = z; m.home = (uint8_t)bz; }
+            break;
+        }
+        case M_DROP:                                                           // falling into the aliens' bucket, 1/4 px
+            m.y = (int16_t)(m.y + 3);
+            if ((m.y >> 2) >= groundAt(alienX + 20) - COLL_TOP[PLR.coll] + 3) { m.st = M_LOST; nLost++; tubeT = 45; sfx(S_SLURP); }
+            break;
+        case M_WALK:
+            if (frameNo & 1) { m.x = (int16_t)(m.x + sgn(doorX - m.x)); m.y = (int16_t)groundAt(m.x); }
+            if (absi(m.x - doorX) <= 1) {
+                m.st = M_SAVED; nSaved++; gSaved++; sfx(S_SAVED); tripN++;
+                if (seats == 0 && tripN > 1) {                                  // the last of the trip in: a bonus for bringing many
+                    addScore(tripN * tripN * 50, doorX, m.y - 28);
+                    say(MS_TRIP_BONUS_X, 60, tripN);
+                }
+                for (int k = 0; k < 6; k++) part(doorX, m.y - 6, rnd(24) - 12, -8 - rnd(14), 18, k & 1 ? C_GOLD : C_WHITE);   // a little fanfare of sparks addScore(250 * (sector + 1), doorX, m.y - 16);
+            }
+            break;
+        default: break;
+        }
+    }
+}
+
+// ---- the enemies ----------------------------------------------------------------------------------------------------
+static void eshot(int x, int y, int tx, int ty, int speed, uint8_t kind) {          // x, y px; speed in 1/16 px a frame
+    const int dx = tx - x, dy = ty - y, d = absi(dx) > absi(dy) ? absi(dx) + absi(dy) / 2 : absi(dy) + absi(dx) / 2;
+    if (!d) return;
+    for (auto &s : es) if (!s.life) {
+        s = { (int16_t)(x * 16), (int16_t)(y * 16), (int8_t)(dx * speed / d), (int8_t)(dy * speed / d), 90, kind };
+        sfx(S_ZAP);
+        return;
+    }
+}
+
+static void killEn(Enemy &e) {
+    static const uint16_t PTS[5] = { 0, 150, 100, 50, 200 };
+    const int x = e.x >> 4, y = e.y >> 4;
+    addScore(PTS[e.kind] * (sector + 1), x, y - 8);
+    if (killT) { kills++; if (kills >= 2) { say(kills == 2 ? MS_DOUBLE : kills == 3 ? MS_TRIPLE : MS_RAMPAGE, 40); addScore(100 * kills, -1, 0); } } else kills = 1;
+    killT = 45;
+    if (e.kind == E_UFO) flashT = 3;
+    boom(x, y, 16, 10);
+    sfx(S_BOOM);
+    if (e.kind == E_UFO) {
+        const uint8_t me = (uint8_t)(&e - en + 1);
+        int k = 0;
+        for (auto &m : men)                                                            // the colonists bail out on jet packs
+            if ((m.st == M_BEAM || m.st == M_HELD) && m.by == me) {
+                const int sy = m.st == M_HELD ? y : (m.y < y ? y : m.y);
+                m.st = M_JET; m.x = (int16_t)(x + (k & 1 ? 1 : -1) * (k * 3)); m.y = (int16_t)(sy << 2); m.vy = -6; k++;
+            }
+        if (k) { say(k > 1 ? MS_JETPACKS_GO : MS_BAIL_OUT, 50); sfx(S_CATCH); }
+        if (e.st >= 3 && e.st <= 5) say(MS_NO_TIP, 50);
+        blast(x - 5, y + 2, 9, 5); blast(x + 6, y - 1, 8, 9);
+        for (int i = 0; i < 10; i++) part(x, y, rnd(64) - 32, rnd(30) - 24, 30, i & 1 ? C_SILVER : C_GREEN);   // the saucer's plates
+        shake = 6;
+    }
+    e.kind = E_NONE;
+}
+
+static void updateEnemies() {
+    const int X = LX(), Y = LY();
+    int fliers = 0, ufos = 0;
+    for (auto &e : en) if (e.kind && e.kind != E_TURRET && !(e.kind == E_UFO && e.st >= 3 && e.st <= 5)) { fliers++; if (e.kind == E_UFO) ufos++; }
+    if (tubeT) tubeT--;
+    if (burgerX >= 0 && (frameNo % 280) == 100) {                       // the Moon: hungry saucers come to the diner
+        int n = 0;
+        for (auto &e : en) if (e.kind == E_UFO && e.st >= 3 && e.st <= 5) n++;
+        if (n < 3) if (Enemy *e = spawnEn(E_UFO, burgerX + 160 + rnd(80), 20)) { e->st = 3; e->target = ticket++; e->hp = 2; }
+    }
+    bool idle = false;
+    for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE) idle = true;
+    const int want = clampi(2 + stage * 2 / 3, 2, 9);
+    if (spawnT) spawnT--;
+    else if (fliers < want) {
+        const int side = rnd(2) ? 1 : -1;
+        const int x = clampi(cam + 64 + side * (150 + rnd(110)), 20, W - 20);
+        uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) ? E_STINGER : E_MINE);
+        if (Enemy *e = spawnEn(k, x, 28 + rnd(30))) { if (k == E_UFO) { sfx(S_UFO); } e->vx = (int8_t)(-side * 8); }
+        spawnT = clampi(130 - stage * 6, 40, 130);
+    }
+    for (int ei = 0; ei < ENS; ei++) {
+        Enemy &e = en[ei];
+        if (!e.kind) continue;
+        e.t++;
+        if (e.hit) e.hit--;
+        const int ex = e.x >> 4, ey = e.y >> 4;
+        switch (e.kind) {
+        case E_UFO: {
+            const int sp = (12 + stage / 2) * (8 - e.cargo) / 8;            // slower with each colonist aboard
+            if (e.st == 0) {                                                  // seek a colonist on the ground
+                if (e.target == 255 || men[e.target].st != M_IDLE) {
+                    e.target = 255;
+                    int bd = 700;
+                    for (int i = 0; i < nMen; i++) {
+                        if (men[i].st != M_IDLE) continue;
+                        bool taken = false;
+                        for (auto &o : en) if (&o != &e && o.kind == E_UFO && o.target == i) taken = true;
+                        if (!taken && absi(men[i].x - ex) < bd) { bd = absi(men[i].x - ex); e.target = (uint8_t)i; }
+                    }
+                }
+                if (e.target == 255 && e.cargo) { e.st = 2; break; }            // nobody left to take: home with what it has
+                int tx = X + 40, ty = 34;
+                if (e.target != 255) { tx = men[e.target].x; ty = men[e.target].y - 44; }
+                e.vx = (int8_t)clampi((tx - ex) * 2, -sp, sp);
+                e.vy = (int8_t)clampi((ty - ey) * 2, -10, 10);
+                if (e.target != 255 && absi(tx - ex) < 2 && absi(ty - ey) < 2) {     // over the colonist: the beam
+                    e.st = 1; e.t = 0; e.vx = e.vy = 0;
+                    Man &m = men[e.target];
+                    m.st = M_BEAM; m.by = (uint8_t)(ei + 1);
+                    sfx(S_BEAM);
+                }
+            } else if (e.st == 1) {                                           // lifting
+                Man &m = men[e.target];
+                if (m.st != M_BEAM) { e.st = 0; e.target = 255; break; }
+                if (e.t & 1) m.y--;
+                if ((e.t % 14) == 0) sfx(S_BEAM);
+                if (m.y <= ey + 6) {                                          // taken aboard
+                    m.st = M_HELD; m.by = (uint8_t)(ei + 1);
+                    e.cargo++; e.target = 255;
+                    e.st = (e.cargo >= 5 || !idle) ? 2 : 0;
+                    sfx(S_TAKEN); say(e.st == 2 ? MS_UFO_HEADING_HOME : MS_ABDUCTED, 50);
+                }
+            } else if (e.st == 2) {                                           // home to the bucket, slow when full
+                const int tx = alienX + 20, ty = groundAt(tx) - 54;
+                e.vx = (int8_t)clampi((tx - ex) * 2, -sp, sp);
+                e.vy = (int8_t)clampi((ty - ey) * 2, -8, 8);
+                if (absi(tx - ex) < 2 && absi(ty - ey) < 3) { e.st = 6; e.t = 0; e.vx = e.vy = 0; }
+            } else if (e.st == 6) {                                           // one colonist at a time into the bucket
+                if (e.t % 20 == 10) {
+                    if (e.cargo) {
+                        for (auto &m : men) if (m.st == M_HELD && m.by == ei + 1) { m.st = M_DROP; m.x = (int16_t)ex; m.y = (int16_t)((ey + 4) << 2); break; }
+                        e.cargo--;
+                    } else e.st = 0;
+                }
+            } else if (e.st == 3) {                                           // in the queue at the diner, shuffling
+                int pos = 0;
+                for (auto &o : en) if (o.kind == E_UFO && (o.st == 3 || o.st == 4) && o.target < e.target) pos++;
+                const int win = burgerX + 35, tx = win + 4 + pos * 26 + (((e.t + e.target * 37) % 110) < 12 ? isin(e.t * 32) / 64 : 0), ty = groundAt(win) - 26;
+                e.vx = (int8_t)clampi((tx - ex) * 2, -10, 10);
+                e.vy = (int8_t)clampi((ty - ey) * 2, -8, 8);
+                if (!pos && absi(tx - ex) < 2 && absi(ty - ey) < 3 && ++e.cargo > 100) { e.st = 4; e.cargo = 0; sfx(S_ORDER); }
+            } else if (e.st == 4) {                                           // the order comes up in the beam
+                e.vx = e.vy = 0;
+                if ((e.t % 14) == 0 && absi(ex - X) < 90) sfx(S_BEAM);
+                if (++e.cargo >= 2 * (groundAt(burgerX + 35) - 8 - ey)) { e.st = 5; e.cargo = 0; }
+            } else {                                                          // away up into the sky
+                e.vx = 0; e.vy = -22;
+                if (ey < -10) { e.kind = E_NONE; break; }
+            }
+            if (e.st != 1 && e.st != 6 && e.st != 4) e.y = (int16_t)(e.y + isin(e.t * 6) / 32);
+            break;
+        }
+        case E_STINGER: {                                                     // keeps its distance and spits plasma
+            const int tx = X + (ex < X ? -48 : 48), ty = Y - 6 + isin(e.t * 3) / 16;
+            e.vx = (int8_t)clampi(e.vx + sgn(tx - ex), -14 - sector * 4, 14 + sector * 4);
+            e.vy = (int8_t)clampi(e.vy + sgn(ty - ey), -10, 10);
+            const int rate = clampi(96 - planet * 6 - sector * 20, 40, 96);
+            if (lst != 2 && absi(X - ex) < 110 && (e.t % rate) == 0) eshot(ex, ey, X, Y, 22 + sector * 6, 0);
+            break;
+        }
+        case E_MINE:
+            if (absi(X - ex) < 160) { e.vx = (int8_t)clampi(e.vx + sgn(X - ex), -6, 6); e.vy = (int8_t)clampi(e.vy + sgn(Y - ey), -5, 5); }
+            else e.vx = e.vy = 0;
+            break;
+        case E_TURRET:
+            if (lst != 2 && absi(X - ex) < 100 && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, 26 + sector * 6, 1);
+            break;
+        }
+        if (!e.kind) continue;
+        e.x = (int16_t)(e.x + e.vx); e.y = (int16_t)(e.y + e.vy);
+        const int nx = e.x >> 4, ny = e.y >> 4;
+        if (e.kind != E_TURRET && e.kind != E_UFO && ny > groundAt(nx) - 6) e.y = (int16_t)((groundAt(nx) - 6) * 16);
+        if (e.kind != E_TURRET && absi(nx - X) > 420 && !(e.kind == E_UFO && (e.cargo || e.st != 0))) { e.kind = E_NONE; continue; }
+        // touching the lander
+        if (lst != 2 && absi(nx - X) < 10 && absi(ny - Y) < 9) {
+            damage(e.kind == E_MINE ? 2 : 1);
+            killEn(e);
+        }
+    }
+}
+
+static void updateShots() {
+    for (auto &s : shots) {
+        if (!s.life) continue;
+        s.life--;
+        for (int step = 0; step < 7 && s.life; step++) {
+            s.x = (int16_t)(s.x + s.dir);
+            if (s.y >= groundAt(s.x)) { part(s.x, s.y, -s.dir * 8, -10, 8, C_GOLD); s.life = 0; break; }
+            for (auto &e : en) {
+                if (!e.kind) continue;
+                const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : 6;
+                if (e.kind == E_UFO && ey < TOP) continue;
+                if (absi(s.x - ex) <= hw && absi(s.y - ey) <= 5) {
+                    s.life = 0;
+                    e.hit = 4;
+                    if (s.kind && (frameNo & 1)) break;                    // a cannon round does half a laser's damage
+                    part(s.x, s.y, -s.dir * 10, -8, 8, C_WHITE);
+                    if (--e.hp == 0) killEn(e); else sfx(S_HIT);
+                    break;
+                }
+            }
+        }
+    }
+    const int X = LX(), Y = LY();
+    for (auto &s : es) {
+        if (!s.life) continue;
+        s.life--;
+        s.x = (int16_t)(s.x + s.vx); s.y = (int16_t)(s.y + s.vy);
+        const int x = s.x >> 4, y = s.y >> 4;
+        if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
+        if (lst != 2 && absi(x - X) < 7 && absi(y - Y) < 8) { s.life = 0; damage(1); }
+    }
+    for (auto &q : pt) {
+        if (!q.life) continue;
+        q.life--;
+        q.x = (int16_t)(q.x + q.vx); q.y = (int16_t)(q.y + q.vy);
+        if (q.col != C_STEEL && q.col != C_SILVER) q.vy = (int8_t)(q.vy + 1);          // smoke drifts, sparks and debris fall
+        if ((q.y >> 4) > groundAt(q.x >> 4)) { q.y = (int16_t)(groundAt(q.x >> 4) * 16); q.vy = (int8_t)(-q.vy / 3); q.vx = (int8_t)(q.vx / 2); }
+    }
+    for (auto &b : booms) {
+        if (b.delay) { if (--b.delay == 0) { sfx(S_BOOM); for (int i = 0; i < 6; i++) part(b.x, b.y, rnd(40) - 20, rnd(40) - 26, 16, i & 1 ? C_GOLD : C_RED); shake = 8; } }
+        else if (b.t) b.t--;
+    }
+}
+
+// ---- weather --------------------------------------------------------------------------------------------------------
+static uint8_t wxX[WXN], wxY[WXN];
+static int lastCam, meteorT, meteorX, meteorY;
+static void updateWeather() {
+    const Planet &p = PLR;
+    const int dc = cam - lastCam;
+    lastCam = cam;
+    windV = isin(frameNo / 3 + stage * 50) * p.wind * (3 + (isin(frameNo * 2) > 60 ? 2 : 0)) / 8;   // the wind, 1/256 px a frame: it veers and gusts
+    const int gust = windV / 2;
+    for (int i = 0; i < WXN; i++) {
+        int x = wxX[i] - dc, y = wxY[i];
+        switch (p.weather) {
+        case WX_DUST: x += gust / 24 + (i & 1); y += (i % 3) == 0; break;
+        case WX_SNOW: y += (frameNo + i) & 1; x += (isin(frameNo * 2 + i * 23) > 40) - (isin(frameNo * 2 + i * 23) < -40) + gust / 48; break;
+        case WX_RAIN: y += 5; x -= 1; break;
+        case WX_ASH: if (i & 1) { y -= 1; x += (frameNo + i) % 3 == 0; } else { y += (frameNo & 1); } break;
+        case WX_DRIZZLE: y += 2; break;
+        case WX_ACID: y += 4; break;
+        default: break;
+        }
+        while (x < 0) x += 160;
+        while (x >= 160) x -= 160;
+        if (y >= 128) { y = TOP; x = rnd(160); }
+        if (y < TOP) { y = 127; x = rnd(160); }
+        wxX[i] = (uint8_t)x; wxY[i] = (uint8_t)y;
+    }
+    if (p.weather == WX_RAIN && !lightT && rnd(260) == 0) lightT = 8;
+    if (p.weather == WX_METEOR && !meteorT && rnd(120) == 0) { meteorT = 20; meteorX = 20 + rnd(90); meteorY = 18 + rnd(20); }
+    if (meteorT) meteorT--;
+}
+
+static void drawWeather() {
+    const Planet &p = PLR;
+    for (int i = 0; i < WXN; i++) {
+        const int x = wxX[i], y = wxY[i];
+        if (x >= 128) continue;
+        switch (p.weather) {
+        case WX_DUST: pset(x, y, (i & 1) ? C_GNDL : C_SKY1); pset(x - 1, y, C_SKY1); if (i & 2) pset(x - 2, y, C_GNDL); break;
+        case WX_SNOW: pset(x, y, C_WHITE); if ((i & 3) == 0) pset(x + 1, y, C_WHITE); break;
+        case WX_RAIN: pset(x, y, C_SILVER); pset(x + 1, y - 1, C_STEEL); pset(x + 1, y - 2, C_STEEL); break;
+        case WX_ASH: if (i & 1) pset(x, y, ((frameNo + i) & 4) ? C_GOLD : C_RED); else pset(x, y, C_STEEL); break;
+        case WX_DRIZZLE: pset(x, y, C_GNDL); pset(x, y - 1, C_SKY1); break;
+        case WX_ACID: pset(x, y, C_GREEN); pset(x, y - 1, C_GREEN); if (y >= groundAt(cam + x) - 1) { pset(x - 1, y - 1, C_GREEN); pset(x + 1, y - 1, C_GREEN); } break;
+        case WX_GLINT: {
+            const int ph = (frameNo + i * 11) & 31;
+            if (ph < 6) { const uint8_t c = ph < 3 ? C_WHITE : C_ACC; pset(x, y, c); if (ph == 1 || ph == 2) { pset(x - 1, y, C_ACC); pset(x + 1, y, C_ACC); pset(x, y - 1, C_ACC); pset(x, y + 1, C_ACC); } }
+            break;
+        }
+        default: break;
+        }
+    }
+}
+
+// ---- the scene ------------------------------------------------------------------------------------------------------
+static uint8_t topA[4][128];                       // each layer's top per screen column: far, mid, near, ground
+
+static void drawSky() {
+    // a dithered gradient: SKY0 above, SKY1 lower down, then SKY1 into FAR towards the horizon (a haze)
+    for (int y = TOP; y < 128; y++) {
+        const int lv = (y - TOP) * 7 / 80;
+        const uint8_t s0 = (C_SKY0 << 4) | C_SKY0, s1 = (C_SKY1 << 4) | C_SKY1, d01 = (C_SKY1 << 4) | C_SKY0, d10 = (C_SKY0 << 4) | C_SKY1;
+        const uint8_t f1 = (C_FAR << 4) | C_SKY1, f2 = (C_SKY1 << 4) | C_FAR;
+        uint8_t v;
+        switch (lv) {
+        case 0: case 1: v = s0; break;
+        case 2: v = (y & 1) ? d01 : s0; break;
+        case 3: v = (y & 1) ? d01 : d10; break;
+        case 4: v = (y & 1) ? d01 : s1; break;
+        case 5: case 6: v = s1; break;
+        default: v = (y & 1) ? ((y & 2) ? f1 : s1) : s1; break;
+        }
+        memset(gfx_fb + y * GFX_FB_STRIDE, v, GFX_FB_STRIDE);
+    }
+}
+
+static void disc(int cx, int cy, int r, uint8_t c) { gfx_fillCircle(cx, cy, r, c); }
+// a planet in the sky: bands of a and b (or, clouds, b drifting over a), its night side dithered off to the right
+static void skyBall(int cx, int cy, int r, uint8_t a, uint8_t b, uint8_t night, bool clouds) {
+    for (int dy = -r; dy <= r; dy++) {
+        const int hw = isqrtTab(r * r - dy * dy);
+        for (int dx = -hw; dx <= hw; dx++) {
+            uint8_t c;
+            if (clouds) {
+                const uint32_t h = hash((uint32_t)(((dx + (frameNo >> 4)) >> 1) & 63) * 131u + (uint32_t)((dy + 16) >> 1) * 7u) & 7;
+                c = h < 2 ? b : h == 2 ? C_GREEN : a;
+            } else c = (((dy + 32) / 4) & 1) ? a : b;
+            const int e = dx - hw / 2;
+            if (e > 1 || (e >= 0 && ((dx + dy) & 1))) c = night;
+            pset(cx + dx, cy + dy, c);
+        }
+    }
+}
+
+static void drawSkyObjects() {
+    const Planet &p = PLR;
+    const int pc = cam >> 6;
+    if (p.sky == SK_EARTH || p.sky == SK_AURORA || p.sky == SK_MOONS || p.sky == SK_TWINSUN) {    // stars
+        const int sc = cam >> 5;
+        for (int i = 0; i < 40; i++) {
+            const uint32_t h = hash((uint32_t)i * 7777u + 1u);
+            const int x = (int)((h & 255) + 512 - (uint32_t)sc) & 255, y = TOP + 2 + (int)((h >> 8) % 60);
+            if (x < 128) pset(x, y, ((h >> 16) & 7) == (uint32_t)((frameNo >> 3) & 7) ? C_SILVER : ((h >> 20) & 1) ? C_WHITE : C_STEEL);
+        }
+    }
+    switch (p.sky) {
+    case SK_EARTH: skyBall(98 - pc, 36, 9, C_ACC, C_WHITE, C_INK, true); break;    // the Earth: blue seas, white cloud, a night side
+    case SK_SUN:
+        disc(30 - pc, 34, 7, C_GNDL); disc(30 - pc, 34, 5, C_GOLD); disc(30 - pc, 34, 3, C_WHITE);
+        R(70 - pc, 26, 3, 3, C_SILVER); pset(70 - pc, 26, C_WHITE);
+        R(88 - pc, 40, 2, 2, C_GNDL);
+        break;
+    case SK_AURORA:                                             // curtains of light, shimmering
+        for (int x = 0; x < 128; x++) {
+            const int wx = x + (cam >> 5), top = TOP + 6 + (isin(wx * 3 + frameNo) >> 5) + (isin(wx * 7 - frameNo * 2) >> 6);
+            const int len = 10 + (isin(wx * 5 + frameNo / 2) >> 5);
+            for (int y = top; y < top + len; y++) if (((x + y + (frameNo >> 1)) & 1) == 0 || y < top + 3) pset(x, y, (y - top) < 4 ? C_GREEN : C_ACC);
+        }
+        break;
+    case SK_GIANT: skyBall(92 - pc, 48, 24, C_ACC, C_GOLD, C_FAR, false); break;    // a banded gas giant over the jungle
+    case SK_REDSUN: disc(64 - pc, 96, 36, C_RED); disc(64 - pc, 96, 25, C_ACC); disc(64 - pc, 96, 12, C_GOLD); break;
+    case SK_RINGED: {                                           // a ringed giant: the ring behind, the planet, the ring in front
+        const int cx = 38 - pc, cy = 40;
+        for (int k = 0; k < 2; k++) {
+            if (k) skyBall(cx, cy, 15, C_GNDL, C_WHITE, C_FAR, false);
+            for (int a = 0; a < 256; a += 2 - k) { const int y = isin(a); if ((y >= 0) == (k == 1)) { pset(cx + (isin(a + 64) * 32 >> 7), cy + (y * 6 >> 7), C_GOLD); } }
+        }
+        break;
+    }
+    case SK_TWINSUN:
+        disc(26 - pc, 30, 6, C_ACC); disc(26 - pc, 30, 4, C_WHITE);
+        disc(48 - pc, 44, 4, C_GOLD); disc(48 - pc, 44, 2, C_WHITE);
+        break;
+    case SK_MOONS:
+        disc(30 - pc, 32, 7, C_SILVER); disc(33 - pc, 30, 6, C_SKY0);          // a crescent
+        disc(96 - pc, 26, 4, C_ACC); disc(95 - pc, 25, 2, C_WHITE);
+        break;
+    }
+    if (p.clouds) {                                             // dithered cloud banks drifting slowly
+        const int cc = (cam >> 4) + (frameNo >> 3);
+        for (int k = (cc >> 6) - 1; k <= ((cc + 128) >> 6) + 1; k++) {
+            const uint32_t h = hash((uint32_t)k * 4243u + planet);
+            const int cx = k * 64 - cc + (int)(h & 15), cy = TOP + 10 + (int)((h >> 4) & 31), hw = 16 + (int)((h >> 9) & 15), hh = 3 + (int)((h >> 13) & 3);
+            for (int r = -hh; r <= hh; r++) {
+                const int w = hw - (hw * r * r) / (hh * hh + 1) - (r < 0 ? -r * 2 : 0);
+                if (w <= 0) continue;
+                const int y = cy + r;
+                hl(cx - w + 3, y, 2 * w - 6, p.clouds);
+                for (int x = cx - w; x < cx - w + 3; x++) if ((x + y) & 1) pset(x, y, p.clouds);
+                for (int x = cx + w - 3; x < cx + w; x++) if ((x + y) & 1) pset(x, y, p.clouds);
+            }
+        }
+    }
+    if (meteorT) for (int k = 0; k < 6; k++) pset(meteorX + (20 - meteorT) * 3 - k, meteorY + (20 - meteorT) - k / 2, k < 2 ? C_WHITE : k < 4 ? C_SILVER : C_STEEL);
+    if (lightT > 4) {                                          // a lightning bolt from the clouds
+        int x = 30 + (frameNo * 37) % 70;
+        for (int y = TOP + 8; y < 80; y++) { x += ((hash((uint32_t)(y + frameNo)) & 3) == 0) - ((hash((uint32_t)(y * 3 + frameNo)) & 3) == 0); pset(x, y, C_WHITE); }
+    }
+}
+
+// a layer's colours: its own, a lighter one for slopes facing the light, a darker one for the others
+static const uint8_t LBODY[3] = { C_FAR, C_MID, C_NEAR }, LLIT[3] = { C_SKY1, C_FAR, C_MID }, LDARK[3] = { C_MID, C_NEAR, C_GNDD };
+
+static void layerTops(int L) {
+    const int lc = cam >> (3 - L);
+    for (int x = 0; x < 128; x++) topA[L][x] = (uint8_t)clampi(layerH(L, lc + x), TOP, 127);
+}
+
+// fill one layer's columns from its top down to the next layer's top: slope lighting and a stone texture
+static void drawLayerCols(int L) {
+    const uint8_t body = LBODY[L], lit = LLIT[L], dark = LDARK[L];
+    const int lc = cam >> (3 - L);
+    for (int x = 0; x < 128; x++) {
+        const int y0 = topA[L][x], y1 = topA[L + 1][x];
+        if (y0 >= y1) continue;
+        const int slope = x ? (int)topA[L][x - 1] - y0 : 0;            // > 0: rising to the right, facing the light
+        const int litD = slope > 0 ? 2 + slope * 2 : slope < 0 ? 0 : 1, darkD = slope < 0 ? 2 - slope : 0;
+        uint8_t *p = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
+        const int sh = (x & 1) ? 4 : 0;
+        const uint8_t keep = (x & 1) ? 0x0F : 0xF0;
+        const int tx = (lc + x) & 31;
+        for (int y = y0; y < y1; y++, p += GFX_FB_STRIDE) {
+            const int d = y - y0;
+            uint8_t c = body;
+            if (d < litD) c = lit;
+            else if (d < darkD) c = dark;
+            else if (L && d > 2) { const uint8_t t = tile[y & 15][tx]; if (t == 0) c = dark; else if (t == 3 && L == 2 && d < 12) c = lit; }
+            *p = (uint8_t)((*p & keep) | (c << sh));
+        }
+    }
+}
+
+static void drawGroundCols() {
+    const Planet &p = PLR;
+    static const uint8_t BAND[4][4] = { { C_GND, C_GNDL, C_GNDL, C_GNDL }, { C_GND, C_GND, C_GND, C_GNDL }, { C_GNDD, C_GND, C_GND, C_GND }, { C_GNDD, C_GNDD, C_GND, C_GNDD } };
+    for (int x = 0; x < 128; x++) {
+        const int y0 = topA[3][x];
+        uint8_t *p8 = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
+        const int sh = (x & 1) ? 4 : 0;
+        const uint8_t keep = (x & 1) ? 0x0F : 0xF0;
+        const int tx = (cam + x) & 31;
+        for (int y = y0; y < 128; y++, p8 += GFX_FB_STRIDE) {
+            const int d = y - y0;
+            const uint8_t t = tile[y & 15][tx];
+            uint8_t c;
+            if (d == 0) c = C_GNDL;
+            else {
+                int b = d < 3 ? 0 : d < 12 ? 1 : d < 28 ? 2 : 3;
+                if ((d == 12 || d == 28) && ((x ^ y) & 1)) b--;                       // the bands dithered into each other
+                c = BAND[b][t];
+                if (t == 0 && b >= 2 && p.crack != C_INK) c = ((x + y + (frameNo >> 2)) & 7) ? p.crack : C_GOLD;   // glowing seams
+            }
+            *p8 = (uint8_t)((*p8 & keep) | (c << sh));
+        }
+    }
+}
+
+// ---- structures on the background layers ----------------------------------------------------------------------------
+// a background building from the card, in the layer's colours, with its light animated
+static void structure(int n, int sx, int base, int L, uint32_t h) {
+    const CSpr &c = *STRUCT[PLR.theme - 1][n];
+    uint8_t mp[14];
+    memcpy(mp, MAP, 14); mp[2] = LDARK[L]; mp[3] = LBODY[L]; mp[4] = LLIT[L];
+    const int x = sx, y = base - c.h + 1;
+    blit(c, x, y, ((h >> 22) & 1) && n != 3, 255, mp);
+    const int8_t *li = STRUCT_LIGHT[PLR.theme - 1][n];
+    const int lx = x + li[0], ly = y + li[1];
+    switch (li[2]) {
+    case 1: pset(lx, ly, ((frameNo + (int)h) & 16) ? C_RED : C_GOLD); break;                       // a beacon
+    case 2: for (int r = 0; r < 3; r++) R(lx - 3, ly - ((frameNo / 2 + r * 12) % 36), 6, 1, C_ACC); break;   // rings of light climbing
+    case 3:                                                                                         // an arc between pylons
+        if ((frameNo & 7) < 5) for (int k = 0, yy = ly; k < 18; k++) { yy = clampi(yy + (int)(hash((uint32_t)(k + frameNo / 2 * 31)) % 3) - 1, ly - 4, ly + 4); pset(lx + k, yy, (k & 1) ? C_ACC : C_WHITE); }
+        break;
+    case 4: { const uint8_t e = ((frameNo + (int)h) & 63) < 40 ? C_GOLD : C_RED; pset(lx, ly, e); pset(lx + 6, ly, e); break; }   // eyes that glow
+    }
+}
+
+static void drawStructures(int L) {
+    const Planet &p = PLR;
+    if (p.theme == TH_MOON) return;
+    if (L == 0) {
+        if (p.style[0] == ST_CONES) {                                   // volcanoes: lava at the craters, blobs thrown up
+            const int lc = cam >> 3;
+            for (int k = (lc >> 7) - 1; k <= ((lc + 128) >> 7) + 1; k++) {
+                if ((hash((uint32_t)planet * 7919u + (uint32_t)k * 31u) & 3) != 0) continue;
+                const int sx = k * 128 + 64 - lc, top = layerH(0, k * 128 + 64);
+                R(sx - 3, top + 1, 7, 2, C_ACC); R(sx - 1, top, 3, 1, C_GOLD);
+                for (int i = 0; i < 4; i++) {
+                    const int ph = (frameNo * 2 + i * 23) % 60, bx = sx + (i - 2) * ph / 10, by = top - ph + ph * ph / 34;
+                    if (by < top) pset(bx, by, ph < 30 ? C_GOLD : C_ACC);
+                }
+                for (int d = 2; d < 14; d++) pset(sx + ((d * (k & 1 ? 1 : -1)) >> 1), top + d, (d + frameNo / 4) & 3 ? C_ACC : C_RED);   // a lava flow
+            }
+        }
+        if (p.theme == TH_RUINS && p.style[0] == ST_SPIKES) {           // capstones glint on the pyramids
+            const int lc = cam >> 3, s2 = LSH[0] - 1;
+            for (int k = (lc >> s2); k <= ((lc + 128) >> s2); k++) {
+                const int sx = (k << s2) + (1 << (s2 - 1)) - lc, top = layerH(0, (k << s2) + (1 << (s2 - 1)));
+                if (top < 64) { pset(sx, top, C_GOLD); pset(sx - 1, top + 1, C_GOLD); pset(sx, top + 1, C_GOLD); }
+            }
+        }
+        return;
+    }
+    const int cw = L == 1 ? 96 : 80, lc = cam >> (3 - L);
+    for (int k = (lc / cw) - 1; k <= (lc + 128) / cw + 1; k++) {
+        const uint32_t h = hash((uint32_t)k * 2246822519u + (uint32_t)L * 3266489917u + planet);
+        if ((h & 3) == 0) continue;
+        const int lxp = k * cw + 8 + (int)((h >> 4) % (uint32_t)(cw - 40));
+        const int sx = lxp - lc;
+        if (sx < -40 || sx > 140) continue;
+        const int base = layerH(L, lxp + 6) + 3;
+        const int ty = (int)((h >> 12) % 4);
+        if (L == 2 && ((h >> 18) & 3) == 0) {                          // a billboard on two legs
+            const char *t = PLR.ads[(h >> 20) % 3];
+            const int w = text35Width(t) + 6;
+            R(sx + 3, base - 16, 1, 16, LDARK[L]); R(sx + w - 4, base - 16, 1, 16, LDARK[L]);
+            adBoard(sx, base - 27, t, false, h);
+            continue;
+        }
+        structure((int)((h >> 12) % 6), sx, base, L, h);
+    }
+}
+
+// ---- things on the ground: pads, the base, the Moon's flag and footprints, turrets ----------------------------------
+static void drawPad(int px, bool base) {
+    const int sx = px - cam, gy = groundAt(px + 20);
+    if (sx < -48 || sx > 130) return;
+    R(sx, gy, 40, 3, C_STEEL); R(sx, gy, 40, 1, C_SILVER);
+    for (int k = 4; k < 36; k += 8) R(sx + k, gy + 1, 4, 1, C_GOLD);
+    const uint8_t lamp = base ? ((frameNo & 8) ? C_GREEN : C_ACC) : ((frameNo & 8) ? C_RED : C_GOLD);
+    R(sx - 1, gy - 6, 1, 6, C_STEEL); R(sx + 40, gy - 6, 1, 6, C_STEEL);
+    pset(sx - 1, gy - 7, lamp); pset(sx + 40, gy - 7, lamp);
+    if (base) {                                                     // the fuel pump
+        const int fx = baseRight ? sx + 42 : sx - 6;
+        R(fx, gy - 9, 4, 9, C_GOLD); R(fx, gy - 9, 4, 1, C_WHITE); R(fx + 1, gy - 6, 2, 2, (lst == 1 && onPad == 2 && (frameNo & 4)) ? C_GREEN : C_INK);
+        gfx_text(sx + 8, gy + 4, T(MS_BASE), C_GOLD);
+    } else {                                                        // a launch gantry
+        const int gx = baseRight ? sx - 10 : sx + 44;
+        R(gx, gy - 30, 1, 30, C_STEEL); R(gx + 5, gy - 30, 1, 30, C_STEEL);
+        for (int y = gy - 30; y < gy; y += 5) { R(gx, y, 6, 1, C_STEEL); pset(gx + 2 + ((y >> 2) & 1), y + 2, C_STEEL); }
+        pset(gx + 2, gy - 32, (frameNo & 16) ? C_RED : C_STEEL);
+    }
+}
+
+static void windsock(int x, int gy) {
+    if (x < -12 || x > 136) return;
+    R(x, gy - 12, 1, 12, C_STEEL);
+    const int dir = windV < 0 ? -1 : 1, len = 2 + absi(windV) / 32, droop = 5 - len / 2;
+    for (int k = 1; k <= len; k++) {
+        const int y = gy - 12 + (droop > 0 ? k * droop / len : 0) + ((isin(frameNo * 8 + k * 30) > 80) ? 1 : 0);
+        const uint8_t c = ((k + 1) >> 1) & 1 ? C_RED : C_WHITE;
+        pset(x + dir * k, y, c); if (k < len - 1) pset(x + dir * k, y + 1, c);
+    }
+}
+
+static void drawMoonTableau() {
+    // a flag on its pole (rippling: the crossbar holds it out), an old descent stage and boot prints in the dust
+    const int fxw = baseRight ? startPadX + 74 : startPadX - 34, fx = fxw - cam;
+    if (fx < -60 || fx > 180) return;
+    const int gy = groundAt(fxw);
+    R(fx, gy - 24, 1, 24, C_SILVER);
+    R(fx, gy - 24, 13, 1, C_SILVER);
+    static const int8_t WAVE[8] = { 0, 0, 1, 1, 1, 0, 0, -1 };
+    for (int c = 0; c < 12; c++) {
+        const int off = c < 2 ? 0 : WAVE[(c + (frameNo >> 2)) & 7] * (c > 6 ? 2 : 1) / 1;
+        for (int r = 0; r < 7; r++) {
+            uint8_t col = (r & 1) ? C_WHITE : C_RED;
+            if (c < 5 && r < 4) col = (((c + r) & 1) && c > 0 && r > 0 && r < 3) ? C_WHITE : C_ACC;   // the stars on blue
+            if (c >= 10 && ((frameNo >> 2) & 1) && r == 6) continue;
+            pset(fx + 1 + c, gy - 23 + r + off, col);
+        }
+    }
+    const int dx = fx + (baseRight ? 22 : -26), dgy = groundAt(fxw + (baseRight ? 22 : -26));     // the descent stage left behind
+    R(dx - 1, dgy - 9, 1, 9, C_STEEL); R(dx + 12, dgy - 9, 1, 9, C_STEEL);
+    R(dx - 2, dgy - 1, 3, 1, C_SILVER); R(dx + 11, dgy - 1, 3, 1, C_SILVER);
+    R(dx, dgy - 12, 12, 6, C_GOLD); R(dx, dgy - 12, 12, 1, C_WHITE); R(dx + 11, dgy - 11, 1, 5, C_RED);
+    R(dx + 4, dgy - 6, 4, 2, C_STEEL);
+    for (int wx = fxw - 70; wx < fxw + 70; wx += 3) {               // boot prints from the pad to the flag and around
+        const int s = wx - cam;
+        if ((unsigned)s > 127 || (hash((uint32_t)wx) & 7) == 0) continue;
+        const int y = groundAt(wx) + 1 + ((wx / 3) & 1);
+        pset(s, y, C_GNDD); pset(s + 1, y, C_GNDD);
+    }
+}
+
+static void drawItems() {
+    for (const auto &it : items) {
+        if (it.st != 1) continue;
+        const int x = it.x - cam - 3, y = groundAt(it.x) - 5;
+        if (x < -8 || x > 130) continue;
+        static const uint8_t BODY[4] = { C_GOLD, C_STEEL, C_RED, C_ACC };
+        R(x, y, 7, 5, BODY[it.kind]); R(x, y, 7, 1, C_WHITE); R(x + 6, y + 1, 1, 4, C_INK);
+        if (it.kind == IT_SUPPLY) { R(x + 3, y + 1, 1, 3, C_RED); R(x + 2, y + 2, 3, 1, C_RED); }   // a red cross
+        else if (it.kind == IT_REPAIR) { pset(x + 2, y + 2, C_WHITE); pset(x + 3, y + 3, C_WHITE); pset(x + 4, y + 2, C_WHITE); }
+        else if (it.kind == IT_FUEL) R(x + 1, y + 2, 5, 1, C_WHITE);
+        else pset(x + 3, y + 2, (frameNo & 4) ? C_WHITE : C_GOLD);
+        if ((frameNo & 16) && absi(it.x - LX()) < 60) pset(x + 3, y - 3, C_GOLD);   // a beacon when the lander is near
+    }
+}
+
+static void drawPointer() {                                 // an arrow at the edge of the screen: the base when full, else the nearest colonist
+    if (state != PLAY || lst == 2 || !(frameNo & 8)) return;
+    int tx = -1;
+    uint8_t c = C_WHITE;
+    if (seats >= SEATS || (seats && nearestIdle(LX(), 9999) < 0)) { tx = basePadX + 20; c = C_ACC; }
+    else { const int i = nearestIdle(LX(), 9999); if (i >= 0) tx = men[i].x; }
+    if (tx < 0 || (tx >= cam && tx < cam + 128)) return;
+    const int left = tx < cam, x = left ? 1 : 126, y = 70;
+    for (int k = 0; k < 4; k++) R(left ? x + k : x - k, y - k, 1, 2 * k + 1, c);
+}
+
+static void drawGroundThings() {
+    drawPlants();
+    drawCritters();
+    drawPad(startPadX, false);
+    drawPad(basePadX, true);
+    if (PLR.wind) { windsock(startPadX + (baseRight ? 46 : -6) - cam, groundAt(startPadX)); windsock(basePadX + (baseRight ? -6 : 46) - cam, groundAt(basePadX)); }
+    const int bx = buildX - cam;
+    if (bx > -50 && bx < 130) {
+        const int gy = groundAt(buildX + 22);
+        uint8_t mp[14];                                                  // the base in this world's colours
+        memcpy(mp, MAP, 14); mp[5] = PLR.basec;
+        blit(*BASEPIC[PLR.base], bx, gy - BASEPIC[PLR.base]->h + 1, !baseRight, 255, mp);
+        flag(baseRight ? bx - 4 : bx + 46, gy, false);
+    }
+    drawAlienBase();
+    drawItems();
+    drawDiner();
+    if (planet == 0) drawMoonTableau();
+    drawSigns();
+}
+
+// a flag on a pole, rippling: the colony's (a gold star) or the aliens' (an eye)
+static void flag(int x, int gy, bool alien) {
+    if (x < -14 || x > 130) return;
+    R(x, gy - 24, 1, 24, C_SILVER); pset(x, gy - 25, C_GOLD);
+    static const int8_t WAVE[8] = { 0, 0, 1, 1, 1, 0, 0, -1 };
+    for (int c = 0; c < 11; c++) {
+        const int off = c > 1 ? WAVE[(c + (frameNo >> 2)) & 7] : 0;
+        for (int r = 0; r < 7; r++) {
+            uint8_t col;
+            if (alien) {
+                const int d = (c - 5) * (c - 5) + (r - 3) * (r - 3) * 2;
+                col = d == 0 ? C_INK : d < 3 ? C_RED : d < 9 ? C_WHITE : C_GREEN;
+            } else {
+                col = (r == 0 || r == 6) ? C_ACC : C_WHITE;
+                if ((c == 5 && r >= 2 && r <= 4) || (r == 3 && c >= 4 && c <= 6)) col = C_GOLD;
+            }
+            pset(x + 1 + c, gy - 24 + r + off, col);
+        }
+    }
+}
+
+// the aliens' collecting bucket: its tubes run down to pods in a chamber under the ground
+static void drawAlienBase() {
+    const int bx = alienX - cam;
+    if (bx < -50 || bx > 130) return;
+    const int gy = groundAt(alienX + 20), cy = gy + 9;
+    const uint8_t *TX = COLL_TUBE[PLR.coll];
+    if (cy < 128) {
+        R(bx + 1, cy, 38, 15, C_INK); R(bx + 1, cy, 38, 1, C_STEEL); R(bx + 1, cy + 14, 38, 1, C_STEEL);
+        R(bx + 1, cy, 1, 15, C_STEEL); R(bx + 38, cy, 1, 15, C_STEEL);
+        for (int k = 0; k < 4; k++) {                                   // pods, glowing
+            const int px = bx + 5 + k * 8;
+            R(px, cy + 4, 6, 9, C_STEEL); R(px + 1, cy + 5, 4, 7, ((frameNo >> 3) + k) & 3 ? C_GREEN : C_WHITE);
+            pset(px + 2, cy + 7, C_INK); pset(px + 3, cy + 7, C_INK);
+        }
+        for (int k = 3; k < 37; k += 5) pset(bx + k, cy + 2, ((frameNo >> 2) + k) & 4 ? C_RED : C_GOLD);
+    }
+    for (int t = 0; t < 3; t++) R(bx + TX[t], gy, 2, cy - gy, C_STEEL);
+    blit(*COLLPIC[PLR.coll], bx, gy - COLLPIC[PLR.coll]->h + 1, false);
+    if (tubeT) for (int t = 0; t < 3; t++) {                           // green slime pulsing down the tubes
+        const int y = gy - 12 + ((45 - tubeT) * 2 + t * 3) % 22;
+        R(bx + TX[t], y, 2, 3, C_GREEN); pset(bx + TX[t], y + 1, C_WHITE);
+    }
+    if (tubeT && (frameNo & 2)) R(bx + 6, gy - COLL_TOP[PLR.coll] + 1, 28, 1, C_WHITE);       // a splash as one goes in
+    flag(bx + 39, gy, true);
+}
+
+// the Moon's drive-through diner: a lit neon sign, an open sign, arrows down the lane
+// the giant food on the takeaway's pole (a 12 x 9 box)
+static void foodIcon(uint8_t k, int x, int y) {
+    switch (k) {
+    case 0:                                                              // a burger
+        hl(x + 2, y, 8, C_GOLD); hl(x + 1, y + 1, 10, C_GOLD); hl(x, y + 2, 12, C_GOLD); pset(x + 3, y + 1, C_WHITE); pset(x + 7, y + 1, C_WHITE);
+        hl(x, y + 3, 12, C_GREEN); hl(x, y + 4, 12, C_RED); hl(x, y + 5, 12, C_STEEL); hl(x, y + 6, 12, C_GOLD); hl(x + 1, y + 7, 10, C_GOLD);
+        break;
+    case 1:                                                              // a bowl of noodles and chopsticks
+        for (int c = 0; c < 10; c++) pset(x + 1 + c, y + 3 + ((c >> 1) & 1), C_GOLD);
+        for (int r = 0; r < 4; r++) hl(x + r, y + 5 + r, 12 - 2 * r, r ? C_RED : C_WHITE);
+        for (int k = 0; k < 5; k++) { pset(x + 7 + k, y + k, C_STEEL); pset(x + 9 + k / 2, y + k, C_SILVER); }
+        break;
+    case 2:                                                              // an ice cream cone
+        gfx_fillCircle(x + 6, y + 3, 3, C_WHITE); gfx_fillCircle(x + 5, y + 2, 1, C_ACC); pset(x + 6, y - 1, C_RED);
+        for (int r = 0; r < 4; r++) hl(x + 3 + r, y + 6 + r, 7 - 2 * r, (r & 1) ? C_GOLD : C_WHITE);
+        break;
+    case 3:                                                              // a slice of pizza
+        for (int r = 0; r < 9; r++) hl(x + r * 2 / 3, y + r, 12 - r * 4 / 3, r ? C_GOLD : C_RED);
+        R(x + 3, y + 2, 2, 2, C_RED); R(x + 7, y + 3, 2, 2, C_RED); R(x + 5, y + 5, 2, 1, C_RED);
+        break;
+    case 4:                                                              // a hot dog
+        R(x, y + 3, 12, 2, C_RED); hl(x + 1, y + 2, 10, C_RED);
+        for (int c = 1; c < 11; c++) pset(x + c, y + 3 + (c & 1), C_GOLD);
+        R(x + 1, y + 5, 10, 3, C_GOLD); hl(x + 2, y + 5, 8, C_WHITE);
+        break;
+    case 5:                                                              // fish and chips
+        gfx_fillCircle(x + 4, y + 5, 3, C_SILVER); pset(x + 2, y + 4, C_INK); pset(x + 8, y + 3, C_SILVER); pset(x + 8, y + 7, C_SILVER); R(x + 7, y + 4, 2, 3, C_SILVER);
+        for (int k = 0; k < 3; k++) R(x + 9 + k, y + 1 + (k & 1), 1, 4, C_GOLD);
+        R(x + 9, y + 5, 3, 4, C_RED);
+        break;
+    case 6:                                                              // two sushi rolls
+        for (int k = 0; k < 2; k++) { gfx_fillCircle(x + 3 + k * 6, y + 5, 3, C_INK); gfx_fillCircle(x + 3 + k * 6, y + 5, 2, C_WHITE); pset(x + 3 + k * 6, y + 5, k ? C_ACC : C_RED); }
+        break;
+    default:                                                             // a glorp pie, steaming
+        for (int r = 0; r < 5; r++) hl(x + 4 - r, y + 4 + r, 4 + 2 * r, C_GOLD);
+        for (int c = 1; c < 11; c += 3) pset(x + c, y + 7, C_STEEL);
+        pset(x + 5 + ((frameNo >> 3) & 1), y + 2 - ((frameNo >> 2) & 1), C_GREEN); pset(x + 7, y + 1, C_GREEN);
+        break;
+    }
+}
+
+static void drawDiner() {
+    if (burgerX < 0) return;
+    const int bx = burgerX - cam;
+    if (bx < -60 || bx > 140) return;
+    const int gy = groundAt(burgerX + 30), top = gy - 37;
+    uint8_t mp[14];                                                      // the shop's own colour
+    memcpy(mp, MAP, 14); mp[6] = PLR.shopc;
+    blit(C_BURGER, bx, top, false, 255, mp);
+    foodIcon(PLR.food, bx + 44, top + 1);
+    const bool flicker = (hash((uint32_t)(frameNo >> 1)) & 63) == 0;
+    if (!flicker) text35(bx + 23 - text35Width(PLR.shop) / 2, top + 5, PLR.shop, (frameNo & 32) ? C_GOLD : C_WHITE);
+    for (int k = 0; k < 46; k += 2) {                                   // chasing bulbs round the board
+        const uint8_t c = ((k / 2 + (frameNo >> 2)) & 3) == 0 ? C_GOLD : C_WHITE;
+        pset(bx + k, top + 2, c); pset(bx + 45 - k, top + 12, c);
+    }
+    if ((frameNo & 63) < 50) text35(bx + 7, top + 28, "OPEN", C_RED);
+    for (int k = 0; k < 4; k++) {                                       // the lane
+        const int ax = bx + 46 + k * 16, ay = groundAt(burgerX + 46 + k * 16);
+        pset(ax + 1, ay + 1, C_GOLD); pset(ax, ay + 2, C_GOLD); pset(ax + 1, ay + 3, C_GOLD);
+    }
+}
+
+// the alien wildlife on the ground: rocks and plants of each world, swaying; an eye plant watches the lander
+static bool busyAt(int x) {
+    if (absi(x - startPadX - 20) < 34 || absi(x - basePadX - 20) < 34 || absi(x - buildX - 22) < 30 || absi(x - alienX - 20) < 26) return true;
+    if (burgerX >= 0 && x > burgerX - 6 && x < burgerX + 116) return true;
+    for (int z = 0; z < nZones; z++) if (absi(x - zoneX[z]) < 32) return true;
+    return false;
+}
+static void plant(uint8_t k, int x, int gy, uint32_t h) {          // from the card; the ground's tones are this world's
+    uint8_t mp[14];
+    memcpy(mp, MAP, 14); mp[9] = C_GND; mp[12] = C_GNDL; mp[7] = C_GNDD;
+    blitBC(*PLANTPIC[k][((frameNo >> 4) + (int)(h >> 9)) & 1], x, gy + 1, (h >> 11) & 1, 255, mp);
+}
+static void drawPlants() {
+    for (int c = cam / 9 - 1; c <= (cam + 128) / 9 + 1; c++) {
+        const uint32_t h = hash((uint32_t)c * 2654435761u + (uint32_t)stage * 97u);
+        if (((h >> 3) & 3) == 0 && !(planet == 0 && ((h >> 5) & 1))) continue;
+        if (((h >> 3) & 3) == 1) continue;
+        const int x = c * 9 + (int)(h & 7);
+        if (busyAt(x)) continue;
+        plant(PLR.plants[(h >> 16) % 3], x - cam, groundAt(x), h);
+    }
+}
+
+// background wildlife: fliers and crawlers that live their own lives (nothing touches them)
+static void updateCritters() {
+    if (!PLR.fly && !PLR.crawl) return;
+    for (auto &c : crit) {
+        if (!c.kind) {
+            if (rnd(90) == 0) {
+                const bool left = rnd(2);
+                c.kind = (uint8_t)(PLR.fly && PLR.crawl ? 1 + rnd(2) : PLR.fly ? 1 : 2); c.x = (int16_t)(cam + (left ? -8 : 136)); c.vx = (int8_t)(left ? 1 : -1); c.t = (uint8_t)rnd(255);
+                c.y = (int16_t)(c.kind == 1 ? TOP + 10 + rnd(36) : groundAt(c.x));
+            }
+            continue;
+        }
+        c.t++;
+        if (c.kind == 1) { if (c.t & 1) c.x = (int16_t)(c.x + c.vx); if ((c.t & 7) == 0) c.y = (int16_t)(c.y + (isin(c.t * 4) > 0 ? 1 : -1)); }
+        else { if ((c.t & 3) == 0) c.x = (int16_t)(c.x + c.vx); c.y = (int16_t)groundAt(c.x); if (rnd(300) == 0) c.vx = (int8_t)-c.vx; }
+        if (absi(c.x - cam - 64) > 170) c.kind = 0;
+    }
+}
+static void drawCritters() {
+    for (const auto &c : crit) {
+        if (!c.kind) continue;
+        const int x = c.x - cam, y = c.y, f = (c.t >> 2) & 1;
+        if (c.kind == 1) switch (PLR.fly) {
+            case 1: pset(x, y, C_RED); pset(x - 1, y - f, C_ACC); pset(x + 1, y - f, C_ACC); pset(x - 2, y - 2 * f + 1 - f, C_ACC); pset(x + 2, y - 2 * f + 1 - f, C_ACC); break;   // a bat
+            case 2: R(x - 2, y - 2, 5, 2, C_ACC); pset(x - 1, y - 2, C_WHITE); for (int k = -1; k <= 1; k++) { pset(x + k * 2, y, C_ACC); pset(x + k * 2 + ((c.t >> 3) & 1), y + 1, C_GREEN); } break;   // a jelly
+            default: hl(x - 3, y, 7, C_GNDL); hl(x - 1, y - 1, 3, C_GNDL); pset(x - 3, y - f, C_WHITE); pset(x + 3, y - f, C_WHITE); pset(x - c.vx * 4, y + 1, C_GNDL); pset(x - c.vx * 5, y + 1 + f, C_GNDL); break;   // a ray
+        } else switch (PLR.crawl) {
+            case 1: { const int hop = (c.t & 31) < 8 ? ((c.t & 31) * (8 - (c.t & 31))) / 4 : 0; R(x - 1, y - 2 - hop, 3, 2, C_GREEN); pset(x + c.vx, y - 3 - hop, C_WHITE); break; }   // a hopper
+            case 2: R(x - 2, y - 2, 4, 2, C_RED); pset(x - 1, y - 2, C_GOLD); pset(x - 2 + f, y, C_INK); pset(x + 1 - f, y, C_INK); pset(x + c.vx * 2, y - 2, C_INK); break;      // a beetle
+            default: R(x - 1, y - 3, 3, 3, C_GOLD); pset(x, y - 2, C_INK); hl(x - 2, y - 1, 5, C_ACC); pset(x + c.vx * 2, y - 2, C_ACC); pset(x + c.vx * 2, y - 3, C_WHITE); break;   // a snail
+        }
+    }
+}
+
+// adverts for each world's goods: neon boards on the hills, and signs flown about on little rockets
+static void adBoard(int x, int y, const char *t, bool rockets, uint32_t h) {
+    const int w = text35Width(t) + 6, ht = 11;
+    if (x > 128 || x + w < 0) return;
+    R(x, y, w, ht, C_INK);
+    for (int k = 0; k < w; k += 2) { const uint8_t c = ((k / 2 + (frameNo >> 2)) & 1) ? C_GOLD : C_RED; pset(x + k, y, c); pset(x + w - 1 - k, y + ht - 1, c); }
+    for (int k = 2; k < ht - 1; k += 2) { const uint8_t c = ((k / 2 + (frameNo >> 2)) & 1) ? C_GOLD : C_RED; pset(x, y + k, c); pset(x + w - 1, y + ht - 1 - k, c); }
+    const int ph = (frameNo + (int)(h & 255)) & 63;
+    const bool on = (h & 4) ? ph < 44 || (ph & 4) : true;             // some boards blink off and on, the rest pulse
+    if (on && (hash((uint32_t)(frameNo >> 1) + h) & 63) != 0) text35(x + 3, y + 3, t, (ph & 32) ? C_ACC : (h & 8) ? C_GOLD : C_WHITE);   // neon, flickering now and then
+    if (rockets) for (int k = 0; k < 2; k++) {
+        const int rx = k ? x + w - 4 : x + 2;
+        R(rx, y + ht, 2, 3, C_STEEL); pset(rx, y + ht, C_SILVER);
+        const int f = 1 + ((frameNo + rx) & 3);
+        for (int j = 0; j < f; j++) pset(rx + (j & 1), y + ht + 3 + j, j ? C_RED : C_GOLD);
+    }
+}
+static void updateSigns() {
+    for (auto &g : signs) {
+        if (!g.on) {
+            if (rnd(500) == 0) { const bool left = rnd(2); g.on = 1; g.ad = (uint8_t)rnd(3); g.x = (int16_t)(cam + (left ? -64 : 150)); g.vx = (int8_t)(left ? 1 : -1); g.y = (int16_t)(TOP + 8 + rnd(20)); }
+            continue;
+        }
+        if (frameNo & 1) g.x = (int16_t)(g.x + g.vx);
+        if (g.x < cam - 220 || g.x > cam + 350) g.on = 0;
+    }
+}
+static void drawSigns() {
+    for (const auto &g : signs) if (g.on) adBoard(g.x - cam, g.y + isin(frameNo * 4 + g.ad * 50) / 64, PLR.ads[g.ad], true, g.ad * 77u);
+}
+
+static void drawBeam(int ux, int uy, int gy) {                       // the tractor beam: a shimmering green cone
+    const int top = uy + 5, len = gy - top;
+    if (len <= 0) return;
+    for (int y = top; y < gy; y++) {
+        const int hw = 2 + (y - top) * 6 / len;
+        for (int dx = -hw; dx <= hw; dx++) {
+            const int x = ux + dx;
+            const int k = (y * 2 - frameNo * 3 + absi(dx)) & 7;
+            if (absi(dx) == hw) { if ((y + frameNo) & 1) pset(x, y, C_GREEN); }
+            else if (k == 0) pset(x, y, C_WHITE);
+            else if (k < 3 && ((x + y + frameNo) & 1)) pset(x, y, C_GREEN);
+        }
+    }
+}
+
+// suits: the suit, its shade and the visor; a colonist's look picks one, and a kit (an aerial, a pack, both or none)
+static const uint8_t SUIT[6][3] = { { C_WHITE, C_SILVER, C_GOLD }, { C_GOLD, C_RED, C_ACC }, { C_WHITE, C_GREEN, C_GOLD },
+                                    { C_WHITE, C_ACC, C_GOLD }, { C_WHITE, C_GOLD, C_ACC }, { C_SILVER, C_RED, C_GOLD } };   // highlight, suit, visor
+static const uint8_t *manMap(uint8_t look) {
+    static uint8_t m[14];
+    memcpy(m, MAP, 14);
+    const uint8_t *su = SUIT[look % 6];
+    m[1] = su[0]; m[5] = su[1]; m[8] = su[2];
+    return m;
+}
+static void manKit(const Man &m, int sx, int by, bool jet) {
+    const int kit = (m.look >> 3) & 3, back = sx - m.face * 4;
+    if (kit & 1) { pset(sx + m.face, by - 12, C_STEEL); pset(sx + m.face, by - 13, (frameNo & 16) ? C_RED : C_STEEL); }
+    if ((kit & 2) || jet) { R(back - (m.face < 0 ? 0 : 1), by - 8, 2, 4, C_STEEL); pset(back - (m.face < 0 ? 0 : 1), by - 8, C_SILVER); }
+    if (jet) {                                                          // the burners
+        const int f = 1 + ((frameNo + sx) & 3) / 2 + (groundAt(m.x) - by < 24 ? 2 : 0);
+        for (int k = 0; k < f; k++) { pset(back, by - 4 + k, k ? C_RED : C_GOLD); if (k == 0) pset(back - 1 + (m.face > 0), by - 4, C_WHITE); }
+    }
+}
+
+static void drawMen() {
+    for (int i = 0; i < nMen; i++) {
+        const Man &m = men[i];
+        const int sx = m.x - cam;
+        if (sx < -10 || sx > 138) continue;
+        const bool flip = m.face < 0;
+        const int phase = (frameNo + i * 7);
+        const uint8_t *mp = manMap(m.look);
+        switch (m.st) {
+        case M_IDLE: {
+            const Spr *s = &S_MAN_STAND;
+            int by = m.y;
+            switch (m.act) {
+            case D_GAZE: s = &S_MAN_LOOKUP; break;
+            case D_WANDER: s = (phase & 8) ? &S_MAN_RUN1 : &S_MAN_STAND; break;
+            case D_WAVE: s = (phase & 4) ? &S_MAN_WAVE1 : &S_MAN_WAVE2; break;
+            case D_CHEER: s = (phase & 8) ? &S_MAN_CHEER : &S_MAN_STAND; if (phase & 8) by--; break;
+            case D_CHAT: {
+                const bool speaking = (((m.t >> 5) & 1) == m.by);
+                if (speaking) {
+                    s = (phase & 8) ? &S_MAN_TALK : &S_MAN_STAND;
+                    const int bx = sx + m.face * 4 - 3, byy = m.y - 18;          // a speech bubble
+                    R(bx, byy, 8, 5, C_WHITE); pset(bx + (m.face > 0 ? 1 : 6), byy + 5, C_WHITE);
+                    for (int d = 0; d < 3; d++) if (((m.t >> 2) % 4) > d) pset(bx + 1 + d * 2, byy + 2, C_INK);
+                }
+                break;
+            }
+            default: break;
+            }
+            blitBC(*s, sx, by, flip, 255, mp);
+            manKit(m, sx, by, false);
+            break;
+        }
+        case M_RUN: case M_WALK: blitBC((phase & 4) ? S_MAN_RUN1 : S_MAN_RUN2, sx, m.y, flip, 255, mp); manKit(m, sx, m.y, false); break;
+        case M_BEAM: blitBC(*SPIN[(frameNo >> 2) & 7], sx, m.y + 1, ((frameNo >> 4) & 1) != 0, 255, mp); break;   // tumbling and twisting
+        case M_DROP: blitBC(*SPIN[(frameNo >> 1) & 7], sx, (m.y >> 2) + 1, ((frameNo >> 3) & 1) != 0, 255, mp); break;
+        case M_JET: { const int y = m.y >> 2; blitBC((frameNo & 8) ? S_MAN_CHEER : S_MAN_WAVE1, sx, y, flip, 255, mp); manKit(m, sx, y, true); break; }
+        default: break;
+        }
+    }
+}
+
+static void drawEnemies() {
+    for (const auto &e : en) {
+        if (!e.kind) continue;
+        const int sx = (e.x >> 4) - cam, sy = e.y >> 4;
+        if (sx < -16 || sx > 144) continue;
+        const uint8_t solid = e.hit ? C_WHITE : 255;
+        switch (e.kind) {
+        case E_UFO:
+            if (e.st == 1 && e.target != 255) drawBeam(sx, sy, men[e.target].y + 1);
+            if (e.st == 4) {                                            // the order: a paper bag rising in the beam
+                const int gy = groundAt(burgerX + 35) - 8, by = gy - e.cargo / 2;
+                drawBeam(sx, sy, gy + 2);
+                R(sx - 2, by - 4, 5, 5, C_WHITE); R(sx - 2, by - 4, 5, 1, C_SILVER); R(sx - 2, by - 2, 5, 1, PLR.shopc); pset(sx, by - 3, C_GOLD);
+            }
+            blit(*SAUCER[(frameNo >> 2) & 3], sx - 11, sy - 5, false, solid);
+            for (int k = 0; k < e.cargo && e.st < 3; k++) pset(sx - 4 + k * 2, sy - 3, (frameNo + k * 4) & 8 ? C_WHITE : C_GOLD);
+            break;
+        case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid); break;
+        case E_MINE: blit((frameNo & 4) ? S_MINE0 : S_MINE1, sx - 4, sy - 4, false, solid); break;
+        case E_TURRET: {
+            const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);
+            for (int k = 0; k < 5; k++) pset(sx + dx * k / 4, sy - 4 - k, C_STEEL);
+            blit(S_TURRET, sx - 6, sy - 4, false, solid);
+            break;
+        }
+        }
+    }
+}
+
+static void drawLander() {
+    if (lst == 2) return;
+    if (invT && (frameNo & 2) && lst != 1) return;
+    const int sx = LX() - cam, sy = LY();
+    const CSpr &s = gear ? *LANDER[absi(ang)] : *LANDER_UP[absi(ang)];
+    if (thrusting) {                                                // the flame, along the hull's axis
+        int nx, ny;
+        hullPt(0, 9, nx, ny);
+        const int len = 3 + rnd(4) + (seats < 4 ? 1 : 0), dxs = -sinA(ang), dys = cosA(ang);
+        for (int k = 0; k <= len; k++) {
+            const int px = nx - cam + ((dxs * k) >> 8), py = ny + ((dys * k) >> 8);
+            const uint8_t c = k < 1 ? C_WHITE : k < 3 ? C_GOLD : C_RED;
+            pset(px, py, c);
+            if (k < len - 1) { pset(px + (dys >> 8), py - (dxs >> 8), k < 2 ? C_GOLD : C_RED); pset(px - (dys >> 8), py + (dxs >> 8), k < 2 ? C_GOLD : C_RED); }
+        }
+    }
+    if (thrusting) {                                                // hovering low: dust rolls out along the ground both ways
+        const int gx = LX(), alt = groundAt(gx) - sy;
+        if (alt < 36) for (int k = 0; k < 4; k++) {
+            const int rr = ((frameNo * 3 + k * 9) % 36) * (40 - alt) / 36, y = groundAt(gx + rr) - 1 - (rr > 6 ? (k & 1) : 0);
+            const uint8_t c = rr < 12 ? C_GNDL : (k & 1) ? C_GND : C_GNDL;
+            for (int d = -1; d <= 1; d += 2) { const int x = sx + d * rr; pset(x, y, c); if (rr > 4) { pset(x - d, y - 1, c); if ((x + frameNo) & 1) pset(x + d, y - 2, C_GND); } }
+        }
+    }
+    blit(s, sx - 11, sy - 11, ang < 0);
+    if (absi(ang) < 3) {                                             // the gun pod
+        const int gx = sx + facing * 7, gy = sy + 1;
+        pset(gx, gy, C_STEEL); pset(gx + facing, gy, gunCd ? ((frameNo & 1) ? C_WHITE : C_GOLD) : C_SILVER); pset(gx, gy + 1, (frameNo & 2) && gunCd ? C_SILVER : C_STEEL);
+    }
+}
+
+static void drawShots() {
+    for (const auto &s : shots) {
+        if (!s.life) continue;
+        const int x = s.x - cam;
+        if (s.kind) { pset(x, s.y, C_WHITE); pset(x - s.dir, s.y, C_GOLD); pset(x - s.dir * 2, s.y, C_GOLD); pset(x - s.dir * 4, s.y, C_RED); continue; }
+        for (int k = 0; k < 14; k++) pset(x - s.dir * k, s.y, k < 2 ? C_WHITE : k < 6 ? C_ACC : (k & 1) ? C_WHITE : C_SKY0);
+    }
+    for (const auto &s : es) {
+        if (!s.life) continue;
+        const int x = (s.x >> 4) - cam, y = s.y >> 4;
+        const uint8_t c = s.kind ? ((frameNo & 2) ? C_RED : C_GOLD) : ((frameNo & 2) ? C_GREEN : C_WHITE);
+        pset(x, y, C_WHITE); pset(x - 1, y, c); pset(x + 1, y, c); pset(x, y - 1, c); pset(x, y + 1, c);
+    }
+    for (const auto &q : pt) if (q.life) pset((q.x >> 4) - cam, q.y >> 4, q.col);
+    for (const auto &b : booms) if (b.t && !b.delay) {
+        const int age = 16 - b.t, x = b.x - cam, r = b.r;
+        if (age < 2) gfx_fillCircle(x, b.y, 2 + r * (age + 1) / 4, C_WHITE);
+        else if (age < 7) {
+            const int rr = r * (age + 2) / 9;
+            gfx_fillCircle(x, b.y, rr, C_RED); gfx_fillCircle(x - 1, b.y - 1, rr * 2 / 3, C_GOLD); gfx_fillCircle(x - 1, b.y - 1, rr / 3, C_WHITE);
+            gfx_circle(x, b.y, rr + age, C_GOLD);
+        } else if (age < 12) {
+            const int rr = r * (12 - age) / 6;
+            gfx_circle(x, b.y, r + age * 2, (age & 1) ? C_RED : C_GOLD);
+            if (rr > 0) { gfx_fillCircle(x, b.y - (age - 7), rr, C_RED); if (rr > 2) gfx_fillCircle(x, b.y - (age - 7), rr / 2, C_GOLD); }
+        } else {
+            const int rr = r / 2 + (age - 10) * 2;
+            for (int k = 0; k < 32; k += 2) pset(x + isin(k * 8 + 64) * rr / 128, b.y - (age - 10) + isin(k * 8) * rr / 160, (k & 2) ? C_STEEL : C_SILVER);
+        }
+    }
+}
+
+static void drawHud() {
+    R(0, 0, 128, TOP, C_INK);
+    // fuel
+    gfx_text(1, 0, "F", C_SILVER);
+    R(7, 2, 26, 4, C_STEEL);
+    const int fw = fuel * 24 / FUEL_MAX;
+    R(8, 3, fw, 2, fuel < FUEL_MAX / 4 ? ((frameNo & 8) ? C_RED : C_GOLD) : C_GOLD);
+    // the seats: a white figure for each colonist aboard
+    char q[8];
+    text35(35, 1, fmt(q, "", nSaved, "/", quota), nSaved >= quota ? C_GREEN : C_GOLD);
+    for (int i = 0; i < SEATS; i++) { const uint8_t c = i < seats ? C_WHITE : C_STEEL; R(57 + i * 4, 2, 3, 4, c); pset(58 + i * 4, 3, i < seats ? C_GOLD : C_INK); }
+    // shield and lives
+    for (int i = 0; i < 3; i++) R(90 + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
+    char s[12];
+    fmt(s, "", score);
+    text35(127 - text35Width(s), 1, s, C_WHITE);
+    // the scanner: the whole stage, 16 px to a dot
+    R(3, 8, 122, 1, C_STEEL);
+    for (int i = 0; i < 120; i++) pset(4 + i, scanY[i], C_GNDD);
+    const int c0 = 4 + cam / 16;
+    R(c0, 9, 1, 6, C_STEEL); R(c0 + 8, 9, 1, 6, C_STEEL);
+    R(4 + (basePadX + 20) / 16 - 1, 13, 3, 2, C_ACC);
+    for (int i = 0; i < nMen; i++) {
+        const Man &m = men[i];
+        if (m.st == M_IDLE || m.st == M_RUN || m.st == M_JET || m.st == M_BEAM) pset(4 + m.x / 16, m.st == M_BEAM ? 11 : 14, m.st == M_BEAM ? C_GREEN : C_WHITE);
+    }
+    for (const auto &it : items) if (it.st == 1 && (frameNo & 8)) pset(4 + it.x / 16, 13, C_GOLD);
+    for (const auto &e : en) if (e.kind) pset(4 + (e.x >> 4) / 16, 9 + ((e.y >> 4) - TOP) * 6 / 112, e.kind == E_UFO ? C_GREEN : C_RED);
+    if (frameNo & 4) pset(4 + LX() / 16, 9 + (LY() - TOP) * 6 / 112, C_GOLD);
+}
+
+static void drawWorld() {
+    const int saved = cam;
+    if (shake) cam += (frameNo & 1) ? (shake >> 2) : -(shake >> 2);
+    cam = clampi(cam, 0, W - 128);
+    for (int L = 0; L < 3; L++) layerTops(L);
+    for (int x = 0; x < 128; x++) topA[3][x] = (uint8_t)clampi(groundAt(cam + x), TOP, 127);
+    drawSky();
+    drawSkyObjects();
+    for (int L = 0; L < 3; L++) { drawLayerCols(L); drawStructures(L); }
+    drawGroundCols();
+    drawGroundThings();
+    drawMen();
+    drawEnemies();
+    drawLander();
+    drawShots();
+    drawWeather();
+    for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); gfx_text(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
+    cam = saved;
+    drawHud();
+    drawPointer();
+    if (PLR.wind && state == PLAY) {                                   // the wind: an arrow, longer when it blows harder
+        const int len = absi(windV) / 20, dir = windV < 0 ? -1 : 1, x0 = 14;
+        text35(1, 18, "W", C_SILVER);
+        if (len) { hl(dir > 0 ? x0 : x0 - len, 20, len, C_WHITE); pset(x0 + dir * len, 20, C_WHITE); pset(x0 + dir * (len - 1), 19, C_WHITE); pset(x0 + dir * (len - 1), 21, C_WHITE); }
+    }
+    if (bannerT) {
+        char b[28];
+        fmt(b, T(banner), bannerNum);
+        const int w = gfx_textWidth(b);
+        R((128 - w) / 2 - 3, 19, w + 6, 10, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD);
+    }
+}
+
+// ---- title, menus ------------------------------------------------------------------------------------------------------
+static void drawLogo(int y) {
+    const char *t = "STARLIFT";
+    const int w = gfx_textWidthScaled(t, 2), x = (128 - w) / 2;
+    gfx_textScaled(x + 2, y + 2, t, C_INK, 2);
+    gfx_textScaled(x + 1, y + 1, t, C_RED, 2);
+    gfx_textScaled(x, y, t, C_GOLD, 2);
+}
+
+static void drawBeam(int ux, int uy, int gy);
+static uint8_t menuItems(uint8_t *it);
+static void drawTitleScene() {
+    for (int L = 0; L < 3; L++) layerTops(L);
+    for (int x = 0; x < 128; x++) topA[3][x] = (uint8_t)clampi(groundAt(cam + x), TOP, 127);
+    drawSky(); drawSkyObjects();
+    for (int L = 0; L < 3; L++) { drawLayerCols(L); drawStructures(L); }
+    drawGroundCols();
+    drawPlants();
+    drawWeather();
+    R(0, 0, 128, TOP, C_SKY0);
+}
+
+static void drawTitle() {
+    drawTitleScene();
+    {                                                              // the lander drifts across, its engine lit
+        const int x = 64 + (isin(frameNo * 2) >> 3), y = 60 + (isin(frameNo * 3) >> 5);
+        const int saved = cam; const int32_t sx = lx, sy = ly; const int8_t sa = ang;
+        cam = 0; lx = (int32_t)x << 8; ly = (int32_t)y << 8; ang = (int8_t)(isin(frameNo * 2) / 60); thrusting = (frameNo & 15) < 11; gear = 1; lst = 0; invT = 0;
+        drawLander();
+        cam = saved; lx = sx; ly = sy; ang = sa;
+    }
+    {                                                              // a saucer drifts by, beaming a colonist up
+        const int ux = 128 - ((frameNo / 2) % 220) + 40, uy = 50 + (isin(frameNo * 5) >> 6), gy = groundAt(cam + ux);
+        if (ux > -20 && ux < 150) {
+            const int my = gy - ((frameNo / 2) % 220) / 4;
+            if (my > uy + 6) { drawBeam(ux, uy, gy); blitBC(*SPIN[(frameNo >> 2) & 7], ux, my, ((frameNo >> 4) & 1) != 0); }
+            blit(*SAUCER[(frameNo >> 2) & 3], ux - 11, uy - 5, false);
+        }
+    }
+    drawLogo(18);
+    textCS(36, T(MS_RESCUE_THE_COLONISTS), C_WHITE);
+    char s[24];
+    if (hiScore) { fmt(s, T(MS_HI), hiScore); textCS(2, s, C_SILVER); }
+    uint8_t it[4];
+    const uint8_t n = menuItems(it);
+    R(30, 84, 68, n * 9 + 5, C_INK); R(30, 84, 68, 1, C_GOLD); R(30, 84 + n * 9 + 4, 68, 1, C_GOLD);
+    for (uint8_t i = 0; i < n; i++) gfx_text(40, 87 + i * 9, T(it[i]), titleSel == i ? C_WHITE : C_STEEL);
+    gfx_text(33, 87 + titleSel * 9, T(MS_X52), (frameNo & 8) ? C_GOLD : C_RED);
+    text35(2, 122, "V" SL_VERSION, C_SILVER);
+    text35(126 - text35Width(PLR.name), 122, PLR.name, C_GOLD);
+}
+
+static uint8_t menuItems(uint8_t *it) {
+    uint8_t n = 0;
+    if (hasSave) it[n++] = MS_CONTINUE;
+    it[n++] = hasSave ? MS_NEW_GAME : MS_START;
+    it[n++] = MS_HOW_TO_PLAY;
+    it[n++] = MS_OPTIONS;
+    return n;
+}
+
+// how to play: three pages over the scene
+static void panel(int y, int h) { R(4, y, 120, h, C_INK); R(4, y, 120, 1, C_GOLD); R(4, y + h - 1, 120, 1, C_GOLD); }
+static void drawHelp() {
+    drawTitleScene();
+    panel(6, 116);
+    textCS(10, T((uint8_t)(MS_CONTROLS + helpPage)), C_GOLD);
+    for (int i = 0; i < HELP_LINES; i++) {                          // the text, from the card
+        const uint8_t *r = card::at(CARD_TXT + HELP_OFF[i]);
+        if (r && r[0] == helpPage) text35(r[1], r[2], (const char *)r + 4, r[3]);
+    }
+    if (helpPage == 0) blit(*LANDER[(frameNo >> 5) % 3], 52, 74, false);
+    else if (helpPage == 1) { blitBC(S_MAN_WAVE1, 40, 116, false); blitBC(S_MAN_CHEER, 60, 116, true, 255, manMap(1)); blitBC(S_MAN_STAND, 80, 116, false, 255, manMap(2)); }
+    else {
+        blit(*SAUCER[(frameNo >> 2) & 3], 8, 24, false);
+        blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, 12, 48, false);
+        blit(S_MINE0, 15, 68, false);
+        blit(S_TURRET, 13, 84, false);
+    }
+    char s[8];
+    text35(9, 114, fmt(s, "", helpPage + 1, T(MS_3)), C_STEEL);
+    if (frameNo & 16) text35(118 - text35Width("A: NEXT  B: BACK"), 114, T(MS_A_NEXT_B_BACK), C_SILVER);
+}
+
+static void drawOptions() {
+    drawTitleScene();
+    panel(30, 66);
+    textCS(34, T(MS_OPTIONS), C_GOLD);
+    for (int i = 0; i < 3; i++) {
+        gfx_text(22, 48 + i * 12, T((uint8_t)(MS_MUSIC + i)), optSel == i ? C_WHITE : C_STEEL);
+        if (i < 2) for (int k = 0; k < 4; k++) R(76 + k * 8, 49 + i * 12, 6, 6, k < (i ? fxV : musicV) ? (optSel == i ? C_GOLD : C_SILVER) : C_STEEL);
+    }
+    gfx_text(14, 48 + optSel * 12, T(MS_X52), C_GOLD);
+    text35(10, 88, T(MS_LEFT_RIGHT_CHANGE_A_OR_B_BACK), C_SILVER);
+}
+
+static void drawIntro() {
+    drawWorld();
+    panel(30, 68);
+    char s[28];
+    fmt(s, T(MS_STAGE), stage + 1, T(MS_OF_16));
+    textC(34, s, C_SILVER);
+    textC(44, PLR.name, C_GOLD);
+    textC(53, PLR.place, C_WHITE);
+    fmt(s, T(MS_SAVE), quota, T(MS_OF), nMen);
+    textC(64, s, C_GREEN);
+    fmt(s, T(MS_GRAVITY_0), gHund(), T(MS_G));
+    textC(74, s, C_SILVER);
+    textC(85, T(baseRight ? MS_BASE_IS_EAST : MS_BASE_IS_WEST), (frameNo & 8) ? C_ACC : C_WHITE);
+}
+
+static void drawPause() {
+    drawWorld();
+    R(24, 40, 80, 50, C_INK);
+    R(24, 40, 80, 1, C_GOLD); R(24, 89, 80, 1, C_GOLD);
+    textC(44, T(MS_PAUSED), C_GOLD);
+    for (int i = 0; i < 3; i++) gfx_text(40, 56 + i * 10, T((uint8_t)(MS_RESUME + i)), pauseSel == i ? C_WHITE : C_STEEL);
+    gfx_text(32, 56 + pauseSel * 10, T(MS_X52), C_GOLD);
+    char s[24];
+    fmt(s, PLR.name, -1, T(MS_0), gHund(), T(MS_G));
+    textCS(26, s, C_SILVER);
+    if (pauseNote) textCS(96, T(pauseNote), C_GOLD);
+}
+
+static void draw() {
+    if (!card::ok() || loadReq) {                                      // STARLIFT.DAT holds the worlds, the music and the big pictures
+        gfx_clear(C_INK);
+        textC(44, "STARLIFT", C_GOLD);
+        textC(60, "INSERT SD CARD WITH", C_WHITE);
+        textC(70, "STARLIFT.DAT", C_WHITE);
+        return;
+    }
+    switch (state) {
+    case TITLE: drawTitle(); break;
+    case INTRO: drawIntro(); break;
+    case PAUSED: drawPause(); break;
+    case CLEAR: {
+        drawWorld();
+        R(8, 36, 112, 54, C_INK);
+        R(8, 36, 112, 1, C_GOLD); R(8, 89, 112, 1, C_GOLD);
+        textC(40, T(MS_STAGE_CLEAR), C_GOLD);
+        char s[28];
+        if (missed) { textC(30, T(MS_QUOTA_MISSED), (frameNo & 8) ? C_RED : C_WHITE); textC(84, T(MS_TRY_AGAIN), C_SILVER); }
+        fmt(s, T(MS_RESCUED), nSaved, T(MS_OF), nMen);
+        textC(52, s, C_WHITE);
+        fmt(s, T(MS_FUEL_BONUS), fuel / 4);
+        textC(62, s, C_SILVER);
+        if (nSaved == nMen) textC(74, T(MS_ALL_HOME_2000), (frameNo & 4) ? C_GREEN : C_WHITE);
+        break;
+    }
+    case OVER: {
+        drawWorld();
+        for (int y = TOP; y < 128; y += 2) memset(gfx_fb + y * GFX_FB_STRIDE, 0, GFX_FB_STRIDE);   // the scene dimmed by scan lines
+        const int w = gfx_textWidthScaled("GAME OVER", 2), yy = 22 + (overT < 30 ? (30 - overT) : 0);
+        gfx_textScaled((128 - w) / 2 + 2, yy + 2, T(MS_GAME_OVER), C_INK, 2);
+        gfx_textScaled((128 - w) / 2, yy, T(MS_GAME_OVER), C_RED, 2);
+        if (overT > 30) {
+            panel(46, 58);
+            char s[28];
+            textC(50, fmt(s, T(MS_SCORE), score), C_WHITE);
+            textC(60, fmt(s, T(MS_BEST), hiScore), C_GOLD);
+            textC(70, fmt(s, T(MS_COLONISTS_HOME), gSaved), C_GREEN);
+            textC(80, fmt(s, T(MS_REACHED_STAGE), stage + 1), C_SILVER);
+            if (newHi && (frameNo & 8)) textCS(91, T(MS_NEW_HIGH_SCORE), C_GOLD);
+            if (overT > 90 && (frameNo & 16)) textCS(110, T(MS_PRESS_A), C_WHITE);
+        }
+        break;
+    }
+    case HELP: drawHelp(); break;
+    case OPTIONS: drawOptions(); break;
+    case WIN:
+        drawTitle();
+        R(4, 44, 120, 50, C_INK);
+        textC(48, T(MS_EVERY_WORLD_VISITED), C_GOLD);
+        textC(58, T(MS_THE_COLONISTS), C_WHITE);
+        textC(67, T(MS_ARE_SAFE_AT_LAST), C_WHITE);
+        { char s[24]; fmt(s, T(MS_SCORE), score); textC(80, s, C_GREEN); }
+        break;
+    default: drawWorld(); break;
+    }
+}
+
+// ---- update ------------------------------------------------------------------------------------------------------------
+static void toTitle() {
+    state = TITLE; titleSel = 0; stage = 0; planet = 0;
+    loadReq = true;
+    cam = 200; synth::music(0); synth::engine(0);
+}
+
+static void updateCamera() {
+    const int lead = clampi(lvx / 6, -40, 40);
+    const int t = clampi(LX() - 64 + lead, 0, W - 128);
+    cam += (t - cam) / 6;
+    cam = clampi(cam, 0, W - 128);
+}
+
+#ifdef SL_BOT
+// A test autopilot: to the nearest camp (landing on its free side) or, when full or low on fuel, to the base; cruise above the
+// ground ahead, come down slowly, shoot what is in front.
+static void botInput(bool &l, bool &r, bool &u, bool &d, bool &a, bool &b) {
+    l = r = u = d = a = b = false;
+    if (state != PLAY) { a = (frameNo & 15) == 0; if (state == TITLE) titleSel = hasSave ? 1 : 0; return; }
+    const int X = LX(), Y = LY();
+    const int near = nearestIdle(X, 9999);
+    const bool goBase = seats >= SEATS || (seats && near < 0) || fuel < FUEL_MAX / 4 || near < 0;
+    int tx = basePadX + 20;
+    if (!goBase) tx = zoneX[men[near].home] + (baseRight ? 16 : -16);
+    if (!gear) d = (frameNo & 2) != 0;
+    if (lst == 1) {
+        bool wait = onPad == 2 && (seats || fuel < FUEL_MAX - 20);
+        for (auto &m : men) if (m.st == M_RUN) wait = true;
+        if (!wait && (absi(tx - X) > 6 || nearestIdle(X, 60) < 0 || seats >= SEATS)) a = true;
+        return;
+    }
+    const int dx = tx - X, alt = groundAt(X) - Y;
+    int hmin = 127;
+    for (int k = -16; k <= 72; k += 8) { const int g = groundAt(X + (dx < 0 ? -k : k)); if (g < hmin) hmin = g; }
+    const int cruise = clampi(hmin - 28, CEIL + 4, 118);
+    const int dvx = absi(dx) < 3 ? 0 : clampi(dx * 3, -300, 300);
+    const int dvy = absi(dx) > 14 ? clampi((cruise - Y) * 8, -200, 200) : alt > 40 ? 140 : alt > 18 ? 80 : 40;
+    int want = clampi((dvx - lvx) / 48, -3, 3);
+    if (alt < 24 || absi(dx) <= 14) want = clampi(want, -1, 1);
+    if ((absi(dx) <= 6 && alt < 20) || alt < 14) want = 0;
+    r = ang < want; l = ang > want;
+    a = lvy > dvy || (ang && absi(dvx - lvx) > 60 && lvy > dvy - 80);
+    for (const auto &e : en) if (e.kind && absi((e.y >> 4) - Y) < 10 && ((e.x >> 4) - X) * facing > 0 && absi((e.x >> 4) - X) < 90) b = true;
+}
+#endif
+
+static void update() {
+    frameNo++;
+    bool l = chgame.pressed(LEFT_BUTTON), r = chgame.pressed(RIGHT_BUTTON), u = chgame.pressed(UP_BUTTON), d = chgame.pressed(DOWN_BUTTON);
+    bool a = chgame.pressed(A_BUTTON), b = chgame.pressed(B_BUTTON);
+#ifdef SL_BOT
+    botInput(l, r, u, d, a, b);
+#endif
+    static uint8_t prev;
+    const uint8_t cur = (u ? 1 : 0) | (d ? 2 : 0) | (a ? 4 : 0) | (b ? 8 : 0) | (l ? 16 : 0) | (r ? 32 : 0), edge = cur & ~prev;
+    prev = cur;
+    if (shake) shake--;
+    if (bannerT) bannerT--;
+    if (killT) killT--;
+    if (flashT) { flashT--; gfx_setFade((uint8_t)(flashT * 40), 0xFFFF); }
+    for (auto &q : pops) if (q.t) q.t--;
+    if (lightT) {                                                   // lightning: the sky goes white for a moment
+        lightT--;
+        if (lightT == 7) { gfx_setPaletteEntry(C_SKY0, gfx_rgb(220, 220, 255)); gfx_setPaletteEntry(C_SKY1, gfx_rgb(255, 255, 255)); }
+        if (lightT == 4) applyPalette();
+    }
+    switch (state) {
+    case TITLE: {
+        cam += 1;
+        if (cam > W - 300) cam = 200;
+        if ((frameNo % 240) == 0) {                                 // show the next world
+            planet = (planet + 1) & 7; stage = planet; loadReq = true; cam = 200;
+        }
+        updateWeather();
+        uint8_t it[4];
+        const uint8_t n = menuItems(it);
+        if (edge & 1) { titleSel = (uint8_t)((titleSel + n - 1) % n); sfx(S_GEAR); }
+        if (edge & 2) { titleSel = (uint8_t)((titleSel + 1) % n); sfx(S_GEAR); }
+        if (edge & 4) {
+            const uint8_t pick = it[titleSel];
+            if (pick == MS_CONTINUE) {
+                stage = sv.stage; score = sv.score; lives = sv.lives; nextLife = (score / 20000 + 1) * 20000; gSaved = 0; newHi = false;
+                sfx(S_START); newStage();
+            } else if (pick == MS_HOW_TO_PLAY) { state = HELP; helpPage = 0; sfx(S_BOARD); }
+            else if (pick == MS_OPTIONS) { state = OPTIONS; optSel = 0; sfx(S_BOARD); }
+            else newGame();
+        }
+        break;
+    }
+    case HELP:
+        cam += 1; if (cam > W - 300) cam = 200;
+        updateWeather();
+        if (edge & (4 | 32)) { if (++helpPage >= 3) state = TITLE; sfx(S_BOARD); }
+        else if (edge & 16) { if (helpPage) helpPage--; sfx(S_BOARD); }
+        else if (edge & 8) { state = TITLE; sfx(S_GEAR); }
+        break;
+    case OPTIONS: {
+        cam += 1; if (cam > W - 300) cam = 200;
+        updateWeather();
+        if (edge & 1) optSel = (uint8_t)((optSel + 2) % 3);
+        if (edge & 2) optSel = (uint8_t)((optSel + 1) % 3);
+        uint8_t *v = optSel == 0 ? &musicV : optSel == 1 ? &fxV : nullptr;
+        if (v && (edge & 48)) {
+            if ((edge & 16) && *v > 0) (*v)--;
+            if ((edge & 32) && *v < 4) (*v)++;
+            synth::volume(musicV, fxV);
+            sfx(optSel ? S_LASER : S_BOARD);
+        }
+        if ((edge & 8) || ((edge & 4) && optSel == 2)) {               // back: keep the levels with the save
+            state = TITLE;
+            sv.musicV = musicV; sv.fxV = fxV; saveFlag = hasSave; saveDue = true;
+            sfx(S_GEAR);
+        }
+        break;
+    }
+    case PAUSED:
+        if (edge & 1) pauseSel = (uint8_t)((pauseSel + 2) % 3);
+        if (edge & 2) pauseSel = (uint8_t)((pauseSel + 1) % 3);
+        if (edge & 12) {
+            if (pauseSel == 0) state = PLAY;
+            else if (pauseSel == 1) { saveProgress(true); pauseNote = save::available() ? MS_GAME_SAVED : MS_SAVING_IS_OFF; }
+            else toTitle();
+        }
+        break;
+    case INTRO:
+        updateWeather(); updateCritters();
+        updateCamera();
+        if (--timer <= 0 || ((edge & 4) && timer < 80)) { state = PLAY; say(MS_FLY_SAFE, 30); }
+        break;
+    case PLAY:
+        {
+            static int lastDown = -99;                                  // the gear: DOWN tapped twice
+            bool gearTap = false;
+            if (edge & 2) { gearTap = frameNo - lastDown < 10; lastDown = gearTap ? -99 : frameNo; }
+            updateLander(l, r, a, gearTap, b);
+        }
+        if (state != PLAY) break;
+        updateMen();
+        updateEnemies();
+        updateShots();
+        updateWeather();
+        updateCritters();
+        updateSigns();
+        updateCamera();
+        if ((nSaved + nLost >= nMen || nLost > nMen - quota) && seats == 0) {
+            if (++endT > 50) {
+                missed = nSaved < quota;
+                state = CLEAR; timer = 150; synth::engine(0);
+                addScore(fuel / 4, -1, 0);
+                if (nSaved == nMen) addScore(2000, -1, 0);
+                sfx(S_CLEAR);
+            }
+        }
+        break;
+    case CLEAR:
+        updateShots(); updateWeather();
+        if (--timer <= 0) {
+            if (missed) {                                               // the quota missed: a lander is lost and the world is tried again
+                if (--lives <= 0) { lives = 0; gameOver(); break; }
+            } else stage++;
+            if (stage >= 16) { state = WIN; timer = 90; synth::music(0); saveProgress(false); }
+            else { newStage(); saveProgress(true); }
+        }
+        break;
+    case OVER:
+        updateShots(); updateWeather();
+        if (overT < 2000) overT++;
+        if (overT > 90 && (edge & 4)) toTitle();
+        break;
+    case WIN:
+        cam += 1; if (cam > W - 300) cam = 200;
+        updateWeather();
+        if (timer > 0) timer--;
+        else if (edge & 4) toTitle();
+        break;
+    }
+#ifdef SL_TRACE
+    if (frameNo % 150 == 0) fprintf(stderr, "f%d st%d stage%d L%d,%d v%d,%d ang%d lst%d fuel%d seats%d saved%d lost%d/%d sh%d lives%d\n",
+                                    frameNo, state, stage, LX(), LY(), lvx, lvy, ang, lst, fuel, seats, nSaved, nLost, nMen, shield, lives);
+#endif
+}
+
+#ifdef CHSIM
+void sim_sync();
+void sim_advance(uint32_t us);
+void sim_waitInput();
+#endif
+
+void setup() {
+    chgame.boot();
+#if CHGAME_DEBUG
+    dbg::begin("STARLIFT " SL_VERSION);
+#endif
+    gfx_begin(GFX_DIV2, GFX_12BPP);
+    const uint16_t pal[16] = {
+        gfx_rgb(4, 4, 12), gfx_rgb(255, 255, 255), 0, 0, gfx_rgb(70, 255, 100), 0, 0, 0, 0, 0, 0, 0,
+        gfx_rgb(184, 190, 208), gfx_rgb(66, 72, 104), gfx_rgb(255, 202, 44), gfx_rgb(232, 32, 44) };
+    gfx_setPalette(pal, 16);
+    synth::begin();
+    chgame.setFrameRate(30);
+    SaveData dsv;
+    uint8_t flag = 0;
+    if (save::load(MAGIC, 1, dsv, &flag)) {
+        hiScore = dsv.hi;
+        if (flag == 1 && dsv.stage < 16) hasSave = true;
+        sv = dsv;
+        musicV = dsv.musicV <= 4 ? dsv.musicV : 4; fxV = dsv.fxV <= 4 ? dsv.fxV : 4;
+    }
+    rng ^= millis() | 1;
+    for (int i = 0; i < WXN; i++) { wxX[i] = (uint8_t)rnd(160); wxY[i] = (uint8_t)(TOP + rnd(112)); }
+    synth::volume(musicV, fxV);
+    toTitle();
+}
+
+void loop() {
+    static bool startPrev;
+    const bool st = chgame.pressed(START_BUTTON);
+    if (st && !startPrev) {
+        if (state == PLAY) { state = PAUSED; pauseSel = 0; pauseNote = 0; synth::engine(0); sfx(S_PAUSE); }
+        else if (state == PAUSED) { state = PLAY; sfx(S_RESUME); }
+    }
+    startPrev = st;
+    dbg::markRenderStart();
+    update();
+    gfx_wait();
+    if (saveDue) {
+        saveDue = false;
+        save::store(MAGIC, 1, sv, saveFlag ? 1 : 0);
+        hasSave = saveFlag && save::available();
+        if (hasSave) titleSel = 0;
+    }
+    if (!card::ok() && (frameNo % 60) == 2) card::open();
+    if (loadReq && card::ok() && card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)) {
+        loadReq = false;
+        genStage();
+        applyPalette();
+        if (state == TITLE) cam = 200;
+    }
+    if (card::ok() && synth::wanted() >= 0) {                     // the next song, from the card
+        const int id = synth::wanted();
+        if (card::copy(synth::buffer(), CARD_SONG + SONG_OFF[id], SONG_LEN[id])) synth::loaded();
+    }
+    draw();
+    dbg::markRenderEnd();
+    gfx_flushAsync();
+#ifdef CHSIM
+    uint8_t idle = 0;
+    for (dbg::poll(); !chgame.nextFrame(); dbg::poll()) {
+        sim_sync();
+        sim_advance(1000);
+        if (++idle > 2) { sim_waitInput(); idle = 0; }
+    }
+#else
+    do { dbg::poll(); } while (!chgame.nextFrame());
+#endif
+    chgame.pollButtons();
+    dbg::markUpdateStart();
+    static uint32_t startDown;
+    if (!chgame.pressed(START_BUTTON)) startDown = 0;
+    else if (!startDown) startDown = millis() | 1;
+    else if (millis() - startDown >= 3000) chgame.exitToMenu();
+}
