@@ -18,6 +18,7 @@
 #include "CardIndex.h"
 #include "Music.h"
 #include <chgame/Draw.h>
+#include <chgame/RamFunc.h>
 
 #define SL_VERSION "0.1"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
@@ -85,7 +86,7 @@ static void drawSigns();
 enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, MEN = 20, ENS = 12, SHOTS = 10, ESHOTS = 12, PARTS = 56, WXN = 80,
        SEATS = 8, FUEL_MAX = 1200, ZONES = 8 };
 static uint8_t hgt[HN];                     // the ground's top (screen y) every 4 px
-static uint8_t tile[16][32];                // the ground's texture, 0 crack .. 3 lit, built for each planet
+static uint8_t tile[32][16];                // the ground's texture by column, 0 crack .. 3 lit, built for each planet
 static uint8_t scanY[120];                  // the scanner's ground line
 static Man men[MEN];
 static uint8_t nMen, nSaved, nLost, quota;                // quota: how many must reach the base
@@ -157,7 +158,7 @@ static inline int sinA(int a) { return a < 0 ? -SIN7[-a] : SIN7[a]; }
 static inline int cosA(int a) { return SIN7[6 - absi(a)]; }
 
 // ---- drawing primitives -------------------------------------------------------------------------------------------
-static NOINL void pset(int x, int y, uint8_t c) {
+RAMFUNC(pset) static void pset(int x, int y, uint8_t c) {                         // in RAM: every single pixel goes through it
     if ((unsigned)x > 127 || (unsigned)y > 127) return;
     uint8_t *b = gfx_fb + y * GFX_FB_STRIDE + (x >> 1);
     *b = (x & 1) ? (uint8_t)((*b & 0x0F) | (c << 4)) : (uint8_t)((*b & 0xF0) | c);
@@ -188,6 +189,9 @@ static void blitRd(Rd &rd, int w, int h, int x, int y, bool flip, uint8_t solid,
 static NOINL void blit(const Spr &s, int x, int y, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) { Rd rd = { s.d, 0, 0, false }; blitRd(rd, s.w, s.h, x, y, flip, solid, map); }
 static NOINL void blitBC(const Spr &s, int cx, int by, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) { blit(s, cx - s.w / 2, by - s.h + 1, flip, solid, map); }
 static NOINL void blit(const CSpr &s, int x, int y, bool flip, uint8_t solid = 255, const uint8_t *map = MAP) {    // from the card (nothing without one)
+#ifdef SL_NOPICS
+    if (s.w != 96 && s.w != 108) return;                           // a perf test: card pictures off (the logos stay)
+#endif
     if (!card::ok() || x >= 128 || x + s.w <= 0 || y >= 128 || y + s.h <= 0) return;
     Rd rd = { nullptr, CARD_PIC + s.off, 0, true };
     blitRd(rd, s.w, s.h, x, y, flip, solid, map);
@@ -225,7 +229,13 @@ static void applyPalette() {
 static int vn(uint32_t seed, int x, int sh, bool smooth) {
     const int k = x >> sh;
     int t = (x & ((1 << sh) - 1)) << (8 - sh);
-    const int a = (int)(hash(seed + (uint32_t)k * 2654435761u) & 255), b = (int)(hash(seed + (uint32_t)(k + 1) * 2654435761u) & 255);
+    static uint32_t ms[8]; static int mk[8]; static uint8_t ma[8], mb[8];  // a few knots remembered: the columns walk along them
+    const uint8_t slot = (uint8_t)((seed * 7 + (uint32_t)sh) & 7);
+    if (ms[slot] != seed + 1 || mk[slot] != k) {
+        ms[slot] = seed + 1; mk[slot] = k;
+        ma[slot] = (uint8_t)hash(seed + (uint32_t)k * 2654435761u); mb[slot] = (uint8_t)hash(seed + (uint32_t)(k + 1) * 2654435761u);
+    }
+    const int a = ma[slot], b = mb[slot];
     if (smooth) t = (t * t * (768 - 2 * t)) >> 16;
     return a + (((b - a) * t) >> 8);
 }
@@ -297,7 +307,7 @@ static void buildTile() {
                 v = second - best < 9 ? 0 : (bdy < -1 && bdx < 2) ? 3 : bdy > 2 ? 1 : 2;
             }
             }
-            tile[y][x] = v;
+            tile[x][y] = v;
         }
 }
 
@@ -413,7 +423,10 @@ static void genStage() {
     placeLanderOnPad(startPadX);
     cam = clampi(LX() - 64, 0, W - 128);
     spawnT = 150; endT = 0; lightT = 0; warnT = 0;
-    wxLvl = (uint8_t)rnd(4); ticket = 0; tubeT = 0;
+    wxLvl = (uint8_t)rnd(4);
+#ifdef SL_STORM
+    wxLvl = 3;                                                     // a perf test: the worst weather
+#endif ticket = 0; tubeT = 0;
     memset(crit, 0, sizeof crit); memset(signs, 0, sizeof signs);
 }
 
@@ -1100,50 +1113,48 @@ static void layerTops(int L) {
 }
 
 // fill one layer's columns from its top down to the next layer's top: slope lighting and a stone texture
+// the inner loops of the scenery: a run of one colour, or of colours looked up from the column's texture
+RAMFUNC(colFill) static void colFill(uint8_t *p, uint8_t keep, uint8_t v, int n) { for (; n > 0; n--, p += GFX_FB_STRIDE) *p = (uint8_t)((*p & keep) | v); }
+RAMFUNC(colTex) static void colTex(uint8_t *p, uint8_t keep, int sh, int y, int y1, const uint8_t *lut, const uint8_t *tc) {
+    for (; y < y1; y++, p += GFX_FB_STRIDE) *p = (uint8_t)((*p & keep) | (lut[tc[y & 15]] << sh));
+}
+
+// fill one layer's columns from its top down to the next layer's top: a lit (or shaded) rim on its slopes, a stone texture below
 static void drawLayerCols(int L) {
     const uint8_t body = LBODY[L], lit = LLIT[L], dark = LDARK[L];
+    const uint8_t lut[4] = { dark, body, body, L == 2 ? lit : body };
     const int lc = cam >> (3 - L);
     for (int x = 0; x < 128; x++) {
         const int y0 = topA[L][x], y1 = topA[L + 1][x];
         if (y0 >= y1) continue;
         const int slope = x ? (int)topA[L][x - 1] - y0 : 0;            // > 0: rising to the right, facing the light
-        const int litD = slope > 0 ? 2 + slope * 2 : slope < 0 ? 0 : 1, darkD = slope < 0 ? 2 - slope : 0;
-        uint8_t *p = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
         const int sh = (x & 1) ? 4 : 0;
         const uint8_t keep = (x & 1) ? 0x0F : 0xF0;
-        const int tx = (lc + x) & 31;
-        for (int y = y0; y < y1; y++, p += GFX_FB_STRIDE) {
-            const int d = y - y0;
-            uint8_t c = body;
-            if (d < litD) c = lit;
-            else if (d < darkD) c = dark;
-            else if (L && d > 2) { const uint8_t t = tile[y & 15][tx]; if (t == 0) c = dark; else if (t == 3 && L == 2 && d < 12) c = lit; }
-            *p = (uint8_t)((*p & keep) | (c << sh));
-        }
+        uint8_t *p = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
+        int rim = slope > 0 ? 2 + slope * 2 : slope < 0 ? 2 - slope : 1;
+        if (rim > y1 - y0) rim = y1 - y0;
+        colFill(p, keep, (uint8_t)((slope < 0 ? dark : lit) << sh), rim);
+        p += rim * GFX_FB_STRIDE;
+        if (L) colTex(p, keep, sh, y0 + rim, y1, lut, tile[(lc + x) & 31]);
+        else colFill(p, keep, (uint8_t)(body << sh), y1 - y0 - rim);
     }
 }
 
 static void drawGroundCols() {
-    const Planet &p = PLR;
-    static const uint8_t BAND[4][4] = { { C_GND, C_GNDL, C_GNDL, C_GNDL }, { C_GND, C_GND, C_GND, C_GNDL }, { C_GNDD, C_GND, C_GND, C_GND }, { C_GNDD, C_GNDD, C_GND, C_GNDD } };
+    const uint8_t crack = PLR.crack != C_INK ? PLR.crack : C_GNDD;                  // some worlds' seams glow
+    const uint8_t BAND[4][4] = { { C_GND, C_GNDL, C_GNDL, C_GNDL }, { C_GND, C_GND, C_GND, C_GNDL }, { crack, C_GND, C_GND, C_GND }, { crack, C_GNDD, C_GND, C_GNDD } };
+    static const uint8_t EDGE[5] = { 1, 3, 12, 28, 128 };                           // where each band starts below the surface
     for (int x = 0; x < 128; x++) {
         const int y0 = topA[3][x];
-        uint8_t *p8 = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
         const int sh = (x & 1) ? 4 : 0;
         const uint8_t keep = (x & 1) ? 0x0F : 0xF0;
-        const int tx = (cam + x) & 31;
-        for (int y = y0; y < 128; y++, p8 += GFX_FB_STRIDE) {
-            const int d = y - y0;
-            const uint8_t t = tile[y & 15][tx];
-            uint8_t c;
-            if (d == 0) c = C_GNDL;
-            else {
-                int b = d < 3 ? 0 : d < 12 ? 1 : d < 28 ? 2 : 3;
-                if ((d == 12 || d == 28) && ((x ^ y) & 1)) b--;                       // the bands dithered into each other
-                c = BAND[b][t];
-                if (t == 0 && b >= 2 && p.crack != C_INK) c = ((x + y + (frameNo >> 2)) & 7) ? p.crack : C_GOLD;   // glowing seams
-            }
-            *p8 = (uint8_t)((*p8 & keep) | (c << sh));
+        uint8_t *p = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
+        const uint8_t *tc = tile[(cam + x) & 31];
+        *p = (uint8_t)((*p & keep) | (C_GNDL << sh));                                // the lit edge
+        for (int b = 0; b < 4; b++) {
+            const int ya = y0 + EDGE[b], yb = y0 + EDGE[b + 1] < 128 ? y0 + EDGE[b + 1] : 128;
+            if (ya >= 128) break;
+            colTex(gfx_fb + ya * GFX_FB_STRIDE + (x >> 1), keep, sh, ya, yb, BAND[b], tc);
         }
     }
 }
@@ -1247,6 +1258,7 @@ static void windsock(int x, int gy) {
 }
 
 static void drawMoonTableau() {
+#ifndef SL_SLIM
     // a flag on its pole (rippling: the crossbar holds it out), an old descent stage and boot prints in the dust
     const int fxw = baseRight ? startPadX + 74 : startPadX - 34, fx = fxw - cam;
     if (fx < -60 || fx > 180) return;
@@ -1274,6 +1286,7 @@ static void drawMoonTableau() {
         const int y = groundAt(wx) + 1 + ((wx / 3) & 1);
         pset(s, y, C_GNDD); pset(s + 1, y, C_GNDD);
     }
+#endif
 }
 
 static void drawItems() {
@@ -1736,21 +1749,33 @@ static void drawWorld() {
     const int saved = cam;
     if (shake) cam += (frameNo & 1) ? (shake >> 2) : -(shake >> 2);
     cam = clampi(cam, 0, W - 128);
+    dbg::profStart();
     for (int L = 0; L < 3; L++) layerTops(L);
     for (int x = 0; x < 128; x++) topA[3][x] = (uint8_t)clampi(groundAt(cam + x), TOP, 127);
+    dbg::prof(0);
     drawSky();
+    dbg::prof(1);
     drawSkyObjects();
+    dbg::prof(2);
+#ifndef SL_NOSCENE
     for (int L = 0; L < 3; L++) { drawLayerCols(L); drawStructures(L); }
+    dbg::prof(3);
     drawGroundCols();
+#endif
+    dbg::prof(4);
     drawGroundThings();
+    dbg::prof(5);
     drawMen();
     drawEnemies();
+    dbg::prof(6);
     drawLander();
     drawShots();
     drawWeather();
+    dbg::prof(7);
     for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); gfx_text(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
     cam = saved;
     drawHud();
+    dbg::prof(8);
     drawPointer();
     if (PLR.wind && state == PLAY) {                                   // the wind: an arrow, longer when it blows harder
         const int len = absi(windV) / 20, dir = windV < 0 ? -1 : 1, x0 = 14;
@@ -1784,6 +1809,7 @@ static void drawTitleScene() {
 static void drawTitle() {
     drawTitleScene();
 
+#ifndef SL_SLIM
     {                                                              // a saucer drifts by, beaming a colonist up
         const int ux = 128 - ((frameNo / 2) % 220) + 40, uy = 50 + (isin(frameNo * 5) >> 6), gy = groundAt(cam + ux);
         if (ux > -20 && ux < 150) {
@@ -1792,6 +1818,8 @@ static void drawTitle() {
             blit(*SAUCER[(frameNo >> 2) & 3], ux - 11, uy - 5, false);
         }
     }
+#endif
+#ifndef SL_SLIM
     drawLogo(18);
     textCS(36, T(MS_RESCUE_THE_COLONISTS), C_WHITE);
     char s[24];
@@ -1803,6 +1831,7 @@ static void drawTitle() {
     gfx_text(33, 87 + titleSel * 9, T(MS_X52), (frameNo & 8) ? C_GOLD : C_RED);
     text35(2, 122, "V" SL_VERSION, C_SILVER);
     text35(126 - text35Width(PLR.name), 122, PLR.name, C_GOLD);
+#endif
 }
 
 static uint8_t menuItems(uint8_t *it) {
@@ -1817,6 +1846,7 @@ static uint8_t menuItems(uint8_t *it) {
 // how to play: three pages over the scene
 static NOINL void panel(int y, int h) { R(4, y, 120, h, C_INK); R(4, y, 120, 1, C_GOLD); R(4, y + h - 1, 120, 1, C_GOLD); }
 static void drawHelp() {
+#ifndef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
     drawTitleScene();
     panel(6, 116);
     textCS(10, T((uint8_t)(MS_CONTROLS + helpPage)), C_GOLD);
@@ -1835,9 +1865,11 @@ static void drawHelp() {
     char s[8];
     text35(9, 114, fmt(s, "", helpPage + 1, T(MS_3)), C_STEEL);
     if (frameNo & 16) text35(118 - text35Width("A: NEXT  B: BACK"), 114, T(MS_A_NEXT_B_BACK), C_SILVER);
+#endif
 }
 
 static void drawOptions() {
+#ifndef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
     drawTitleScene();
     panel(30, 66);
     textCS(34, T(MS_OPTIONS), C_GOLD);
@@ -1847,10 +1879,12 @@ static void drawOptions() {
     }
     gfx_text(14, 48 + optSel * 12, T(MS_X52), C_GOLD);
     text35(10, 88, T(MS_LEFT_RIGHT_CHANGE_A_OR_B_BACK), C_SILVER);
+#endif
 }
 
 static void drawIntro() {
     drawWorld();
+#ifndef SL_SLIM
     panel(30, 68);
     char s[28];
     fmt(s, T(MS_STAGE), stage + 1, T(MS_OF_16));
@@ -1862,9 +1896,11 @@ static void drawIntro() {
     fmt(s, T(MS_GRAVITY_0), gHund(), T(MS_G));
     textC(74, s, C_SILVER);
     textC(85, T(baseRight ? MS_BASE_IS_EAST : MS_BASE_IS_WEST), (frameNo & 8) ? C_ACC : C_WHITE);
+#endif
 }
 
 static void drawPause() {
+#ifndef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
     drawWorld();
     R(24, 40, 80, 50, C_INK);
     R(24, 40, 80, 1, C_GOLD); R(24, 89, 80, 1, C_GOLD);
@@ -1872,6 +1908,7 @@ static void drawPause() {
     for (int i = 0; i < 3; i++) gfx_text(40, 56 + i * 10, T((uint8_t)(MS_RESUME + i)), pauseSel == i ? C_WHITE : C_STEEL);
     gfx_text(32, 56 + pauseSel * 10, T(MS_X52), C_GOLD);
     if (pauseNote) textCS(96, T(pauseNote), C_GOLD);
+#endif
 }
 
 static void draw() {
@@ -1888,6 +1925,7 @@ static void draw() {
     case PAUSED: drawPause(); break;
     case CLEAR: {
         drawWorld();
+#ifndef SL_SLIM
         R(8, 36, 112, 54, C_INK);
         R(8, 36, 112, 1, C_GOLD); R(8, 89, 112, 1, C_GOLD);
         textC(40, T(missed ? MS_QUOTA_MISSED : MS_STAGE_CLEAR), missed ? C_RED : C_GOLD);
@@ -1898,8 +1936,10 @@ static void draw() {
         fmt(s, T(MS_FUEL_BONUS), fuel / 4);
         textC(62, s, C_SILVER);
         if (nSaved == nMen) textC(74, T(MS_ALL_HOME_2000), (frameNo & 4) ? C_GREEN : C_WHITE);
+#endif
         break;
     }
+#ifndef SL_SLIM
     case OVER: {
         drawWorld();
         for (int y = TOP; y < 128; y += 2) memset(gfx_fb + y * GFX_FB_STRIDE, 0, GFX_FB_STRIDE);   // the scene dimmed by scan lines
@@ -1916,6 +1956,7 @@ static void draw() {
         }
         break;
     }
+#endif
     case HELP: drawHelp(); break;
     case OPTIONS: drawOptions(); break;
     case WIN:
@@ -2021,6 +2062,7 @@ static void update() {
         }
         break;
     }
+#ifndef SL_SLIM
     case HELP:
         cam += 1; if (cam > W - 300) cam = 200;
         updateWeather();
@@ -2047,6 +2089,7 @@ static void update() {
         }
         break;
     }
+#endif
     case PAUSED:
         if (edge & 1) pauseSel = (uint8_t)((pauseSel + 2) % 3);
         if (edge & 2) pauseSel = (uint8_t)((pauseSel + 1) % 3);
@@ -2162,6 +2205,7 @@ void loop() {
         hasSave = saveFlag && save::available();
         if (hasSave) titleSel = 0;
     }
+    card::frame();
     if (!card::ok() && (frameNo % 60) == 2) card::open();
     if (loadReq && card::ok() && card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)) {
         loadReq = false;

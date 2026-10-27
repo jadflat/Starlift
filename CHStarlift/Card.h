@@ -6,6 +6,7 @@
 namespace card {
 bool open();                                       // finds and checks the file; false: no card, no file or the wrong one
 bool ok();                                         // the file is open
+void frame();                                      // after gfx_wait(), each frame: the scratch slot is stale
 const uint8_t *at(uint32_t off);                   // the byte at off and the rest of its 512 B block (nullptr: the card has gone)
 bool copy(uint8_t *dst, uint32_t off, uint16_t n);
 }  // namespace card

@@ -8,16 +8,17 @@
 
 namespace card {
 
-enum { SLOTS = 4 };
+enum { SLOTS = 4, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
-static uint16_t tag[SLOTS] = { 0xffff, 0xffff, 0xffff, 0xffff };
-static uint8_t age[SLOTS], tick;                  // the least recently used slot is the one to replace
+static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
+static uint8_t age[ALL], tick;                    // the least recently used slot is the one to replace
+static uint8_t *slotBuf(uint8_t i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
 static fat::Run runs[4];
 static uint8_t nRuns;
 static bool open_;
 
 bool open() {
-    for (uint8_t i = 0; i < SLOTS; i++) tag[i] = 0xffff;
+    for (uint8_t i = 0; i < ALL; i++) tag[i] = 0xffff;
     nRuns = fat::open("STARLIFTDAT", runs, 4, buf[0]);
     open_ = nRuns && fat::read(runs, nRuns, 0, buf[0]) && !memcmp(buf[0], "STARLIFT", 8) && !memcmp(buf[0] + 8, &CARD_HASH, 4);
     return open_;
@@ -25,17 +26,19 @@ bool open() {
 
 bool ok() { return open_; }
 
+void frame() { tag[SLOTS] = 0xffff; }              // the scratch buffer went out with the last flush
+
 const uint8_t *at(uint32_t off) {
     if (!open_) return nullptr;
     const uint16_t blk = (uint16_t)(off >> 9);
-    for (uint8_t i = 0; i < SLOTS; i++) if (tag[i] == blk) { age[i] = ++tick; return buf[i] + (off & 511); }
+    for (uint8_t i = 0; i < ALL; i++) if (tag[i] == blk) { age[i] = ++tick; return slotBuf(i) + (off & 511); }
     uint8_t v = 0;
-    for (uint8_t i = 1; i < SLOTS; i++) if ((uint8_t)(tick - age[i]) > (uint8_t)(tick - age[v])) v = i;
+    for (uint8_t i = 1; i < ALL; i++) if ((uint8_t)(tick - age[i]) > (uint8_t)(tick - age[v])) v = i;
     tag[v] = 0xffff;
-    if (!fat::read(runs, nRuns, blk, buf[v])) { open_ = false; return nullptr; }
+    if (!fat::read(runs, nRuns, blk, slotBuf(v))) { open_ = false; return nullptr; }
     tag[v] = blk;
     age[v] = ++tick;
-    return buf[v] + (off & 511);
+    return slotBuf(v) + (off & 511);
 }
 
 bool copy(uint8_t *dst, uint32_t off, uint16_t n) {
