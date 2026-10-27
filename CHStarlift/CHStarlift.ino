@@ -624,7 +624,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     lvy += gacc >> 2; gacc &= 3;
     if (thrusting) {
         int t = (142 + engineUp * 7) * 32 / (32 + seats) * thrLvl / 6;                  // passengers are heavy; the engine takes a moment to spool up
-        if (LY() < TOP) t = t * (LY() + 200) / (TOP + 200);                          // above the screen the air thins and the engine fades
+        if (LY() < TOP) t = LY() > -24 ? t * (LY() + 24) / (TOP + 24) : 0;            // above the screen the air thins fast: no hanging up there
         lvx += (int16_t)((t * 3 * sinA(ang)) >> 11);                          // the push sideways half as strong again: tilting carries you across
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
         if (thr) fuel--;
@@ -641,7 +641,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     }
     lvx = (int16_t)clampi(lvx, -760, 760); lvy = (int16_t)clampi(lvy, -700, 1150);
     lx += lvx; ly += lvy;
-    if (LY() < -200) { ly = -200 << 8; if (lvy < 0) lvy = 0; }          // no ceiling: up and out of the screen, until the air runs out
+    if (LY() < -60) { ly = -60 << 8; if (lvy < 0) lvy = 0; }            // no ceiling: up and out of the screen, until the air runs out
     if (lx < (10 << 8)) { lx = 10 << 8; lvx = 0; }
     if (lx > ((W - 10) << 8)) { lx = (W - 10) << 8; lvx = 0; }
     // the ground: the feet (or, gear up, the descent stage) and the hull's other corners
