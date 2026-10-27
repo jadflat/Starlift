@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.22"
+#define SL_VERSION "0.23"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -424,7 +424,7 @@ static void genStage() {
     }
     memset(men, 0, sizeof men);
     nMen = (uint8_t)clampi(8 + stage, 8, MEN);
-    quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
+    quota = (uint8_t)((nMen * clampi(20 + diff * 15 + stage * 3, 20, 90) + 99) / 100);   // a fifth to a half at first, more each stage
     memset(items, 0, sizeof items);
     { const uint8_t *a = PLR.alien[sector & 1]; remap(EMAP, RM(3, a[0]) | RM(5, a[1]) << 8 | RM(11, a[2]) << 16 | RM(6, a[3]) << 24); }
     dlv = foodOn = partyT = lidT = feasts = cowsN = crashN = 0;
@@ -459,7 +459,7 @@ static void genStage() {
     memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
     placeLanderOnPad(startPadX);
     cam = clampi(LX() - 64, 0, W - 128);
-    spawnT = 450; endT = 0; lightT = 0; warnT = 0;
+    spawnT = 600; endT = 0; lightT = 0; warnT = 0;
     for (auto &t : topsAt) t = -9999;                              // a new world: the layers' tops are made afresh
     wxLvl = (uint8_t)rnd(4);
 #ifdef SL_STORM
@@ -875,14 +875,14 @@ static void updateEnemies() {
     }
     bool idle = false;
     for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE) idle = true;
-    const int want = clampi(diff + stage / 2, 1, 5 + diff);
+    const int want = clampi((diff + stage) / 2, 1, 5 + diff);            // (one at a time on the first stage)
     if (spawnT) spawnT--;
     else if (fliers < want) {
         const int side = rnd(2) ? 1 : -1;
         const int x = clampi(cam + 64 + side * (150 + rnd(110)), 20, W - 20);
-        uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) ? E_STINGER : E_MINE);
+        uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) && stage ? E_STINGER : E_MINE);   // (no stingers on the first stage)
         if (Enemy *e = spawnEn(k, x, 28 + rnd(30))) { if (k == E_UFO) { sfx(S_UFO); } e->vx = (int8_t)(-side * 8); }
-        spawnT = clampi(240 - stage * 8, 90, 240) * (4 - diff) / 3;                   // enemies come spaced out: time for a rescue between them
+        spawnT = clampi(300 - stage * 12, 90, 300) * (4 - diff) / 3;                  // enemies come spaced out: time for a rescue between them
     }
     for (int ei = 0; ei < ENS; ei++) {
         Enemy &e = en[ei];

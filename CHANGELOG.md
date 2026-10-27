@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.23 (2026-10-28)
+
+- A gentler start, on every difficulty: stage 1 needs 2, 3 or 4 of its 8 colonists (Easy, Normal, Hard; was 2, 4, 5),
+  has no stingers (only a saucer and slow mines), one enemy at a time, the first after 20 s (was 15) and the next ones a
+  quarter further apart.
+- A little easier throughout: quotas 5% lower on every stage, one enemy fewer at once on Normal and Hard as the stages go
+  on, and new enemies spaced out a little more until the last stages (the same by stage 16).
+
 ## 0.22 (2026-10-28)
 
 - Fixed: the game could freeze in the delivery cut-scene, the speeder hovering over the lander and turning left and
