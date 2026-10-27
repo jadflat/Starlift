@@ -140,3 +140,24 @@ def logo(text, top, bottom):
 
 
 LOGOS = {'STARLIFT': logo('STARLIFT', 'wyy', 'yyrr'), 'GAMEOVER': logo('GAME OVER', 'wrr', 'rrrm')}
+
+# the giant food on each takeaway's pole (12 x 9), in make_card.py's FOOD order
+FOODS = [
+    ['..yyyyyyyy..', '.yyywyyywyy.', 'yyyyyyyyyyyy', 'gggggggggggg', 'rrrrrrrrrrrr', 'nnnnnnnnnnnn', 'yyyyyyyyyyyy', '.yyyyyyyyyy.'],   # a burger
+    ['.......n..s.', '.......n.s..', '.yy.yy.ns...', 'y..y..y.y...', 'wwwwwwwwwwww', '.rrrrrrrrrr.', '..rrrrrrrr..', '...rrrrrr...'],   # noodles
+    ['......r.....', '....wwww....', '...wwcwww...', '...wwwwww...', '....wwww....', '...yyyyyy...', '....ywyy....', '.....yy.....', '.....y......'],   # ice cream
+    ['rrrrrrrrrrrr', '.yyyyyyyyyy.', '.yrryyyyrry.', '..yyyyyyyy..', '..yyyrryyy..', '...yyyyyy...', '....yyyy....', '.....yy.....'],   # pizza
+    ['.rrrrrrrrrr.', 'rryrryrryrrr', 'rrrrrrrrrrrr', '.yyyyyyyyyy.', 'ywwwwwwwwwwy', '.yyyyyyyyyy.'],                                 # a hot dog
+    ['.........y.y', '..sss...yyy.', '.ssssss.yyy.', 'skssssssrrr.', '.ssssss.rrr.', '..sss...rrr.', '........rrr.'],                  # fish and chips
+    ['.kkk...kkk..', 'kwwwk.kwwwk.', 'kwrwk.kwcwk.', 'kwwwk.kwwwk.', '.kkk...kkk..'],                                               # sushi
+    ['...g...g....', '....yyyy....', '..yyyyyyyy..', '.yynyynyyny.', 'yyyyyyyyyyyy', '.yyyyyyyyyy.'],                                 # a glorp pie
+]
+DESCENT = ['..wyyyyyyyyyyr..',                              # the old descent stage left on the Moon
+           '..yyyyyyyyyyyr..',
+           '..yynyyyyynyyr..',
+           '..yyyyyyyyyyyr..',
+           '..yyyynnnyyyyr..',
+           '..n...nnn....n..',
+           '.n...........n..',
+           '.n............n.',
+           'ss............ss']

@@ -70,6 +70,9 @@ static NOINL void sfx(uint8_t id) { synth::sfx(SOUNDS[id]); }
 
 // ---- the planets ------------------------------------------------------------------------------------------------
 //                 SKY0           SKY1             FAR              MID              NEAR            GNDD            GND              GNDL             ACC
+// the pictures this world draws, from its pack on the card (tools/make_card.py), the ones every frame needs first
+struct Pack { CSpr sky, giant, plant[3][2], crit[2][2], st[6], shop, food, base, coll; };
+static Pack PK;
 static Planet PLR;                                         // the world being shown, loaded from the card (CARD_PLANET)
 static_assert(sizeof(Planet) == PLANET_LEN, "Planet must match tools/make_card.py");
 
@@ -86,7 +89,7 @@ static void drawSigns();
 enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, MEN = 20, ENS = 12, SHOTS = 10, ESHOTS = 12, PARTS = 56, WXN = 80,
        SEATS = 8, FUEL_MAX = 1200, ZONES = 8 };
 static uint8_t hgt[HN];                     // the ground's top (screen y) every 4 px
-static uint8_t tile[32][16];                // the ground's texture by column, 0 crack .. 3 lit, built for each planet
+static uint8_t tile[16][16];                // the ground's texture by column (it repeats every 16 px), 0 crack .. 3 lit, built for each planet
 static uint8_t scanY[120];                  // the scanner's ground line
 static Man men[MEN];
 static uint8_t nMen, nSaved, nLost, quota;                // quota: how many must reach the base
@@ -273,7 +276,7 @@ static int layerH(int L, int x) {
 static void buildTile() {
     const Planet &p = PLR;
     for (int y = 0; y < 16; y++)
-        for (int x = 0; x < 32; x++) {
+        for (int x = 0; x < 16; x++) {
             uint8_t v = 2;
             switch (p.tile) {
             case TL_BRICKS: {                                  // cut blocks, each row offset by half a block
@@ -289,16 +292,16 @@ static void buildTile() {
                 break;
             }
             case TL_CRYSTAL: {                                 // faceted shards: diagonal planes with bright edges
-                const int a = (x + y) % 11, b = (x - y + 32) % 9;
+                const int a = (x + y) & 7, b = (x - y + 16) & 7;
                 v = a == 0 || b == 0 ? 0 : a < 4 ? 3 : b < 4 ? 1 : 2;
                 break;
             }
             default: {                                         // round stones: the nearest of nine jittered centres (wrapping)
                 int best = 9999, second = 9999, bdx = 0, bdy = 0;
-                for (int k = 0; k < 9; k++) {
+                for (int k = 0; k < 6; k++) {
                     const uint32_t h = hash((uint32_t)k * 101u + planet);
-                    const int cx = (k % 3) * 11 + (int)(h & 7), cy = (k / 3) * 6 + (int)((h >> 3) & 3);
-                    for (int wx = -32; wx <= 32; wx += 32)
+                    const int cx = (k & 1) * 8 + (int)(h & 3), cy = (k >> 1) * 5 + (int)((h >> 3) & 3);
+                    for (int wx = -16; wx <= 16; wx += 16)
                         for (int wy = -16; wy <= 16; wy += 16) {
                             const int dx = x - cx - wx, dy = (y - cy - wy) * 2, d = dx * dx + dy * dy;
                             if (d < best) { second = best; best = d; bdx = dx; bdy = dy; } else if (d < second) second = d;
@@ -636,7 +639,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
         int x, y;
         hullPt(PTS[k][0], PTS[k][1] - (k < 2 && !gear ? 2 : 0), x, y);
         if (y >= groundAt(x)) { hit = true; if (k >= 3 || (k == 2 && gear)) body = true; }
-        if (x >= buildX + 2 && x < buildX + 42 && y > groundAt(buildX + 22) - BASEPIC[PLR.base]->h + 4) body = true;   // the base building
+        if (x >= buildX + 2 && x < buildX + 42 && y > groundAt(buildX + 22) - PK.base.h + 4) body = true;   // the base building
     }
     if (body && LY() < groundAt(LX()) - 4) { say(MS_CRASHED, 60); wreck(); return; }
     if (hit) {
@@ -1063,7 +1066,7 @@ static void drawSkyObjects() {
     default: {                                                  // a planet, a sun or moons: a picture from the card
         uint8_t mp[14];
         memcpy(mp, MAP, 14); mp[7] = C_SKY0; mp[9] = C_FAR; mp[12] = C_GNDL;
-        const CSpr &c = *SKYPIC[p.sky];
+        const CSpr &c = PK.sky;
         blit(c, SKY_AT[p.sky][0] - pc - c.w / 2, SKY_AT[p.sky][1] - c.h / 2, false, 255, mp);
         break;
     }
@@ -1078,7 +1081,7 @@ static void drawSkyObjects() {
     {                                                           // the world's sky giant, drifting across far away
         uint8_t mp[14];
         memcpy(mp, MAP, 14); mp[7] = C_MID; mp[9] = C_FAR; mp[12] = C_GNDL;
-        const CSpr &g = *GIANTPIC[stage & 7];
+        const CSpr &g = PK.giant;
         const int gx = 150 - (int)(((uint32_t)frameNo / 3 + stage * 97u) % 420u), gy = (stage & 7) == 1 ? 50 : TOP + 14 + isin(frameNo + stage * 30) / 20;
         if ((stage & 7) != 1 || ((frameNo >> 8) & 1)) blit(g, gx, gy, false, 255, mp);   // the far worm only shows now and then
     }
@@ -1135,26 +1138,42 @@ static void drawLayerCols(int L) {
         if (rim > y1 - y0) rim = y1 - y0;
         colFill(p, keep, (uint8_t)((slope < 0 ? dark : lit) << sh), rim);
         p += rim * GFX_FB_STRIDE;
-        if (L) colTex(p, keep, sh, y0 + rim, y1, lut, tile[(lc + x) & 31]);
+        if (L) colTex(p, keep, sh, y0 + rim, y1, lut, tile[(lc + x) & 15]);
         else colFill(p, keep, (uint8_t)(body << sh), y1 - y0 - rim);
     }
 }
 
+// two ground pixels a byte: neither has to be read back
+RAMFUNC(colPair) static void colPair(uint8_t *p, int y, int y1, const uint8_t *la, const uint8_t *ta, const uint8_t *lb, const uint8_t *tb) {
+    for (; y < y1; y++, p += GFX_FB_STRIDE) *p = (uint8_t)(la[ta[y & 15]] | (lb[tb[y & 15]] << 4));
+}
+
+// the ground in bands below its surface: the lit edge, a light skin, then darker and darker rock with the world's texture
 static void drawGroundCols() {
     const uint8_t crack = PLR.crack != C_INK ? PLR.crack : C_GNDD;                  // some worlds' seams glow
-    const uint8_t BAND[4][4] = { { C_GND, C_GNDL, C_GNDL, C_GNDL }, { C_GND, C_GND, C_GND, C_GNDL }, { crack, C_GND, C_GND, C_GND }, { crack, C_GNDD, C_GND, C_GNDD } };
-    static const uint8_t EDGE[5] = { 1, 3, 12, 28, 128 };                           // where each band starts below the surface
-    for (int x = 0; x < 128; x++) {
-        const int y0 = topA[3][x];
-        const int sh = (x & 1) ? 4 : 0;
-        const uint8_t keep = (x & 1) ? 0x0F : 0xF0;
-        uint8_t *p = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
-        const uint8_t *tc = tile[(cam + x) & 31];
-        *p = (uint8_t)((*p & keep) | (C_GNDL << sh));                                // the lit edge
-        for (int b = 0; b < 4; b++) {
-            const int ya = y0 + EDGE[b], yb = y0 + EDGE[b + 1] < 128 ? y0 + EDGE[b + 1] : 128;
-            if (ya >= 128) break;
-            colTex(gfx_fb + ya * GFX_FB_STRIDE + (x >> 1), keep, sh, ya, yb, BAND[b], tc);
+    const uint8_t LUT[5][4] = { { C_GNDL, C_GNDL, C_GNDL, C_GNDL }, { C_GND, C_GNDL, C_GNDL, C_GNDL }, { C_GND, C_GND, C_GND, C_GNDL },
+                                { crack, C_GND, C_GND, C_GND }, { crack, C_GNDD, C_GND, C_GNDD } };
+    static const uint8_t EDGE[6] = { 0, 1, 3, 12, 28, 255 };                        // where each band starts below the surface
+    for (int xb = 0; xb < 64; xb++) {
+        const int y0[2] = { topA[3][xb * 2], topA[3][xb * 2 + 1] };
+        const uint8_t *tc[2] = { tile[(cam + xb * 2) & 15], tile[(cam + xb * 2 + 1) & 15] };
+        uint8_t *col = gfx_fb + (xb);
+        const int hi = y0[0] < y0[1] ? 0 : 1, yTop = y0[hi], yBoth = y0[hi ^ 1];
+        for (int b = 0; b < 5 && yTop + EDGE[b] < yBoth; b++) {                    // where only one of the two is ground yet
+            const int ya = yTop + EDGE[b], yb = yTop + EDGE[b + 1] < yBoth ? yTop + EDGE[b + 1] : yBoth;
+            colTex(col + ya * GFX_FB_STRIDE, hi ? 0x0F : 0xF0, hi ? 4 : 0, ya, yb, LUT[b], tc[hi]);
+        }
+        int y = yBoth, ba = 0, bb = 0;                                            // both: a byte at a time
+        while (ba < 4 && y0[0] + EDGE[ba + 1] <= y) ba++;
+        while (bb < 4 && y0[1] + EDGE[bb + 1] <= y) bb++;
+        while (y < 128) {
+            const int na = y0[0] + EDGE[ba + 1], nb = y0[1] + EDGE[bb + 1];
+            int ye = na < nb ? na : nb;
+            if (ye > 128) ye = 128;
+            colPair(col + y * GFX_FB_STRIDE, y, ye, LUT[ba], tc[0], LUT[bb], tc[1]);
+            y = ye;
+            if (y >= na && ba < 4) ba++;
+            if (y >= nb && bb < 4) bb++;
         }
     }
 }
@@ -1162,7 +1181,7 @@ static void drawGroundCols() {
 // ---- structures on the background layers ----------------------------------------------------------------------------
 // a background building from the card, in the layer's colours, with its light animated
 static void structure(int n, int sx, int base, int L, uint32_t h) {
-    const CSpr &c = *STRUCT[PLR.theme - 1][n];
+    const CSpr &c = PK.st[n];
     uint8_t mp[14];
     memcpy(mp, MAP, 14); mp[2] = LDARK[L]; mp[3] = LBODY[L]; mp[4] = LLIT[L];
     const int x = sx, y = base - c.h + 1;
@@ -1275,11 +1294,7 @@ static void drawMoonTableau() {
             pset(fx + 1 + c, gy - 23 + r + off, col);
         }
     }
-    const int dx = fx + (baseRight ? 22 : -26), dgy = groundAt(fxw + (baseRight ? 22 : -26));     // the descent stage left behind
-    R(dx - 1, dgy - 9, 1, 9, C_STEEL); R(dx + 12, dgy - 9, 1, 9, C_STEEL);
-    R(dx - 2, dgy - 1, 3, 1, C_SILVER); R(dx + 11, dgy - 1, 3, 1, C_SILVER);
-    R(dx, dgy - 12, 12, 6, C_GOLD); R(dx, dgy - 12, 12, 1, C_WHITE); R(dx + 11, dgy - 11, 1, 5, C_RED);
-    R(dx + 4, dgy - 6, 4, 2, C_STEEL);
+    blitBC(C_DESCENT, fx + (baseRight ? 28 : -20), groundAt(fxw + (baseRight ? 28 : -20)), !baseRight);   // the descent stage left behind
     for (int wx = fxw - 70; wx < fxw + 70; wx += 3) {               // boot prints from the pad to the flag and around
         const int s = wx - cam;
         if ((unsigned)s > 127 || (hash((uint32_t)wx) & 7) == 0) continue;
@@ -1326,7 +1341,7 @@ static void drawGroundThings() {
         const int gy = groundAt(buildX + 22);
         uint8_t mp[14];                                                  // the base in this world's colours
         memcpy(mp, MAP, 14); mp[5] = PLR.basec;
-        blit(*BASEPIC[PLR.base], bx, gy - BASEPIC[PLR.base]->h + 1, !baseRight, 255, mp);
+        blit(PK.base, bx, gy - PK.base.h + 1, !baseRight, 255, mp);
         flag(baseRight ? bx - 4 : bx + 46, gy, false);
     }
     drawAlienBase();
@@ -1374,7 +1389,7 @@ static void drawAlienBase() {
         for (int k = 3; k < 37; k += 5) pset(bx + k, cy + 2, ((frameNo >> 2) + k) & 4 ? C_RED : C_GOLD);
     }
     for (int t = 0; t < 3; t++) R(bx + TX[t], gy, 2, cy - gy, C_STEEL);
-    blit(*COLLPIC[PLR.coll], bx, gy - COLLPIC[PLR.coll]->h + 1, false);
+    blit(PK.coll, bx, gy - PK.coll.h + 1, false);
     if (tubeT) for (int t = 0; t < 3; t++) {                           // green slime pulsing down the tubes
         const int y = gy - 12 + ((45 - tubeT) * 2 + t * 3) % 22;
         R(bx + TX[t], y, 2, 3, C_GREEN); pset(bx + TX[t], y + 1, C_WHITE);
@@ -1384,47 +1399,6 @@ static void drawAlienBase() {
 }
 
 // the Moon's drive-through diner: a lit neon sign, an open sign, arrows down the lane
-// the giant food on the takeaway's pole (a 12 x 9 box)
-static void foodIcon(uint8_t k, int x, int y) {
-    switch (k) {
-    case 0:                                                              // a burger
-        hl(x + 2, y, 8, C_GOLD); hl(x + 1, y + 1, 10, C_GOLD); hl(x, y + 2, 12, C_GOLD); pset(x + 3, y + 1, C_WHITE); pset(x + 7, y + 1, C_WHITE);
-        hl(x, y + 3, 12, C_GREEN); hl(x, y + 4, 12, C_RED); hl(x, y + 5, 12, C_STEEL); hl(x, y + 6, 12, C_GOLD); hl(x + 1, y + 7, 10, C_GOLD);
-        break;
-    case 1:                                                              // a bowl of noodles and chopsticks
-        for (int c = 0; c < 10; c++) pset(x + 1 + c, y + 3 + ((c >> 1) & 1), C_GOLD);
-        for (int r = 0; r < 4; r++) hl(x + r, y + 5 + r, 12 - 2 * r, r ? C_RED : C_WHITE);
-        for (int k = 0; k < 5; k++) { pset(x + 7 + k, y + k, C_STEEL); pset(x + 9 + k / 2, y + k, C_SILVER); }
-        break;
-    case 2:                                                              // an ice cream cone
-        gfx_fillCircle(x + 6, y + 3, 3, C_WHITE); gfx_fillCircle(x + 5, y + 2, 1, C_ACC); pset(x + 6, y - 1, C_RED);
-        for (int r = 0; r < 4; r++) hl(x + 3 + r, y + 6 + r, 7 - 2 * r, (r & 1) ? C_GOLD : C_WHITE);
-        break;
-    case 3:                                                              // a slice of pizza
-        for (int r = 0; r < 9; r++) hl(x + r * 2 / 3, y + r, 12 - r * 4 / 3, r ? C_GOLD : C_RED);
-        R(x + 3, y + 2, 2, 2, C_RED); R(x + 7, y + 3, 2, 2, C_RED); R(x + 5, y + 5, 2, 1, C_RED);
-        break;
-    case 4:                                                              // a hot dog
-        R(x, y + 3, 12, 2, C_RED); hl(x + 1, y + 2, 10, C_RED);
-        for (int c = 1; c < 11; c++) pset(x + c, y + 3 + (c & 1), C_GOLD);
-        R(x + 1, y + 5, 10, 3, C_GOLD); hl(x + 2, y + 5, 8, C_WHITE);
-        break;
-    case 5:                                                              // fish and chips
-        gfx_fillCircle(x + 4, y + 5, 3, C_SILVER); pset(x + 2, y + 4, C_INK); pset(x + 8, y + 3, C_SILVER); pset(x + 8, y + 7, C_SILVER); R(x + 7, y + 4, 2, 3, C_SILVER);
-        for (int k = 0; k < 3; k++) R(x + 9 + k, y + 1 + (k & 1), 1, 4, C_GOLD);
-        R(x + 9, y + 5, 3, 4, C_RED);
-        break;
-    case 6:                                                              // two sushi rolls
-        for (int k = 0; k < 2; k++) { gfx_fillCircle(x + 3 + k * 6, y + 5, 3, C_INK); gfx_fillCircle(x + 3 + k * 6, y + 5, 2, C_WHITE); pset(x + 3 + k * 6, y + 5, k ? C_ACC : C_RED); }
-        break;
-    default:                                                             // a glorp pie, steaming
-        for (int r = 0; r < 5; r++) hl(x + 4 - r, y + 4 + r, 4 + 2 * r, C_GOLD);
-        for (int c = 1; c < 11; c += 3) pset(x + c, y + 7, C_STEEL);
-        pset(x + 5 + ((frameNo >> 3) & 1), y + 2 - ((frameNo >> 2) & 1), C_GREEN); pset(x + 7, y + 1, C_GREEN);
-        break;
-    }
-}
-
 static void drawDiner() {
     if (burgerX < 0) return;
     const int bx = burgerX - cam;
@@ -1432,8 +1406,8 @@ static void drawDiner() {
     const int gy = groundAt(burgerX + 30), top = gy - 37;
     uint8_t mp[14];                                                      // the shop's own colour
     memcpy(mp, MAP, 14); mp[6] = PLR.shopc;
-    blit(C_BURGER, bx, top, false, 255, mp);
-    foodIcon(PLR.food, bx + 44, top + 1);
+    blit(PK.shop, bx, top, false, 255, mp);
+    blit(PK.food, bx + 44, top + 1, false);
     const bool flicker = (hash((uint32_t)(frameNo >> 1)) & 63) == 0;
     if (!flicker) text35(bx + 23 - text35Width(PLR.shop) / 2, top + 5, PLR.shop, (frameNo & 32) ? C_GOLD : C_WHITE);
     for (int k = 0; k < 46; k += 2) {                                   // chasing bulbs round the board
@@ -1457,7 +1431,7 @@ static bool busyAt(int x) {
 static void plant(uint8_t k, int x, int gy, uint32_t h) {          // from the card; the ground's tones are this world's
     uint8_t mp[14];
     memcpy(mp, MAP, 14); mp[9] = C_GND; mp[12] = C_GNDL; mp[7] = C_GNDD;
-    blitBC(*PLANTPIC[k][((frameNo >> 4) + (int)(h >> 9)) & 1], x, gy + 1, (h >> 11) & 1, 255, mp);
+    blitBC(PK.plant[k][((frameNo >> 4) + (int)(h >> 9)) & 1], x, gy + 1, (h >> 11) & 1, 255, mp);
 }
 static void drawPlants() {
     for (int c = cam / 9 - 1; c <= (cam + 128) / 9 + 1; c++) {
@@ -1466,7 +1440,7 @@ static void drawPlants() {
         if (((h >> 3) & 3) == 1) continue;
         const int x = c * 9 + (int)(h & 7);
         if (busyAt(x)) continue;
-        plant(PLR.plants[(h >> 16) % 3], x - cam, groundAt(x), h);
+        plant((uint8_t)((h >> 16) % 3), x - cam, groundAt(x), h);
     }
 }
 
@@ -1493,7 +1467,7 @@ static void drawCritters() {
         if (!c.kind) continue;
         const int fl = c.kind == 1, kind = (fl ? PLR.fly : PLR.crawl) - 1, f = (c.t >> (fl ? 2 : 3)) & 1;
         const int hop = (!fl && kind == 0 && (c.t & 31) < 8) ? ((c.t & 31) * (8 - (c.t & 31))) / 4 : 0;
-        blitBC(*CRITPIC[!fl][kind][f], c.x - cam, c.y - hop, c.vx < 0);
+        blitBC(PK.crit[!fl][f], c.x - cam, c.y - hop, c.vx < 0);
     }
 }
 
@@ -2207,7 +2181,8 @@ void loop() {
     }
     card::frame();
     if (!card::ok() && (frameNo % 60) == 2) card::open();
-    if (loadReq && card::ok() && card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)) {
+    if (loadReq && card::ok() && card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)
+        && card::copy((uint8_t *)&PK, CARD_PACK + (uint32_t)(stage & 7) * sizeof(Pack), sizeof(Pack))) {
         loadReq = false;
         genStage();
         applyPalette();

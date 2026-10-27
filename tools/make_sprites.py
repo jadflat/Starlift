@@ -327,6 +327,9 @@ for n, f, x, y in skies.SKIES:
 import life                                           # critters, the sky giants and the logos (tools/life.py)
 for n in life.FLY_ORDER + life.CRAWL_ORDER:
     CARD['CR_%s0' % n] = life.g(life.CRITTERS[n][0]); CARD['CR_%s1' % n] = life.g(life.CRITTERS[n][1])
+for k, f in enumerate(life.FOODS):
+    CARD['FOOD%d' % k] = life.g(f)
+CARD['DESCENT'] = life.g(life.DESCENT)
 for n in life.GIANT_ORDER:
     CARD['GI_' + n] = life.g(life.GIANTS[n])
 for n, gr in life.LOGOS.items():
@@ -387,18 +390,21 @@ def main():
     lines.append("")
     lines.append("struct CSpr { uint16_t off; uint8_t w, h; };   // a picture in STARLIFT.DAT's picture section (CardIndex.h: CARD_PIC)")
     sec = bytearray()
+    where = {}
     for name, p in CARD.items():
         data = pack(p)
         assert len(data) <= 1024, name                 # at most two blocks: the card cache holds two
         if len(data) <= 512 and (len(sec) % 512) + len(data) > 512:
             sec += bytes(512 - len(sec) % 512)
         lines.append("static const CSpr C_%s = { %d, %d, %d };   // %d bytes" % (name, len(sec), len(p[0]), len(p), len(data)))
+        where[name] = (len(sec), len(p[0]), len(p), len(data))
         sec += bytes(data)
         SPR_ALL[name] = p
         render(name, p)
     card = os.path.join(ROOT, 'out', 'card')
     os.makedirs(card, exist_ok=True)
     open(os.path.join(card, 'pics.bin'), 'wb').write(bytes(sec))
+    json.dump(where, open(os.path.join(card, 'pics.json'), 'w'))      # make_card.py builds each world's pack from these
     lines.append("static const CSpr *const STRUCT[3][6] = { %s };   // the background buildings of the ruins, the bases, the aliens" % ", ".join(
         "{ %s }" % ", ".join("&C_" + n for n in structures.THEMES[th]) for th in (1, 2, 3)))
     lines.append("static const int8_t STRUCT_LIGHT[3][6][3] = { %s };   // a light on each: x, y, kind (1 beacon, 2 rising glow, 3 arc, 4 eyes)" % ", ".join(
@@ -414,6 +420,7 @@ def main():
     lines.append("static const CSpr *const CRITPIC[2][3][2] = { %s };   // fliers, crawlers; two frames each" % ", ".join(
         "{ %s }" % ", ".join("{ &C_CR_%s0, &C_CR_%s1 }" % (n, n) for n in order) for order in (life.FLY_ORDER, life.CRAWL_ORDER)))
     lines.append("static const CSpr *const GIANTPIC[8] = { %s };   // each world's sky giant" % ", ".join("&C_GI_" + n for n in life.GIANT_OF))
+    lines.append("static const CSpr *const FOODPIC[8] = { %s };" % ", ".join("&C_FOOD%d" % k for k in range(8)))
     lines.append("static const CSpr *const SPIN[8] = { %s };" % ", ".join("&C_MAN_SPIN%d" % i for i in range(8)))
     lines.append("static const CSpr *const LANDER_UP[7] = { %s };" % ", ".join("&C_LANDUP%d" % i for i in range(7)))
     lines.append("static const CSpr *const SAUCER[4] = { %s };" % ", ".join("&C_SAUCER%d" % i for i in range(4)))

@@ -124,17 +124,53 @@ for page, x, y, c, t in HELP:
         txt += bytes(512 - len(txt) % 512)
     help_off.append(len(txt))
     txt += rec
-pics = padded(open(os.path.join(CARD, 'pics.bin'), 'rb').read())
+# ---- each world's pack: copies of the pictures it draws, the ones drawn every frame first, so a frame reads few blocks.
+# Its index (22 pictures: off, w, h, 4 bytes each) is loaded into RAM when the stage is built (Game.h: struct Pack).
+import json
+sys.path.insert(0, HERE)
+import life
+import skies
+import structures
+where = json.load(open(os.path.join(CARD, 'pics.json')))
+pics = bytearray(open(os.path.join(CARD, 'pics.bin'), 'rb').read())
+FLY_N = ['', 'BAT', 'JELLY', 'RAY']
+CRAWL_N = ['', 'HOPPER', 'BEETLE', 'SNAIL']
+PLANT_N = ['ROCK', 'SPIKES', 'BULB', 'FERN', 'FLOWER', 'TUBE', 'EYE', 'CACTUS', 'MUSH']
+SKY_N = [n if f else None for n, f, x, y in skies.SKIES]
+FOOD_N = ['BURGER', 'NOODLES', 'ICECREAM', 'PIZZA', 'HOTDOG', 'FISH', 'SUSHI', 'PIE']
+index = bytearray()
+for wi, w in enumerate(WORLDS):
+    names = ['SKY_' + SKY_N[SKY[w['sky']]] if SKY_N[SKY[w['sky']]] else None, 'GI_' + life.GIANT_OF[wi]]
+    names += ['PL_%s%d' % (pn, f) for pn in w['plants'] for f in (0, 1)]
+    names += ['CR_%s%d' % (FLY_N[FLY[w['fly']]], f) if FLY[w['fly']] else None for f in (0, 1)]
+    names += ['CR_%s%d' % (CRAWL_N[CRAWL[w['crawl']]], f) if CRAWL[w['crawl']] else None for f in (0, 1)]
+    names += structures.THEMES[TH[w['theme']]] if TH[w['theme']] else [None] * 6
+    names += ['BURGER', 'FOOD%d' % FOOD[w['food']], ['BASE', 'BASE1', 'BASE2', 'BASE3'][w['base']], ['BUCKET', 'COLL1', 'COLL2', 'COLL3'][w['coll']]]
+    assert len(names) == 22
+    pics += bytes(-len(pics) % 512)                               # each pack starts on a block
+    for n in names:
+        if n is None:
+            index += bytes(4)
+            continue
+        o, pw, ph, ln = where[n]
+        if ln <= 512 and (len(pics) % 512) + ln > 512:
+            pics += bytes(512 - len(pics) % 512)
+        assert len(pics) < 65536
+        index += struct.pack('<HBB', len(pics), pw, ph)
+        pics += pics[o:o + ln]
+pics = padded(bytes(pics))
 songs = padded(open(os.path.join(CARD, 'songs.bin'), 'rb').read())
 txt = padded(bytes(txt))
 plan = padded(bytes(plan))
+index = padded(bytes(index))
 msg = padded(bytes(msg))
 pic_blk = 1
 song_blk = pic_blk + len(pics) // 512
 txt_blk = song_blk + len(songs) // 512
 plan_blk = txt_blk + len(txt) // 512
 msg_blk = plan_blk + len(plan) // 512
-body = pics + songs + txt + plan + msg
+pack_blk = msg_blk + len(msg) // 512
+body = pics + songs + txt + plan + msg + index
 h = zlib.crc32(body) & 0xffffffff
 head = padded(b'STARLIFT' + struct.pack('<IHH', h, pic_blk, song_blk))
 open(os.path.join(CARD, 'STARLIFT.DAT'), 'wb').write(head + body)
@@ -144,9 +180,10 @@ open(os.path.join(ROOT, 'CHStarlift', 'CardIndex.h'), 'w', newline='').write(
     "static const uint32_t CARD_HASH = 0x%08Xu;\n"
     "static const uint32_t CARD_PIC = %d, CARD_SONG = %d, CARD_TXT = %d;\n"
     "// the how-to-play lines: page, x, y, colour, then the text (ending in 0)\n"
+    "static const uint32_t CARD_PACK = %d;   // each world's pack index: 88 bytes\n"
     "static const uint32_t CARD_MSG = %d;\n"
     "enum : uint8_t { %s };\n"
     "static const uint32_t CARD_PLANET = %d;\n#define PLANET_LEN %d\n"
     "#define HELP_LINES %d\n"
-    "static const uint16_t HELP_OFF[HELP_LINES] = { %s };\n" % (h, pic_blk * 512, song_blk * 512, txt_blk * 512, msg_blk * 512, ', '.join(n for n, t in MSGS), plan_blk * 512, PLANET_LEN, len(HELP), ", ".join(map(str, help_off))))
+    "static const uint16_t HELP_OFF[HELP_LINES] = { %s };\n" % (h, pic_blk * 512, song_blk * 512, txt_blk * 512, pack_blk * 512, msg_blk * 512, ', '.join(n for n, t in MSGS), plan_blk * 512, PLANET_LEN, len(HELP), ", ".join(map(str, help_off))))
 print("STARLIFT.DAT: %d bytes (hash %08X)" % (len(head) + len(body), h))

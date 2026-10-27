@@ -1,6 +1,6 @@
 // STARLIFT.DAT (Card.h): block 0 holds "STARLIFT" and the build's hash (CardIndex.h, written with the file by
 // tools/make_card.py), so a card from another build is refused; then the picture section, then the song section.
-// Four 512 B slots keep the blocks used last: the pictures on screen are read once and drawn from RAM after that.
+// Five 512 B slots (and CHGfx's scratch buffer while a frame is drawn) keep the blocks used last: the pictures on screen are read once and drawn from RAM after that.
 #include <CHGame.h>
 #include <Fat.h>
 #include "Card.h"
@@ -8,9 +8,9 @@
 
 namespace card {
 
-enum { SLOTS = 4, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
+enum { SLOTS = 5, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
-static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
+static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
 static uint8_t age[ALL], tick;                    // the least recently used slot is the one to replace
 static uint8_t *slotBuf(uint8_t i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
 static fat::Run runs[4];

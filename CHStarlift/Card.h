@@ -1,4 +1,4 @@
-// STARLIFT.DAT on the SD card (Card.cpp): the songs and the big set-piece pictures, read through a four-block cache.
+// STARLIFT.DAT on the SD card (Card.cpp): the songs and the big set-piece pictures, read through a six-block cache.
 // Every call reads the card over SPI1, which the panel shares: call them only between gfx_wait() and gfx_flushAsync().
 #pragma once
 #include <stdint.h>
