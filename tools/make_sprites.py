@@ -336,9 +336,10 @@ for k, f in enumerate(life.FOODS):
 CARD['DESCENT'] = life.g(life.DESCENT)
 CARD['GANTRY'] = life.g(life.GANTRY)
 CARD['PUMP'] = life.g(life.PUMP)
-CARD['MOTHERSHIP'] = life.g(life.MOTHERSHIP)
-for _b in ('BOSS_HIVE', 'BOSS_PRISM', 'BOSS_DREAD'):
-    CARD[_b] = life.g(getattr(life, _b))
+import bosses                                         # the four bosses (tools/bosses.py, redrawn in 0.20)
+CARD['MOTHERSHIP'] = life.g(bosses.MOTHERSHIP)
+for _b, _d in (('BOSS_HIVE', bosses.HIVE), ('BOSS_PRISM', bosses.PRISM), ('BOSS_DREAD', bosses.DREAD)):
+    CARD[_b] = life.g(_d)
 CARD['SCOOTER'] = life.g(life.SCOOTER)
 CARD['COW'] = life.g(life.COW)
 CARD['COWEAT'] = life.g(life.COWEAT)

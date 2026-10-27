@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.19"
+#define SL_VERSION "0.20"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -1082,7 +1082,7 @@ static void updateShots() {
             if (s.y >= groundAt(s.x) && s.kind != 2) { part(s.x, s.y, -s.dir * 8, -10, 8, C_GOLD); s.life = 0; break; }
             for (auto &e : en) {
                 if (!e.kind) continue;
-                const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : e.kind == E_MOTHER ? 18 : 6;
+                const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : e.kind == E_MOTHER ? 22 : 6;
                 if (e.kind == E_UFO && ey < TOP) continue;
                 if (absi(s.x - ex) <= hw && absi(s.y - ey) <= (s.kind >= 2 ? 8 : 5)) {
                     if (s.kind >= 2) {
@@ -1782,9 +1782,9 @@ static void drawEnemies() {
             break;
         }
         case E_MOTHER:
-            blit(PK.mother, sx - 18, sy - 7, false, solid, EMAP);
+            blit(PK.mother, sx - 22, sy - 10, false, solid, EMAP);
             if (frameNo & 8) pset(sx - 16 + ((frameNo >> 2) % 9) * 4, sy, C_RED);       // a light running round its rim
-            R(sx - 12, sy - 10, e.hp * 24 / clampi(40 + stage * 2, 40, 120), 1, C_RED);                 // how much it can still take
+            R(sx - 12, sy - 13, e.hp * 24 / clampi(40 + stage * 2, 40, 120), 1, C_RED);                 // how much it can still take
             break;
         case E_TURRET: {
             const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);

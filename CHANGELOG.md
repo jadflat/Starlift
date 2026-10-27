@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20 (2026-10-28)
+
+- The four bosses redrawn bigger (45 x 20, from 37 x 14) and in far more detail: shaded from the top left and outlined
+  (tools/bosses.py builds the lit shapes, then the detail is added by hand). The Mothership: a glass dome with a glint,
+  a band of lit windows, running lights, hull seams, a glowing tractor emitter. The Hive: a wet, veined dome, four gold
+  eyes, fangs, tendrils. The Prism warship: a faceted crystal blade with an accent spine, wing lights, fins of light and a
+  burning gem of a core. The Dreadnought: a skull-fronted battleship with burning eye sockets, teeth, side guns and
+  glowing gun ports. Their hit area and health bar follow the new size; each still fits its stage's card block.
+
 ## 0.19 (2026-10-28)
 
 - Four bosses instead of one mothership, one on each boss stage, each with its own picture, call-out and ways: the
