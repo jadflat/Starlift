@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.6"
+#define SL_VERSION "0.7"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -28,7 +28,7 @@ static const uint8_t MAP[14] = { C_INK, C_WHITE, C_GREEN, C_GREEN, C_WHITE, C_SI
 
 // ---- sound: 1950s science fiction. Warbling sines for ray guns and saucers, noise for blasts ------------------
 enum Sfx : uint8_t { S_LASER, S_BOOM, S_CRASH, S_HIT, S_BOARD, S_SAVED, S_LAND, S_UFO, S_BEAM, S_TAKEN, S_ZAP, S_FUEL, S_LOW,
-                     S_START, S_CLEAR, S_OVER, S_CATCH, S_SQUASH, S_GEAR, S_WARN, S_SLURP, S_ORDER, S_JET, S_PAUSE, S_RESUME, S_GUN, S_WORM, S_COUNT };
+                     S_START, S_CLEAR, S_OVER, S_CATCH, S_SQUASH, S_GEAR, S_WARN, S_SLURP, S_ORDER, S_JET, S_PAUSE, S_RESUME, S_GUN, S_WORM, S_CLANG, S_COUNT };
 AUDIO_STEPS(ST_LASER)  = { AUDIO_STEP(2600, 700, 110) };
 AUDIO_STEPS(ST_BOOM)   = { AUDIO_STEP(1400, 240, 280) };
 AUDIO_STEPS(ST_CRASH)  = { AUDIO_STEP(1200, 160, 480), AUDIO_STEP(300, 60, 500) };
@@ -56,6 +56,7 @@ AUDIO_STEPS(ST_PAUSE)  = { AUDIO_STEP(1400, 500, 160) };
 AUDIO_STEPS(ST_GUN)    = { AUDIO_STEP(1100, 500, 34) };
 AUDIO_STEPS(ST_WORM)   = { AUDIO_STEP(240, 80, 420) };
 AUDIO_STEPS(ST_RESUME) = { AUDIO_STEP(500, 1400, 160) };
+AUDIO_STEPS(ST_CLANG)  = { AUDIO_STEP(1980, 1860, 30), AUDIO_STEP(1240, 1180, 150) };   // metal on metal, ringing
 static const audio::Effect SOUNDS[S_COUNT] = {
     AUDIO_EFFECT(ST_LASER, 2 | synth::WOBBLE), AUDIO_EFFECT(ST_BOOM, 5 | synth::NOISE), AUDIO_EFFECT(ST_CRASH, 9 | synth::NOISE),
     AUDIO_EFFECT(ST_HIT, 6), AUDIO_EFFECT(ST_BOARD, 4 | synth::WOBBLE), AUDIO_EFFECT(ST_SAVED, 6), AUDIO_EFFECT(ST_LAND, 5),
@@ -65,7 +66,7 @@ static const audio::Effect SOUNDS[S_COUNT] = {
     AUDIO_EFFECT(ST_CATCH, 6 | synth::WOBBLE), AUDIO_EFFECT(ST_SQUASH, 6), AUDIO_EFFECT(ST_GEAR, 3), AUDIO_EFFECT(ST_WARN, 4),
     AUDIO_EFFECT(ST_SLURP, 5 | synth::WOBBLE), AUDIO_EFFECT(ST_ORDER, 3), AUDIO_EFFECT(ST_JET, 2 | synth::NOISE | audio::SOFT),
     AUDIO_EFFECT(ST_PAUSE, 9 | synth::WOBBLE), AUDIO_EFFECT(ST_RESUME, 9 | synth::WOBBLE),
-    AUDIO_EFFECT(ST_GUN, 1 | synth::NOISE | audio::SOFT), AUDIO_EFFECT(ST_WORM, 3 | synth::NOISE) };
+    AUDIO_EFFECT(ST_GUN, 1 | synth::NOISE | audio::SOFT), AUDIO_EFFECT(ST_WORM, 3 | synth::NOISE), AUDIO_EFFECT(ST_CLANG, 6) };
 static NOINL void sfx(uint8_t id) { synth::sfx(SOUNDS[id]); }
 
 // ---- the planets ------------------------------------------------------------------------------------------------
@@ -100,7 +101,7 @@ static Man men[MEN];
 static uint8_t nMen, nSaved, nLost, quota;                // quota: how many must reach the base
 enum : uint8_t { IT_SUPPLY, IT_REPAIR, IT_FUEL, IT_ENGINE };
 struct Item { int16_t x; uint8_t kind, st; };              // st 0 none, 1 waiting on the ground, 2 aboard (supplies)
-static Item items[5];
+static Item items[8];
 static uint8_t engineUp, missed;                           // engine upgrades this game (each +8% thrust); the last stage missed its quota
 static Enemy en[ENS];
 static Shot shots[SHOTS];
@@ -141,15 +142,18 @@ static bool thrusting;
 static uint8_t banner, bannerT;                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
 static uint8_t tripN, killT, kills, flashT, chainMask, ledges;   // chainMask: the camps visited this trip; ledges: the camps on high ledges (double points)
-static uint8_t tripNx;               // colonists home this landing; the kill chain; the screen flash
-static uint8_t diff = 1;                                   // 0 easy, 1 normal, 2 hard (saved)
+static uint8_t tripNx, bumpT;                                   // bumpT: frames until a bump can clang again               // colonists home this landing; the kill chain; the screen flash
+#ifndef SL_DIFF
+#define SL_DIFF 1
+#endif
+static uint8_t diff = SL_DIFF;                                   // 0 easy, 1 normal, 2 hard (saved)
 static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
 static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
 static bool newHi;
 static uint8_t pauseNote;                                  // a message (MS_...), 0 = none
 
 static uint32_t rnd32() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
-static int rnd(int n) { return (int)(rnd32() % (uint32_t)n); }
+static NOINL int rnd(int n) { return (int)(rnd32() % (uint32_t)n); }
 static NOINL uint32_t hash(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
 static inline int absi(int v) { return v < 0 ? -v : v; }
 static inline int sgn(int v) { return (v > 0) - (v < 0); }
@@ -405,10 +409,11 @@ static void genStage() {
     nMen = (uint8_t)clampi(8 + stage, 8, MEN);
     quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
     memset(items, 0, sizeof items);
-    for (int k = 0; k < clampi((stage + 2) / 3, 0, 5); k++) {                // things to pick up: supplies, repairs, fuel, now and then an engine part
+    const int nIt = clampi((stage + 2) / 3, 0, 5);
+    for (int k = 0; k < nIt + (diff ? 0 : 3); k++) {                          // (easy: three more shield kits)                // things to pick up: supplies, repairs, fuel, now and then an engine part
         int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
         while (busyAt(x)) x += 23;
-        items[k] = { (int16_t)x, (uint8_t)(k == 0 ? IT_SUPPLY : (stage % 5 == 4 && k == 1) ? IT_ENGINE : (k & 1) ? IT_REPAIR : IT_FUEL), 1 };
+        items[k] = { (int16_t)x, (uint8_t)(k >= nIt ? IT_REPAIR : k == 0 ? IT_SUPPLY : (stage % 5 == 4 && k == 1) ? IT_ENGINE : (k & 1) ? IT_REPAIR : IT_FUEL), 1 };
         flatten(x, 24);
     }
     for (int i = 0; i < nMen; i++) {
@@ -464,7 +469,7 @@ static NOINL void addScore(int v, int x, int y) {
     if (x >= 0) for (auto &q : pops) if (!q.t) { q = { (int16_t)x, (int16_t)y, (uint16_t)v, 30 }; break; }
 }
 static NOINL void say(uint8_t id, uint8_t t = 50, int num = -1) { banner = id; bannerT = t; bannerNum = (int8_t)num; }
-static inline uint8_t shMax() { return diff ? 4 - diff : 5; }   // hits the hull takes: 5 easy, 3 normal, 2 hard
+static inline uint8_t shMax() { return diff ? 7 - diff * 2 : 8; }   // hits the hull takes: 8 easy, 5 normal, 3 hard
 static int gHund() { const int g = PLR.grav + (sector ? PLR.grav / 8 : 0); return g * 100 / 64; }   // gravity in hundredths of a G
 
 // ---- save ---------------------------------------------------------------------------------------------------------
@@ -955,6 +960,17 @@ static void updateEnemies() {
         // touching the lander
         if (e.kind == E_WORM) { if (e.x < 160) e.x = 160; if (e.x > (W - 10) * 16) e.x = (W - 10) * 16; if (e.st != 2) continue; }
         if (lst != 2 && absi(nx - X) < 10 && absi(ny - Y) < (e.kind == E_WORM ? 20 : 9)) {
+            if (e.kind == E_UFO) {                                            // a bump: no harm done, the ships bounce apart
+                lvx = X >= nx ? 300 : -300; lvy = Y >= ny ? 220 : -220;
+                e.x = (int16_t)(e.x - lvx / 6);
+                if (!bumpT) {
+                    sfx(S_CLANG); shake = 3; bumpT = 12;
+#ifdef SL_TRACE
+                    fprintf(stderr, "clang f%u shield %d/%d lvx %d lvy %d\n", (unsigned)frameNo, shield, shMax(), lvx, lvy);
+#endif
+                }
+                continue;
+            }
             damage(e.kind == E_MINE ? 2 : 1);
             killEn(e);
         }
@@ -962,6 +978,7 @@ static void updateEnemies() {
 }
 
 static void updateShots() {
+    if (bumpT) bumpT--;
     for (auto &s : shots) {
         if (!s.life) continue;
         s.life--;
@@ -1730,7 +1747,7 @@ static void drawHud() {
     text35(35, 1, fmt(q, "", nSaved, "/", quota), nSaved >= quota ? C_GREEN : C_GOLD);
     for (int i = 0; i < SEATS; i++) { const uint8_t c = i < seats ? C_WHITE : C_STEEL; R(57 + i * 4, 2, 3, 4, c); pset(58 + i * 4, 3, i < seats ? C_GOLD : C_INK); }
     // shield and lives
-    for (int i = 0; i < shMax(); i++) R(90 + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
+    for (int i = 0; i < shMax(); i++) R(80 + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
     char s[12];
     fmt(s, "", score);
     text35(127 - text35Width(s), 1, s, C_WHITE);
@@ -2004,6 +2021,9 @@ static void botInput(bool &l, bool &r, bool &u, bool &d, bool &a, bool &b) {
         if (!wait && (absi(tx - X) > 6 || nearestIdle(X, 60) < 0 || seats >= SEATS)) a = true;
         return;
     }
+#ifdef SL_BUMP
+    for (const auto &e : en) if (e.kind == E_UFO) { tx = e.x >> 4; break; }
+#endif
     const int dx = tx - X, alt = groundAt(X) - Y;
     int hmin = 127;
     for (int k = -16; k <= 72; k += 8) { const int g = groundAt(X + (dx < 0 ? -k : k)); if (g < hmin) hmin = g; }
@@ -2015,7 +2035,9 @@ static void botInput(bool &l, bool &r, bool &u, bool &d, bool &a, bool &b) {
     if ((absi(dx) <= 6 && alt < 20) || alt < 14) want = 0;
     r = ang < want; l = ang > want;
     a = lvy > dvy || (ang && absi(dvx - lvx) > 60 && lvy > dvy - 80);
+#ifndef SL_BUMP
     for (const auto &e : en) if (e.kind && absi((e.y >> 4) - Y) < 10 && ((e.x >> 4) - X) * facing > 0 && absi((e.x >> 4) - X) < 90) b = true;
+#endif
 }
 #endif
 

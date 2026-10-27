@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7 (2026-10-27)
+
+- More hull: 8 hits on Easy, 5 on Normal, 3 on Hard (was 5/3/2).
+- Bumping a UFO no longer costs hull: the two ships clang and bounce apart.
+- Easy: three extra shield-repair kits along every stage.
+
 ## 0.6 (2026-10-27)
 
 - The sandworm redrawn so it can be seen: steel-grey swaying rings, a red-gold maw with teeth, a taller mound with a dark crest.
