@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.10"
+#define SL_VERSION "0.11"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -602,6 +602,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
     thrusting = thrLvl > 0;
     if (lst == 1) {                                                  // on the ground
         rotT = 0;
+        if (l != r) facing = r ? 1 : -1;                             // LEFT/RIGHT on the ground turn the guns round
         if (thrLvl >= 4) { lst = 0; gear = 2; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
         else {
             synth::engine(0);

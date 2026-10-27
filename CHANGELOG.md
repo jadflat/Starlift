@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11 (2026-10-27)
+
+- On the ground, LEFT and RIGHT turn the guns round (they kept the way you last flew).
+
 ## 0.10 (2026-10-27)
 
 - The charge shot moves to UP (B is the guns alone again) and charges in about half a second.
