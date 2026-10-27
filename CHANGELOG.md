@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17 (2026-10-27)
+
+- The takeaway delivery is a little cut-scene: once the bag lands, everything else holds still, black bars close in and
+  the camera follows the speeder, now half as fast, out to the bag, up to the lander and the lob into the lid.
+- The feast too: bars, the camera on the party, longer (about 7 seconds), fireworks every half second, a slower dance.
+- The help page's last tip is the takeaway (bump or shoot a saucer as its order comes up).
+- To make room: the ledge camps (pillars of rock with double points) are gone.
+
 ## 0.16 (2026-10-27)
 
 - Smoother late stages: each stage now draws three of its world's six buildings (the other stage the other three), packed

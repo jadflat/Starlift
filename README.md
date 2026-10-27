@@ -35,7 +35,7 @@ Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
   points to the next job.
 
 - **Takeaway.** Shoot down a saucer while its order is coming up from the takeaway, or just bump it, and the bag drops: a speeder bike
-  races out, grabs it and tosses it into the lander's flip-top lid. Stingers go for the speeder, so cover it. Bring the
+  races out, grabs it and tosses it into the lander's flip-top lid, a little cut-scene to watch. Stingers go for the speeder, so cover it. Bring the
   food home for a **FEAST FIESTA**: fireworks, points and a treat from that world's food (an extra lander, a better
   engine or a mended hull).
 - **Cows.** Bump a saucer (it costs nothing: the ships clang apart) and now and then a cow tumbles out and grazes for the

@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.16"
+#define SL_VERSION "0.17"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -151,7 +151,7 @@ static bool thrusting;
 static uint8_t banner, bannerT, bannerNew;   // bannerNew: its text is to be read from the card (once, not every frame)
 static char bannerTxt[28];                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
-static uint8_t tripN, killT, kills, flashT, ledges;   // ledges: the camps on high ledges (double points)
+static uint8_t tripN, killT, kills, flashT;
 static uint8_t dlv, dlvT, lidT, partyT, foodOn, feasts, cowsN;   // feasts: this stage's; cowsN: cows grazing at its end                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
 static int bagX, bagY, scX, scY;                                // px (the speeder's: its middle, the ground under it)
 static int8_t scDir = 1;
@@ -413,12 +413,6 @@ static void genStage() {
         zoneX[z] = (int16_t)cx;
         flatten(cx, 60);
     }
-    ledges = 0;
-    for (int z = 1; z < nZones && stage >= 2; z += 3) {                      // a camp up on a ledge: steep sides, little room
-        const int i0 = zoneX[z] / 4, lv = clampi(hgt[i0] - 26, 46, 120);
-        for (int k = -4; k <= 4; k++) hgt[i0 + k] = (uint8_t)lv;
-        ledges |= (uint8_t)(1 << z);
-    }
     memset(men, 0, sizeof men);
     nMen = (uint8_t)clampi(8 + stage, 8, MEN);
     quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
@@ -434,12 +428,11 @@ static void genStage() {
     }
     for (int i = 0, z = 0, c = 0, pass = 0; i < nMen; i++) {
         Man &m = men[i];
-        const bool ledge = (ledges >> z) & 1;
-        if (c >= (ledge ? 2 : 2 + (z + stage) % 3)) { if (++z == nZones) { z = 0; pass++; } c = 0; }   // this camp is full: on to the next (round again: the other side)
+        if (c >= 2 + (z + stage) % 3) { if (++z == nZones) { z = 0; pass++; } c = 0; }   // this camp is full: on to the next (round again: the other side)
         const int k = c++;                                                    // its place in the camp
         const int side = (baseRight ? -1 : 1) * (pass & 1 ? -1 : 1);         // camp on the side away from the base
         m.home = (uint8_t)z;
-        m.x = (int16_t)(zoneX[z] + side * (((ledges >> z) & 1) ? 3 + (k & 1) * 7 : 6 + (k & 3) * 8 + (int)(hash(s + i * 13u) % 3)));
+        m.x = (int16_t)(zoneX[z] + side * (6 + (k & 3) * 8 + (int)(hash(s + i * 13u) % 3)));
         m.y = (int16_t)groundAt(m.x);
         m.st = M_IDLE; m.act = D_STAND; m.t = (uint8_t)rnd(60); m.face = (int8_t)(rnd(2) ? 1 : -1); m.look = (uint8_t)(hash(s + i * 71u) & 31);
     }
@@ -636,7 +629,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
                 for (auto &it : items) if (it.st == 2) { it.st = 0; addScore(500 * (sector + 1), doorX, groundAt(doorX) - 20); say(MS_DELIVERED); sfx(S_SAVED); }
                 if (foodOn) {
-                    foodOn = 0; partyT = 200; feasts++; addScore(2000 * (sector + 1), doorX, groundAt(doorX) - 28); sfx(S_CLEAR);
+                    foodOn = 0; partyT = 255; feasts++; addScore(2000 * (sector + 1), doorX, groundAt(doorX) - 28); sfx(S_CLEAR);
                     const int k = planet % 3;                                    // the world's food: a lander, a better engine or a mended hull
                     if (k == 0) { if (lives < 9) lives++; } else if (k == 1) { if (engineUp < 3) engineUp++; } else shield = shMax();
                     say((uint8_t)(MS_FED_LANDER + k), 90);
@@ -794,7 +787,7 @@ static void updateMen() {
                     say(MS_TRIP_BONUS_X, 60, tripN);
                 }
                 for (int k = 0; k < 6; k++) part(doorX, m.y - 6, rnd(24) - 12, -8 - rnd(14), 18, k & 1 ? C_GOLD : C_WHITE);   // a little fanfare of sparks
-                addScore(250 * (sector + 1) * (((ledges >> m.home) & 1) + 1), doorX, m.y - 16);   // from a high ledge: double
+                addScore(250 * (sector + 1), doorX, m.y - 16);
             }
             break;
         default: break;
@@ -1030,7 +1023,7 @@ static NOINL int toward(int v, int t, int step) { return v + clampi(t - v, -step
 
 static void updateDelivery() {
     if (lidT) lidT--;
-    if (partyT && (--partyT & 7) == 0) {                                // the feast: fireworks over the base
+    if (partyT && (--partyT & 15) == 0) {                               // the feast: fireworks over the base, every half second
         const int fx = basePadX + rnd(81) - 20, fy = 24 + rnd(30);   // over the pad, where the lander sits
         const uint8_t c = (partyT & 16) ? C_GOLD : (partyT & 8) ? C_GREEN : C_RED;
         for (int a = 0; a < 256; a += 21) part(fx, fy, isin(a) / 4, isin(a + 64) / 4, 22, c);
@@ -1046,15 +1039,18 @@ static void updateDelivery() {
     case 2: tx = bagX; ty = groundAt(scX) - 7; break;                  // low along the ground to the bag
     case 3: tx = X - 12 * scDir; ty = Y - 12; bagX = scX; bagY = scY - 2; if (lst == 2) dlv = 5; break;   // up to the lander with it
     case 4:                                                             // tossed into the open lid
-        bagX = toward(bagX, X, 2); bagY = toward(bagY, Y - 8, 2);
+        bagX = toward(bagX, X, 1); bagY = toward(bagY, Y - 8, 1);
         if (bagX == X && bagY == Y - 8) { dlv = 5; foodOn = 1; sfx(S_CATCH); say(MS_ORDER_UP, 50); }
         return;
     default: tx = scX - scDir * 40; ty = -40; if (scY < -10) dlv = 0; break;   // and away
     }
     if (dlv < 4) scDir = (int8_t)(tx < scX ? -1 : 1);
-    scX = toward(scX, tx, 3); scY = toward(scY, ty, 2);
+    scX = toward(scX, tx, 2); scY = toward(scY, ty, 1);
     if (absi(tx - scX) < 4 && absi(ty - scY) < 4) { if (dlv == 2) dlv = 3; else if (dlv == 3) { dlv = 4; lidT = 40; sfx(S_GEAR); } }
 }
+
+// a cut-scene playing (the delivery, the feast): where the camera looks, or -999
+static NOINL int cutAt() { return partyT ? (doorX + basePadX + 20) / 2 : (dlv >= 2 && dlv <= 4) ? scX : -999; }
 
 static void updateShots() {
     updateDelivery();
@@ -1826,7 +1822,7 @@ static NOINL void drawBag(int x, int y) {                                   // a
 
 static void drawDelivery() {
     if (partyT) {                                                       // the feast at the base door, a colonist dancing either side
-        const int fx = (doorX + basePadX + 20) / 2, gy = groundAt(fx) - 1, hop = (frameNo >> 2) & 1;   // between the pad and the door
+        const int fx = (doorX + basePadX + 20) / 2, gy = groundAt(fx) - 1, hop = (frameNo >> 3) & 1;   // between the pad and the door
         blitBC(PK.food, fx - cam, gy, false);
         for (int k = -1; k <= 1; k += 2) blitBC(hop ? C_MAN_CHEER : C_MAN_WAVE1, fx - cam + k * 12, gy - hop, k > 0, 255, manMap((uint8_t)(k + 3)));
     }
@@ -1938,6 +1934,10 @@ static void drawWorld() {
     drawShots();
 #ifndef SL_NOWX
     drawWeather();
+#endif
+    if (cutAt() > -999) { R(0, TOP, 128, 7, C_INK); R(0, 121, 128, 7, C_INK); }   // a cut-scene's bars
+#ifdef SL_TRACE
+    if ((frameNo & 15) == 0) fprintf(stderr, "cut f%d dlv%d party%d at%d\n", frameNo, dlv, partyT, cutAt());
 #endif
     dbg::prof(7);
     for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); text35(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
@@ -2280,10 +2280,15 @@ static void update() {
                 if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
                 else if (SL_DLV == 4) { if (Enemy *e = spawnEn(E_UFO, LX(), LY() - 26)) { e->st = 4; e->cargo = 10; } }
                 else if (SL_DLV == 3) { crit[0] = { (int16_t)(LX() + 40), (int16_t)groundAt(LX() + 40), 1, 4, 100 }; spawnEn(E_UFO, LX() + 40, 40); }
-                else { dlv = 2; bagX = LX() + 40; bagY = groundAt(bagX) - 3; scX = LX() - 70; scY = groundAt(scX) - 7; crit[0] = { (int16_t)(LX() + 20), 30, 1, 3, 0 }; }
+                else { dlv = 2; bagX = LX() + 40; bagY = groundAt(bagX) - 3; scX = LX() + 200; scY = groundAt(scX) - 7; crit[0] = { (int16_t)(LX() + 20), 30, 1, 3, 0 }; }
             }
         }
 #endif
+        if (const int ct = cutAt(); ct > -999) {                          // a cut-scene: everything else holds still
+            updateDelivery(); updateWeather(); updateCritters();
+            cam = clampi(cam + (ct - 64 - cam) / 8, 0, W - 128);          // the camera goes to it
+            break;
+        }
         {
             static int lastDown = -99;                                  // the gear: DOWN tapped twice
             bool gearTap = false;
