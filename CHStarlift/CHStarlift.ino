@@ -202,6 +202,7 @@ static NOINL void blit(const CSpr &s, int x, int y, bool flip, uint8_t solid = 2
     if (s.w != 96 && s.w != 108) return;                           // a perf test: card pictures off (the logos stay)
 #endif
     if (!card::ok() || x >= 128 || x + s.w <= 0 || y >= 128 || y + s.h <= 0) return;
+    if (!card::at(CARD_PIC + s.off)) return;                       // (scenery past this frame's card budget: next frame)
     Rd rd = { nullptr, CARD_PIC + s.off, 0, true };
     blitRd(rd, s.w, s.h, x, y, flip, solid, map);
 }
@@ -1741,6 +1742,7 @@ static void drawWorld() {
     dbg::prof(0);
     drawSky();
     dbg::prof(1);
+    card::lowPri = true;                                           // the scenery may wait a frame for the card
     drawSkyObjects();
     dbg::prof(2);
 #ifndef SL_NOSCENE
@@ -1750,6 +1752,7 @@ static void drawWorld() {
 #endif
     dbg::prof(4);
     drawGroundThings();
+    card::lowPri = false;
     dbg::prof(5);
     drawMen();
     drawEnemies();
@@ -1815,7 +1818,6 @@ static void drawTitle() {
     for (uint8_t i = 0; i < n; i++) gfx_text(40, 87 + i * 9, T(it[i]), titleSel == i ? C_WHITE : C_STEEL);
     gfx_text(33, 87 + titleSel * 9, T(MS_X52), (frameNo & 8) ? C_GOLD : C_RED);
     text35(2, 122, "V" SL_VERSION, C_SILVER);
-    text35(126 - text35Width(PLR.name), 122, PLR.name, C_GOLD);
 #endif
 }
 
@@ -1838,12 +1840,6 @@ static void drawHelp() {
     for (int i = 0; i < HELP_LINES; i++) {                          // the text, from the card
         const uint8_t *r = card::at(CARD_TXT + HELP_OFF[i]);
         if (r && r[0] == helpPage) text35(r[1], r[2], (const char *)r + 4, r[3]);
-    }
-    if (helpPage == 2) {
-        blit(*SAUCER[(frameNo >> 2) & 3], 8, 24, false);
-        blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, 12, 48, false);
-        blit(C_MINE0, 15, 68, false);
-        blit(C_TURRET, 13, 84, false);
     }
     char s[8];
     text35(9, 114, fmt(s, "", helpPage + 1, T(MS_3)), C_STEEL);
