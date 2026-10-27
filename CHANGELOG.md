@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3 (2026-10-27)
+
+- Stronger sideways thrust; enemies arrive further apart (time for a rescue); slower early UFOs.
+- The version shows on the title screen (each build from here gets the next number).
+
 ## 0.2 (2026-10-27)
 
 - A heavier lander (twice the gravity, a stronger, quicker engine), and no ceiling: fly up and out of the screen.
