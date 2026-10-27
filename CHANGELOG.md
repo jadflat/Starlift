@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18 (2026-10-27)
+
+- Longer cut-scenes: the speeder rides at half its 0.17 speed (a delivery runs about twice as long), and the feast lasts
+  about 10 seconds (its clock at half speed), fireworks still every half second.
+
 ## 0.17 (2026-10-27)
 
 - The takeaway delivery is a little cut-scene: once the bag lands, everything else holds still, black bars close in and

@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.17"
+#define SL_VERSION "0.18"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -629,7 +629,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
                 for (auto &it : items) if (it.st == 2) { it.st = 0; addScore(500 * (sector + 1), doorX, groundAt(doorX) - 20); say(MS_DELIVERED); sfx(S_SAVED); }
                 if (foodOn) {
-                    foodOn = 0; partyT = 255; feasts++; addScore(2000 * (sector + 1), doorX, groundAt(doorX) - 28); sfx(S_CLEAR);
+                    foodOn = 0; partyT = 180; feasts++; addScore(2000 * (sector + 1), doorX, groundAt(doorX) - 28); sfx(S_CLEAR);
                     const int k = planet % 3;                                    // the world's food: a lander, a better engine or a mended hull
                     if (k == 0) { if (lives < 9) lives++; } else if (k == 1) { if (engineUp < 3) engineUp++; } else shield = shMax();
                     say((uint8_t)(MS_FED_LANDER + k), 90);
@@ -1023,7 +1023,7 @@ static NOINL int toward(int v, int t, int step) { return v + clampi(t - v, -step
 
 static void updateDelivery() {
     if (lidT) lidT--;
-    if (partyT && (--partyT & 15) == 0) {                               // the feast: fireworks over the base, every half second
+    if (partyT && (frameNo & 1) && (--partyT & 7) == 0) {              // the feast (its clock at half speed): fireworks every half second
         const int fx = basePadX + rnd(81) - 20, fy = 24 + rnd(30);   // over the pad, where the lander sits
         const uint8_t c = (partyT & 16) ? C_GOLD : (partyT & 8) ? C_GREEN : C_RED;
         for (int a = 0; a < 256; a += 21) part(fx, fy, isin(a) / 4, isin(a + 64) / 4, 22, c);
@@ -1045,12 +1045,12 @@ static void updateDelivery() {
     default: tx = scX - scDir * 40; ty = -40; if (scY < -10) dlv = 0; break;   // and away
     }
     if (dlv < 4) scDir = (int8_t)(tx < scX ? -1 : 1);
-    scX = toward(scX, tx, 2); scY = toward(scY, ty, 1);
+    scX = toward(scX, tx, 1); scY = toward(scY, ty, 1);
     if (absi(tx - scX) < 4 && absi(ty - scY) < 4) { if (dlv == 2) dlv = 3; else if (dlv == 3) { dlv = 4; lidT = 40; sfx(S_GEAR); } }
 }
 
 // a cut-scene playing (the delivery, the feast): where the camera looks, or -999
-static NOINL int cutAt() { return partyT ? (doorX + basePadX + 20) / 2 : (dlv >= 2 && dlv <= 4) ? scX : -999; }
+static NOINL int cutAt() { return partyT ? (doorX + basePadX + 20) / 2 : (uint8_t)(dlv - 2) < 3 ? scX : -999; }
 
 static void updateShots() {
     updateDelivery();
