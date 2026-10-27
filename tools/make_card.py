@@ -173,6 +173,7 @@ def blocks(names):                                                # blocks a gro
 # one index per stage (Pack, 23 pictures): the two stages of a world share its pictures, but each draws three of its six
 # buildings, packed into as few blocks as they go (a frame then reads about seven blocks: the cache holds seven)
 idx = [None] * 16
+BOSSES = ['MOTHERSHIP', 'BOSS_HIVE', 'BOSS_PRISM', 'BOSS_DREAD']   # stages 4, 8, 12 and 16
 for wi, w in enumerate(WORLDS):
     names = ['SKY_' + SKY_N[SKY[w['sky']]] if SKY_N[SKY[w['sky']]] else None, 'GI_' + life.GIANT_OF[wi]]
     names += ['PL_%s%d' % (pn, f) for pn in w['plants'] for f in (0, 1)]
@@ -181,7 +182,8 @@ for wi, w in enumerate(WORLDS):
     st = structures.THEMES[TH[w['theme']]] if TH[w['theme']] else []
     rest = ['BURGER', 'FOOD%d' % FOOD[w['food']], ['BASE', 'BASE1', 'BASE2', 'BASE3'][w['base']], ['BUCKET', 'COLL1', 'COLL2', 'COLL3'][w['coll']]]
     pics += bytes(-len(pics) % 512)                               # each pack starts on a block
-    ent = put([n for n in names if n] + ['MOTHERSHIP'])              # (the mothership: in the critters' block, which has room)
+    boss = [BOSSES[((sec * 8 + wi) >> 2) & 3] for sec in (0, 1)]   # a boss stage's own boss (stage & 3 == 3)
+    ent = put([n for n in names if n] + sorted(set(boss)))          # (the boss: in the critters' block, which has room)
     groups = [[], []]
     if st:                                                        # the split of the six with the fewest blocks a stage
         best = min((c for c in itertools.combinations(st, 3) if st[0] in c),
@@ -207,7 +209,7 @@ for wi, w in enumerate(WORLDS):
             r += ent[n] if n else bytes(4)
         for k in range(6):
             r += ent[groups[sec][k % 3]] if st else bytes(4)
-        for n in rest + ['MOTHERSHIP']:
+        for n in rest + [boss[sec]]:
             r += ent[n]
         assert len(r) == 92
         idx[sec * 8 + wi] = r

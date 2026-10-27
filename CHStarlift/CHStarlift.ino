@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.18"
+#define SL_VERSION "0.19"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -33,47 +33,56 @@ static NOINL void remap(uint8_t *mp, uint32_t p) { memcpy(mp, MAP, 14); for (; p
 // ---- sound: 1950s science fiction. Warbling sines for ray guns and saucers, noise for blasts ------------------
 enum Sfx : uint8_t { S_LASER, S_BOOM, S_CRASH, S_HIT, S_BOARD, S_SAVED, S_LAND, S_UFO, S_BEAM, S_TAKEN, S_ZAP, S_FUEL, S_LOW,
                      S_START, S_CLEAR, S_OVER, S_CATCH, S_SQUASH, S_GEAR, S_WARN, S_SLURP, S_ORDER, S_JET, S_PAUSE, S_RESUME, S_GUN, S_WORM, S_CLANG, S_BLAST, S_MOO, S_COUNT };
-AUDIO_STEPS(ST_LASER)  = { AUDIO_STEP(2600, 700, 110) };
-AUDIO_STEPS(ST_BOOM)   = { AUDIO_STEP(1400, 240, 280) };
-AUDIO_STEPS(ST_CRASH)  = { AUDIO_STEP(1200, 160, 480), AUDIO_STEP(300, 60, 500) };
-AUDIO_STEPS(ST_HIT)    = { AUDIO_STEP(320, 120, 100) };
-AUDIO_STEPS(ST_BOARD)  = { AUDIO_STEP(660, 990, 60), AUDIO_STEP(1320, 0, 60) };
-AUDIO_STEPS(ST_SAVED)  = { AUDIO_STEP(600, 1800, 160), AUDIO_STEP(1568, 0, 70), AUDIO_STEP(2093, 0, 70), AUDIO_STEP(2637, 0, 220) };   // a theremin whoop, then a chime
-AUDIO_STEPS(ST_LAND)   = { AUDIO_STEP(240, 80, 70), AUDIO_STEP(1200, 1800, 80) };
-AUDIO_STEPS(ST_UFO)    = { AUDIO_STEP(600, 1000, 300), AUDIO_STEP(1000, 600, 300) };
-AUDIO_STEPS(ST_BEAM)   = { AUDIO_STEP(380, 640, 110), AUDIO_STEP(640, 380, 110), AUDIO_STEP(380, 640, 110), AUDIO_STEP(640, 380, 110) };   // wom-wom: repeated while a beam is on
-AUDIO_STEPS(ST_TAKEN)  = { AUDIO_STEP(1500, 200, 500), AUDIO_STEP(200, 100, 200) };
-AUDIO_STEPS(ST_ZAP)    = { AUDIO_STEP(1500, 400, 70) };
-AUDIO_STEPS(ST_FUEL)   = { AUDIO_STEP(1800, 2200, 24) };
-AUDIO_STEPS(ST_LOW)    = { AUDIO_STEP(1600, 0, 80), AUDIO_REST(60), AUDIO_STEP(1600, 0, 80) };
-AUDIO_STEPS(ST_START)  = { AUDIO_STEP(400, 1400, 320), AUDIO_STEP(1400, 1400, 200) };
-AUDIO_STEPS(ST_CLEAR)  = { AUDIO_STEP(784, 0, 90), AUDIO_STEP(1047, 0, 90), AUDIO_STEP(1319, 0, 90), AUDIO_STEP(1568, 2093, 360) };
-AUDIO_STEPS(ST_OVER)   = { AUDIO_STEP(1200, 150, 500), AUDIO_STEP(150, 60, 400) };
-AUDIO_STEPS(ST_CATCH)  = { AUDIO_STEP(900, 1800, 140) };
-AUDIO_STEPS(ST_SQUASH) = { AUDIO_STEP(300, 100, 140) };
-AUDIO_STEPS(ST_GEAR)   = { AUDIO_STEP(500, 900, 90), AUDIO_STEP(900, 0, 30) };
-AUDIO_STEPS(ST_WARN)   = { AUDIO_STEP(2200, 0, 50), AUDIO_REST(50), AUDIO_STEP(2200, 0, 50) };
-AUDIO_STEPS(ST_SLURP)  = { AUDIO_STEP(1000, 160, 260), AUDIO_STEP(300, 520, 90) };
-AUDIO_STEPS(ST_ORDER)  = { AUDIO_STEP(1319, 0, 140), AUDIO_STEP(1047, 0, 260) };
-AUDIO_STEPS(ST_JET)    = { AUDIO_STEP(700, 1100, 180) };
-AUDIO_STEPS(ST_PAUSE)  = { AUDIO_STEP(1400, 500, 160) };
-AUDIO_STEPS(ST_GUN)    = { AUDIO_STEP(1100, 500, 34) };
-AUDIO_STEPS(ST_WORM)   = { AUDIO_STEP(240, 80, 420) };
-AUDIO_STEPS(ST_RESUME) = { AUDIO_STEP(500, 1400, 160) };
-AUDIO_STEPS(ST_BLAST)  = { AUDIO_STEP(200, 1600, 90), AUDIO_STEP(1600, 300, 260) };   // a rising whoosh, then the roar away
-AUDIO_STEPS(ST_MOO)    = { AUDIO_STEP(210, 150, 420) };
-AUDIO_STEPS(ST_CLANG)  = { AUDIO_STEP(1980, 1860, 30), AUDIO_STEP(1240, 1180, 150) };   // metal on metal, ringing
-static const audio::Effect SOUNDS[S_COUNT] = {
-    AUDIO_EFFECT(ST_LASER, 2 | synth::WOBBLE), AUDIO_EFFECT(ST_BOOM, 5 | synth::NOISE), AUDIO_EFFECT(ST_CRASH, 9 | synth::NOISE),
-    AUDIO_EFFECT(ST_HIT, 6), AUDIO_EFFECT(ST_BOARD, 4 | synth::WOBBLE), AUDIO_EFFECT(ST_SAVED, 6), AUDIO_EFFECT(ST_LAND, 5),
-    AUDIO_EFFECT(ST_UFO, 3 | synth::WOBBLE), AUDIO_EFFECT(ST_BEAM, 2 | synth::WOBBLE), AUDIO_EFFECT(ST_TAKEN, 7 | synth::WOBBLE),
-    AUDIO_EFFECT(ST_ZAP, 1 | audio::SOFT), AUDIO_EFFECT(ST_FUEL, 1 | audio::SOFT), AUDIO_EFFECT(ST_LOW, 3),
-    AUDIO_EFFECT(ST_START, 6 | synth::WOBBLE), AUDIO_EFFECT(ST_CLEAR, 8 | synth::WOBBLE), AUDIO_EFFECT(ST_OVER, 9 | synth::WOBBLE),
-    AUDIO_EFFECT(ST_CATCH, 6 | synth::WOBBLE), AUDIO_EFFECT(ST_SQUASH, 6), AUDIO_EFFECT(ST_GEAR, 3), AUDIO_EFFECT(ST_WARN, 4),
-    AUDIO_EFFECT(ST_SLURP, 5 | synth::WOBBLE), AUDIO_EFFECT(ST_ORDER, 3), AUDIO_EFFECT(ST_JET, 2 | synth::NOISE | audio::SOFT),
-    AUDIO_EFFECT(ST_PAUSE, 9 | synth::WOBBLE), AUDIO_EFFECT(ST_RESUME, 9 | synth::WOBBLE),
-    AUDIO_EFFECT(ST_GUN, 1 | synth::NOISE | audio::SOFT), AUDIO_EFFECT(ST_WORM, 3 | synth::NOISE), AUDIO_EFFECT(ST_CLANG, 6), AUDIO_EFFECT(ST_BLAST, 8 | synth::WOBBLE), AUDIO_EFFECT(ST_MOO, 6 | synth::WOBBLE) };
-static NOINL void sfx(uint8_t id) { synth::sfx(SOUNDS[id]); }
+// every effect's steps, one after another; an effect is where its steps start, how many, and its priority and flags
+AUDIO_STEPS(SFX_STEPS) = {
+    AUDIO_STEP(2600, 700, 110), AUDIO_STEP(1400, 240, 280), AUDIO_STEP(1200, 160, 480), AUDIO_STEP(300, 60, 500),
+    AUDIO_STEP(320, 120, 100), AUDIO_STEP(660, 990, 60), AUDIO_STEP(1320, 0, 60), AUDIO_STEP(600, 1800, 160),
+    AUDIO_STEP(1568, 0, 70), AUDIO_STEP(2093, 0, 70), AUDIO_STEP(2637, 0, 220), AUDIO_STEP(240, 80, 70),
+    AUDIO_STEP(1200, 1800, 80), AUDIO_STEP(600, 1000, 300), AUDIO_STEP(1000, 600, 300), AUDIO_STEP(380, 640, 110),
+    AUDIO_STEP(640, 380, 110), AUDIO_STEP(380, 640, 110), AUDIO_STEP(640, 380, 110), AUDIO_STEP(1500, 200, 500),
+    AUDIO_STEP(200, 100, 200), AUDIO_STEP(1500, 400, 70), AUDIO_STEP(1800, 2200, 24), AUDIO_STEP(1600, 0, 80),
+    AUDIO_REST(60), AUDIO_STEP(1600, 0, 80), AUDIO_STEP(400, 1400, 320), AUDIO_STEP(1400, 1400, 200),
+    AUDIO_STEP(784, 0, 90), AUDIO_STEP(1047, 0, 90), AUDIO_STEP(1319, 0, 90), AUDIO_STEP(1568, 2093, 360),
+    AUDIO_STEP(1200, 150, 500), AUDIO_STEP(150, 60, 400), AUDIO_STEP(900, 1800, 140), AUDIO_STEP(300, 100, 140),
+    AUDIO_STEP(500, 900, 90), AUDIO_STEP(900, 0, 30), AUDIO_STEP(2200, 0, 50), AUDIO_REST(50),
+    AUDIO_STEP(2200, 0, 50), AUDIO_STEP(1000, 160, 260), AUDIO_STEP(300, 520, 90), AUDIO_STEP(1319, 0, 140),
+    AUDIO_STEP(1047, 0, 260), AUDIO_STEP(700, 1100, 180), AUDIO_STEP(1400, 500, 160), AUDIO_STEP(500, 1400, 160),
+    AUDIO_STEP(1100, 500, 34), AUDIO_STEP(240, 80, 420), AUDIO_STEP(1980, 1860, 30), AUDIO_STEP(1240, 1180, 150),
+    AUDIO_STEP(200, 1600, 90), AUDIO_STEP(1600, 300, 260), AUDIO_STEP(210, 150, 420) };
+struct SfxAt { uint8_t at, n, flags; };
+static const SfxAt SOUNDS[S_COUNT] = {
+    { 0, 1, (uint8_t)(2 | synth::WOBBLE) },   // LASER
+    { 1, 1, (uint8_t)(5 | synth::NOISE) },   // BOOM
+    { 2, 2, (uint8_t)(9 | synth::NOISE) },   // CRASH
+    { 4, 1, (uint8_t)(6) },   // HIT
+    { 5, 2, (uint8_t)(4 | synth::WOBBLE) },   // BOARD
+    { 7, 4, (uint8_t)(6) },   // SAVED
+    { 11, 2, (uint8_t)(5) },   // LAND
+    { 13, 2, (uint8_t)(3 | synth::WOBBLE) },   // UFO
+    { 15, 4, (uint8_t)(2 | synth::WOBBLE) },   // BEAM
+    { 19, 2, (uint8_t)(7 | synth::WOBBLE) },   // TAKEN
+    { 21, 1, (uint8_t)(1 | audio::SOFT) },   // ZAP
+    { 22, 1, (uint8_t)(1 | audio::SOFT) },   // FUEL
+    { 23, 3, (uint8_t)(3) },   // LOW
+    { 26, 2, (uint8_t)(6 | synth::WOBBLE) },   // START
+    { 28, 4, (uint8_t)(8 | synth::WOBBLE) },   // CLEAR
+    { 32, 2, (uint8_t)(9 | synth::WOBBLE) },   // OVER
+    { 34, 1, (uint8_t)(6 | synth::WOBBLE) },   // CATCH
+    { 35, 1, (uint8_t)(6) },   // SQUASH
+    { 36, 2, (uint8_t)(3) },   // GEAR
+    { 38, 3, (uint8_t)(4) },   // WARN
+    { 41, 2, (uint8_t)(5 | synth::WOBBLE) },   // SLURP
+    { 43, 2, (uint8_t)(3) },   // ORDER
+    { 45, 1, (uint8_t)(2 | synth::NOISE | audio::SOFT) },   // JET
+    { 46, 1, (uint8_t)(9 | synth::WOBBLE) },   // PAUSE
+    { 47, 1, (uint8_t)(9 | synth::WOBBLE) },   // RESUME
+    { 48, 1, (uint8_t)(1 | synth::NOISE | audio::SOFT) },   // GUN
+    { 49, 1, (uint8_t)(3 | synth::NOISE) },   // WORM
+    { 50, 2, (uint8_t)(6) },   // CLANG
+    { 52, 2, (uint8_t)(8 | synth::WOBBLE) },   // BLAST
+    { 54, 1, (uint8_t)(6 | synth::WOBBLE) }    // MOO
+};
+static NOINL void sfx(uint8_t id) { const SfxAt &f = SOUNDS[id]; const audio::Effect e = { SFX_STEPS + f.at, f.n, f.flags }; synth::sfx(e); }
 
 // ---- the planets ------------------------------------------------------------------------------------------------
 //                 SKY0           SKY1             FAR              MID              NEAR            GNDD            GND              GNDL             ACC
@@ -152,7 +161,7 @@ static uint8_t banner, bannerT, bannerNew;   // bannerNew: its text is to be rea
 static char bannerTxt[28];                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
 static uint8_t tripN, killT, kills, flashT;
-static uint8_t dlv, dlvT, lidT, partyT, foodOn, feasts, cowsN;   // feasts: this stage's; cowsN: cows grazing at its end                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
+static uint8_t dlv, dlvT, lidT, partyT, foodOn, feasts, cowsN, cowsOn, crashN, stars;   // cowsOn: aboard; crashN: landers lost this stage   // feasts: this stage's; cowsN: cows grazing at its end                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
 static int bagX, bagY, scX, scY;                                // px (the speeder's: its middle, the ground under it)
 static int8_t scDir = 1;
 static uint8_t tripNx, bumpT, charge;                          // charge: frames UP has been held (CHARGED: ready)
@@ -418,7 +427,7 @@ static void genStage() {
     quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
     memset(items, 0, sizeof items);
     { const uint8_t *a = PLR.alien[sector & 1]; remap(EMAP, RM(3, a[0]) | RM(5, a[1]) << 8 | RM(11, a[2]) << 16 | RM(6, a[3]) << 24); }
-    dlv = foodOn = partyT = lidT = feasts = 0;
+    dlv = foodOn = partyT = lidT = feasts = cowsN = crashN = 0;
     const int nIt = clampi((stage + 2) / 3, 0, 5);
     for (int k = 0; k < nIt + (diff ? 0 : 3); k++) {                          // (easy: three more shield kits)                // things to pick up: supplies, repairs, fuel, now and then an engine part
         int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
@@ -496,7 +505,7 @@ static void newStage() {
     planet = stage & 7;
     loadReq = true;
     state = INTRO; timer = 210;                                            // the stage card, then who's who
-    synth::music(1 + planet);
+    synth::music((stage & 3) == 3 ? 9 : 1 + planet);                     // a boss stage: SHOWDOWN
 }
 static void newGame() {
     stage = 0;
@@ -512,7 +521,7 @@ static void gameOver() { state = OVER; overT = 0; newHi = score > 0 && score >= 
 
 // ---- the lander -----------------------------------------------------------------------------------------------------
 static void wreck() {
-    lst = 2; deadT = 80; shake = 18; flashT = 6;
+    lst = 2; deadT = 80; shake = 18; flashT = 6; crashN++; cowsOn = 0;
     boom(LX(), LY(), 34, 20);
     for (int k = 0; k < 4; k++) blast(LX() + rnd(25) - 12, LY() + rnd(15) - 9, 8 + rnd(8), 4 + k * 5);   // the tanks go one after another
     for (int i = 0; i < 14; i++) part(LX(), LY(), rnd(60) - 30, -rnd(50) - 10, 50, i & 1 ? C_SILVER : C_GOLD);   // the hull in pieces
@@ -614,7 +623,10 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
         if (thrLvl >= 4) { lst = 0; gear = 2; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
         else {
             synth::engine(0);
-            for (auto &c : crit) if (c.kind == 4 && absi(c.x - LX()) < 18 && fuel < FUEL_MAX) fuel += 3;   // a milk run: a cow alongside tops up the tank
+            for (auto &c : crit) if (c.kind == 4 && absi(c.x - LX()) < 18) {   // a cow alongside: a milk run tops up the tank, then it climbs aboard
+                if (fuel < FUEL_MAX) fuel += 3;
+                else if (seats < SEATS) { c.kind = 0; seats++; cowsOn++; sfx(S_MOO); say(MS_COW_ABOARD, 40); }
+            }
             for (auto &it : items)                                   // things beside the lander are loaded
                 if (it.st == 1 && absi(it.x - LX()) < 20) {
                     it.st = it.kind == IT_SUPPLY ? 2 : 0;
@@ -626,6 +638,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
                     else say(MS_SUPPLIES);
                     addScore(100, it.x, groundAt(it.x) - 12);
                 }
+            if (onPad == 2 && cowsOn) { seats -= cowsOn; cowsN += cowsOn; addScore(1000 * cowsOn, -1, 0); say(MS_COWS_HOME, 60, cowsOn); cowsOn = 0; }   // cows home
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
                 for (auto &it : items) if (it.st == 2) { it.st = 0; addScore(500 * (sector + 1), doorX, groundAt(doorX) - 20); say(MS_DELIVERED); sfx(S_SAVED); }
                 if (foodOn) {
@@ -985,8 +998,14 @@ static void updateEnemies() {
             e.x = (int16_t)((alienX + 20 + isin(e.t + frameNo / 2) / 4) * 16);
             e.y = (int16_t)((34 + isin(frameNo * 3) / 32) * 16);
             e.vx = e.vy = 0;
-            if (lst != 2 && absi(X - ex) < 120 && (frameNo % 40) == 0) { eshot(ex - 8, ey + 6, X, Y, 24, 1); eshot(ex + 8, ey + 6, X, Y, 24, 1); }
-            if ((frameNo % 300) == 150 && fliers < 5) if (Enemy *u = spawnEn(E_UFO, ex, ey + 8)) { (void)u; sfx(S_UFO); }
+            {
+                const int v = (stage >> 2) & 3;                               // the boss: 0 mothership, 1 hive, 2 prism warship, 3 dreadnought
+                if (lst != 2 && absi(X - ex) < 120 && (frameNo % (v == 3 ? 26 : 40)) == 0) {
+                    eshot(ex - 8, ey + 6, X, Y, 24, 1); eshot(ex + 8, ey + 6, X, Y, 24, 1);
+                    if (v == 2) eshot(ex, ey + 6, X, Y + 40, 24, 1);          // a spread
+                }
+                if ((frameNo % 300) == 150 && fliers < 5 && spawnEn(v == 1 || (v == 3 && (frameNo & 256)) ? E_STINGER : v == 2 ? E_MINE : E_UFO, ex, ey + 8)) sfx(S_UFO);
+            }
             break;
         case E_TURRET:
             if (lst != 2 && absi(X - ex) < 100 && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, 26 + sector * 6, 1);
@@ -2098,6 +2117,11 @@ static void draw() {
         textC(34, T(missed ? MS_QUOTA_MISSED : MS_STAGE_CLEAR), missed ? C_RED : C_GOLD);
         char s[28];
         if (missed) textC(86, T(MS_TRY_AGAIN), C_SILVER);
+        else for (int k = 0; k < 3; k++) {                              // the stars: quota, everyone home, no lander lost
+            const int x = 52 + k * 10;
+            const uint8_t c = k < stars ? C_GOLD : C_STEEL;
+            R(x + 2, 85, 1, 7, c); R(x - 1, 88, 7, 1, c); R(x + 1, 86, 3, 5, c);
+        }
         fmt(s, T(MS_RESCUED), nSaved, T(MS_OF), nMen);
         textC(44, s, C_WHITE);
         fmt(s, T(MS_FUEL_BONUS), fuel / 4);
@@ -2269,7 +2293,7 @@ static void update() {
         updateWeather(); updateCritters();
         updateCamera();
         if ((edge & 4) && timer > 100) timer = 100;                       // A: on to who's who, then to play
-        else if (--timer <= 0 || ((edge & 4) && timer < 95)) { state = PLAY; say((stage & 3) == 3 ? MS_MOTHER : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
+        else if (--timer <= 0 || ((edge & 4) && timer < 95)) { state = PLAY; say((stage & 3) == 3 ? (uint8_t)(MS_MOTHER + ((stage >> 2) & 3)) : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
         break;
     case PLAY:
 #ifdef SL_DLV
@@ -2278,6 +2302,7 @@ static void update() {
             if (!once) {
                 once = true;
                 if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
+                else if (SL_DLV == 5) { lx = (int32_t)(alienX + 20) << 8; ly = (int32_t)70 << 8; lst = 0; gear = 0; }   // over the boss
                 else if (SL_DLV == 4) { if (Enemy *e = spawnEn(E_UFO, LX(), LY() - 26)) { e->st = 4; e->cargo = 10; } }
                 else if (SL_DLV == 3) { crit[0] = { (int16_t)(LX() + 40), (int16_t)groundAt(LX() + 40), 1, 4, 100 }; spawnEn(E_UFO, LX() + 40, 40); }
                 else { dlv = 2; bagX = LX() + 40; bagY = groundAt(bagX) - 3; scX = LX() + 200; scY = groundAt(scX) - 7; crit[0] = { (int16_t)(LX() + 20), 30, 1, 3, 0 }; }
@@ -2306,11 +2331,11 @@ static void update() {
             if (++endT > 50) {
                 missed = nSaved < quota;
                 state = CLEAR; timer = 150; synth::engine(0);
-                cowsN = 0;
-                for (const auto &c : crit) cowsN += c.kind == 4;
-                addScore(cowsN * 250, -1, 0);
-                addScore(fuel / 4, -1, 0);
-                if (nSaved == nMen) addScore(2000, -1, 0);
+                int grazing = 0;
+                for (const auto &c : crit) grazing += c.kind == 4;
+                cowsN += grazing;                                               // (and the ones brought home)
+                stars = (uint8_t)(!missed + (nSaved == nMen) + !crashN);
+                addScore(grazing * 250 + stars * 500 + fuel / 4 + (nSaved == nMen ? 2000 : 0), -1, 0);
                 sfx(S_CLEAR);
             }
         }

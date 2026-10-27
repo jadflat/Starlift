@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19 (2026-10-28)
+
+- Four bosses instead of one mothership, one on each boss stage, each with its own picture, call-out and ways: the
+  Mothership (Verda, saucers), the Hive (Zorg, stingers), the Prism warship (Verda again, mines and three-way fire) and
+  the Dreadnought (Zorg again, the last stage: faster fire, saucers and stingers in turn).
+- Boss music: SHOWDOWN (E phrygian, 132 bpm, the theremin over a driving bass) on every boss stage.
+- Stage ratings: up to three stars on the stage-clear screen (quota made, everyone home, no lander lost), 500 each.
+- Cows aboard: once the milk run has filled the tank, the cow climbs in (it takes a seat); bring it to the base for 1,000.
+  The stage tally counts the cows brought home and the ones still grazing.
+- Room for all this: STARLIFT finds its file on the card with its own small reader (FAT16/FAT32, the root folder)
+  instead of CHSd's general one (268 B), and the sound effects are one packed table (164 B).
+- Not done: a high-score table with initials (about 540 B; it does not fit without dropping something else).
+
 ## 0.18 (2026-10-27)
 
 - Longer cut-scenes: the speeder rides at half its 0.17 speed (a delivery runs about twice as long), and the feast lasts

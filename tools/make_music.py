@@ -235,9 +235,19 @@ sh = [0, -3, 5, 7, 0, -3, 5, 7]
 add('MOONGLOW', 84, 6, [LEAD_MELLOW, SOFT_BASS, BELL_ECHO], lead_stream(67, 'major', P, order, [0] * 8),
     bass_stream(55, 'long', sh), 6, drums('air'), shift=12)
 
-# 0 the title; 1..8 the planets in order (Moon, Ares, Cryo, Verda, Vulcan, Titan, Prism, Zorg)
+# ---- the bosses (0.19): SHOWDOWN. E phrygian, 132 bpm: the theremin wails over a driving bass, four on the floor
+P = {'A': [0, H, 1, H, 0, H, N, 3, H, 1, H, 0, H, H, N, N],
+     'B': [4, H, 5, H, 4, H, 3, H, 1, H, H, H, 0, H, N, N],
+     'C': [7, H, H, H, 8, H, 7, H, 5, H, 4, H, 3, H, 1, H],
+     'D': [8, H, 7, H, 8, H, 9, H, 7, H, H, H, H, H, N, N]}
+order = list('AABA' + 'AABC' + 'CDCD' + 'AABD')
+sh = [0, 0, 0, 0, 1, 1, 0, 0]
+add('SHOWDOWN', 132, 20, [THEREMIN, PLUCK_BASS, SEQ_ECHO], lead_stream(64, 'phrygian', P, order, sh),
+    bass_stream(52, 'eighths', sh), 3, drums('four'), shift=7)
+
+# 0 the title; 1..8 the planets in order (Moon, Ares, Cryo, Verda, Vulcan, Titan, Prism, Zorg); 9 the bosses
 byname = {sg['name']: sg for sg in SONGS}
-ORDER = ('MOONGLOW', 'TRANQUIL', 'SANDS', 'OUTPOST', 'JUNGLE', 'INVASION', 'COSMOS', 'SANDS', 'INVASION')
+ORDER = ('MOONGLOW', 'TRANQUIL', 'SANDS', 'OUTPOST', 'JUNGLE', 'INVASION', 'COSMOS', 'SANDS', 'INVASION', 'SHOWDOWN')
 SONGS = [byname[n] for n in ORDER]
 
 # Each song is one self-contained blob in STARLIFT.DAT (tools/make_card.py puts it there); the game loads the one it

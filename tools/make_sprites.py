@@ -337,6 +337,8 @@ CARD['DESCENT'] = life.g(life.DESCENT)
 CARD['GANTRY'] = life.g(life.GANTRY)
 CARD['PUMP'] = life.g(life.PUMP)
 CARD['MOTHERSHIP'] = life.g(life.MOTHERSHIP)
+for _b in ('BOSS_HIVE', 'BOSS_PRISM', 'BOSS_DREAD'):
+    CARD[_b] = life.g(getattr(life, _b))
 CARD['SCOOTER'] = life.g(life.SCOOTER)
 CARD['COW'] = life.g(life.COW)
 CARD['COWEAT'] = life.g(life.COWEAT)
