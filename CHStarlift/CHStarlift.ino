@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.20"
+#define SL_VERSION "0.22"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -1063,7 +1063,7 @@ static void updateDelivery() {
         return;
     default: tx = scX - scDir * 40; ty = -40; if (scY < -10) dlv = 0; break;   // and away
     }
-    if (dlv < 4) scDir = (int8_t)(tx < scX ? -1 : 1);
+    if (dlv == 2) scDir = (int8_t)(tx < scX ? -1 : 1);                // (fixed once it has the bag: a side chosen every frame never settled)
     scX = toward(scX, tx, 1); scY = toward(scY, ty, 1);
     if (absi(tx - scX) < 4 && absi(ty - scY) < 4) { if (dlv == 2) dlv = 3; else if (dlv == 3) { dlv = 4; lidT = 40; sfx(S_GEAR); } }
 }
@@ -2012,7 +2012,7 @@ static NOINL void menuList(const uint8_t *it, int n, int sel, int x, int y) {
     for (int i = 0; i < n; i++) {
         char b[32];
         if (it[i] == MS_DIFF) fmt(b, T(MS_DIFF), -1, T((uint8_t)(MS_EASY + diff))); else fmt(b, T(it[i]));
-        text35(x, y + i * 9, b, sel == i ? C_WHITE : C_STEEL);
+        text35(x, y + i * 9, b, sel == i ? C_GOLD : C_WHITE);
     }
     text35(x - 7, y + sel * 9, ">", (frameNo & 8) ? C_GOLD : C_RED);
 }
@@ -2049,7 +2049,7 @@ static void drawOptions() {
     panel(30, 66);
     textCS(34, T(MS_OPTIONS), C_GOLD);
     for (int i = 0; i < 3; i++) {
-        text35(22, 48 + i * 12, T((uint8_t)(MS_MUSIC + i)), optSel == i ? C_WHITE : C_STEEL);
+        text35(22, 48 + i * 12, T((uint8_t)(MS_MUSIC + i)), optSel == i ? C_GOLD : C_WHITE);
         if (i < 2) for (int k = 0; k < 4; k++) R(76 + k * 8, 49 + i * 12, 6, 6, k < (i ? fxV : musicV) ? (optSel == i ? C_GOLD : C_SILVER) : C_STEEL);
     }
     text35(14, 48 + optSel * 12, T(MS_X52), C_GOLD);
@@ -2302,7 +2302,8 @@ static void update() {
             if (!once) {
                 once = true;
                 if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
-                else if (SL_DLV == 5) { lx = (int32_t)(alienX + 20) << 8; ly = (int32_t)70 << 8; lst = 0; gear = 0; }   // over the boss
+                else if (SL_DLV == 6) { dlv = 2; bagX = LX() + 2; bagY = groundAt(bagX) - 3; scX = LX() + 60; scY = groundAt(scX) - 7; }   // the bag right beside the lander
+                else if (SL_DLV == 5) { lx = (int32_t)(alienX + 20 + (baseRight ? -40 : 40)) << 8; ly = (int32_t)52 << 8; lst = 0; gear = 1; shield = 99; ang = baseRight ? -1 : 1; facing = (int8_t)(baseRight ? -1 : 1); }   // near the boss, facing it
                 else if (SL_DLV == 4) { if (Enemy *e = spawnEn(E_UFO, LX(), LY() - 26)) { e->st = 4; e->cargo = 10; } }
                 else if (SL_DLV == 3) { crit[0] = { (int16_t)(LX() + 40), (int16_t)groundAt(LX() + 40), 1, 4, 100 }; spawnEn(E_UFO, LX() + 40, 40); }
                 else { dlv = 2; bagX = LX() + 40; bagY = groundAt(bagX) - 3; scX = LX() + 200; scY = groundAt(scX) - 7; crit[0] = { (int16_t)(LX() + 20), 30, 1, 3, 0 }; }

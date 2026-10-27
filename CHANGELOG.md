@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.22 (2026-10-28)
+
+- Fixed: the game could freeze in the delivery cut-scene, the speeder hovering over the lander and turning left and
+  right for ever. It chose which side of the lander to come to every frame, from a target that itself depended on that
+  side; picked up close to the lander it never settled. It now chooses once, when it has the bag.
+
+## 0.21 (2026-10-28)
+
+- Brighter menus: the title and pause menus' items in white, the chosen one in gold (they were steel blue, hard to read);
+  the options screen the same.
+- Board, autopilot: stage 15 (Prism) 22-26 ms a frame on average, stage 16 (Zorg, the Dreadnought) 23-25 ms, worst
+  31 ms (one 34 ms frame on 15). The new card reader works on a real FAT32 card.
+
 ## 0.20 (2026-10-28)
 
 - The four bosses redrawn bigger (45 x 20, from 37 x 14) and in far more detail: shaded from the top left and outlined
