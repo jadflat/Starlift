@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.5"
+#define SL_VERSION "0.6"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6 (2026-10-27)
+
+- The sandworm redrawn so it can be seen: steel-grey swaying rings, a red-gold maw with teeth, a taller mound with a dark crest.
+
 ## 0.5 (2026-10-27)
 
 - Difficulty: Easy, Normal or Hard, on the title menu and the pause menu (enemies, fire, hull, fuel, landing, quota).
