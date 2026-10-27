@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.14"
+#define SL_VERSION "0.15"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -100,7 +100,7 @@ static void drawDiner();
 #ifdef SL_SLIM                                     // a board perf build: a little RAM back for the debug image
 enum { ESHOTS = 8, PARTS = 40, WXN = 48, CRITS = 4, MEN = 18 };
 #else
-enum { ESHOTS = 12, PARTS = 56, WXN = 64, CRITS = 6, MEN = 20 };
+enum { ESHOTS = 12, PARTS = 32, WXN = 48, CRITS = 6, MEN = 20 };
 #endif
 enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, ENS = 12, SHOTS = 10,
        SEATS = 8, FUEL_MAX = 1500, ZONES = 8 };
@@ -148,7 +148,8 @@ static uint16_t fuel;
 static uint8_t seats, shield, lst, gear, rotT, deadT, fireCd, gunCd, onPad, unloadT, invT, dryT, thrLvl;   // thrLvl: the engine spooling, 0-6   // lst: 0 flying, 1 landed, 2 wrecked
 static bool thrusting;
 
-static uint8_t banner, bannerT;                            // a message (MS_...) shown for bannerT frames
+static uint8_t banner, bannerT, bannerNew;   // bannerNew: its text is to be read from the card (once, not every frame)
+static char bannerTxt[28];                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
 static uint8_t tripN, killT, kills, flashT, ledges;   // ledges: the camps on high ledges (double points)
 static uint8_t dlv, dlvT, lidT, partyT, foodOn, feasts, cowsN;   // feasts: this stage's; cowsN: cows grazing at its end                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
@@ -479,13 +480,13 @@ static void boom(int x, int y, int n, int r) {
     for (int i = 0; i < n / 3; i++) part(x + rnd(9) - 4, y + rnd(7) - 3, rnd(9) - 4, -4 - rnd(6), (uint8_t)(24 + rnd(24)), i & 1 ? C_STEEL : C_SILVER);   // smoke
     blast(x, y, r, 0);
 }
+static NOINL void say(uint8_t id, uint8_t t = 50, int num = -1) { banner = id; bannerT = t; bannerNum = (int8_t)num; bannerNew = 1; }
 static NOINL void addScore(int v, int x, int y) {
     score += v;
     if (score > hiScore) hiScore = score;
-    if (score >= nextLife) { nextLife += 10000; if (lives < 9) lives++; banner = MS_EXTRA_LANDER; bannerT = 50; bannerNum = -1; }
+    if (score >= nextLife) { nextLife += 10000; if (lives < 9) lives++; say(MS_EXTRA_LANDER); }
     if (x >= 0) for (auto &q : pops) if (!q.t) { q = { (int16_t)x, (int16_t)y, (uint16_t)v, 30 }; break; }
 }
-static NOINL void say(uint8_t id, uint8_t t = 50, int num = -1) { banner = id; bannerT = t; bannerNum = (int8_t)num; }
 static inline uint8_t shMax() { return diff ? 7 - diff * 2 : 8; }   // hits the hull takes: 8 easy, 5 normal, 3 hard
 static int gHund() { const int g = PLR.grav + (sector ? PLR.grav / 8 : 0); return g * 100 / 64; }   // gravity in hundredths of a G
 
@@ -620,6 +621,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
         if (thrLvl >= 4) { lst = 0; gear = 2; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
         else {
             synth::engine(0);
+            for (auto &c : crit) if (c.kind == 4 && absi(c.x - LX()) < 18 && fuel < FUEL_MAX) fuel += 3;   // a milk run: a cow alongside tops up the tank
             for (auto &it : items)                                   // things beside the lander are loaded
                 if (it.st == 1 && absi(it.x - LX()) < 20) {
                     it.st = it.kind == IT_SUPPLY ? 2 : 0;
@@ -985,7 +987,7 @@ static void updateEnemies() {
             e.y = (int16_t)((34 + isin(frameNo * 3) / 32) * 16);
             e.vx = e.vy = 0;
             if (lst != 2 && absi(X - ex) < 120 && (frameNo % 40) == 0) { eshot(ex - 8, ey + 6, X, Y, 24, 1); eshot(ex + 8, ey + 6, X, Y, 24, 1); }
-            if ((frameNo % 300) == 150 && fliers < 9) if (Enemy *u = spawnEn(E_UFO, ex, ey + 8)) { (void)u; sfx(S_UFO); }
+            if ((frameNo % 300) == 150 && fliers < 5) if (Enemy *u = spawnEn(E_UFO, ex, ey + 8)) { (void)u; sfx(S_UFO); }
             break;
         case E_TURRET:
             if (lst != 2 && absi(X - ex) < 100 && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, 26 + sector * 6, 1);
@@ -1402,7 +1404,7 @@ static void drawPad(int px, bool base) {
         const int fx = baseRight ? sx + 42 : sx - 6;
         blit(C_PUMP, fx, gy - 9, false);
         if (lst == 1 && onPad == 2 && (frameNo & 4)) R(fx + 1, gy - 6, 2, 2, C_GREEN);                // pumping
-        text35(sx + 8, gy + 4, T(MS_BASE), C_GOLD);
+        text35(sx + 8, gy + 4, "BASE", C_GOLD);
     } else {                                                        // a launch gantry
         const int gx = baseRight ? sx - 10 : sx + 44;
         blit(C_GANTRY, gx, gy - 32, false);
@@ -1816,7 +1818,11 @@ static NOINL void drawBag(int x, int y) {                                   // a
 }
 
 static void drawDelivery() {
-    if (partyT) blitBC(PK.food, doorX - cam, groundAt(doorX) - 1, false);   // the feast laid out at the base door
+    if (partyT) {                                                       // the feast at the base door, a colonist dancing either side
+        const int fx = (doorX + basePadX + 20) / 2, gy = groundAt(fx) - 1, hop = (frameNo >> 2) & 1;   // between the pad and the door
+        blitBC(PK.food, fx - cam, gy, false);
+        for (int k = -1; k <= 1; k += 2) blitBC(hop ? C_MAN_CHEER : C_MAN_WAVE1, fx - cam + k * 12, gy - hop, k > 0, 255, manMap((uint8_t)(k + 3)));
+    }
     if (!dlv) return;
     if (dlv <= 4) drawBag(bagX - cam, bagY);
     if (dlv >= 2) {
@@ -1905,7 +1911,11 @@ static void drawWorld() {
     drawSkyObjects();
     dbg::prof(2);
 #ifndef SL_NOSCENE
+#ifdef SL_NOSTRUCT
+    for (int L = 0; L < 3; L++) drawLayerCols(L);
+#else
     for (int L = 0; L < 3; L++) { drawLayerCols(L); drawStructures(L); }
+#endif
     dbg::prof(3);
     drawGroundCols();
 #endif
@@ -1919,20 +1929,18 @@ static void drawWorld() {
     drawLander();
     drawDelivery();
     drawShots();
+#ifndef SL_NOWX
     drawWeather();
+#endif
     dbg::prof(7);
     for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); text35(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
     cam = saved;
     drawHud();
     dbg::prof(8);
     drawPointer();
-    if (PLR.wind && state == PLAY) {                                   // the wind: an arrow, longer when it blows harder
-        const int len = absi(windV) / 20, dir = windV < 0 ? -1 : 1, x0 = 14;
-        if (len) { hl(dir > 0 ? x0 : x0 - len, 20, len, C_WHITE); pset(x0 + dir * len, 20, C_WHITE); pset(x0 + dir * (len - 1), 19, C_WHITE); pset(x0 + dir * (len - 1), 21, C_WHITE); }
-    }
     if (bannerT) {
-        char b[28];
-        fmt(b, T(banner), bannerNum);
+        char *b = bannerTxt;
+        if (bannerNew) { fmt(b, T(banner), bannerNum); bannerNew = 0; }
         int w = text35Width(b);
         if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
         else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
@@ -1947,7 +1955,11 @@ static uint8_t menuItems(uint8_t *it);
 static void drawTitleScene() {
     for (int L = 0; L < 4; L++) layerTops(L);
     drawSky(); drawSkyObjects();
+#ifdef SL_NOSTRUCT
+    for (int L = 0; L < 3; L++) drawLayerCols(L);
+#else
     for (int L = 0; L < 3; L++) { drawLayerCols(L); drawStructures(L); }
+#endif
     drawGroundCols();
     drawPlants();
     drawWeather();
@@ -2038,7 +2050,6 @@ static void drawIntro() {
         if (has[E_TURRET]) { blit(C_TURRET, 11, y + 3, false); row(MS_R_TURRET, C_RED); }
         if (has[E_WORM]) { R(11, y + 4, 13, 6, C_GND); R(13, y + 2, 9, 3, C_RED); row(MS_R_WORM, C_RED); }
         if (has[E_MOTHER]) { blit(C_MOTHERSHIP, -7, y, false); row(MS_R_MOTHER, C_RED); }
-        if (PLR.fly) { blitBC(PK.crit[0][(frameNo >> 3) & 1], 17, y + 9, false); row(MS_R_WILD, C_SILVER); }
         return;
     }
     fmt(s, T(MS_STAGE_N), stage + 1);

@@ -23,7 +23,7 @@ The 15-second trailer: [docs/trailer.mp4](docs/trailer.mp4).
 ## How to play
 
 - **Fly.** Gravity pulls, the engine pushes along the hull, and nothing brakes for you. Each world has its own gravity
-  (shown on the stage card, from 0.14 G to 0.64 G), and some have wind: watch the windsocks and the arrow on the screen.
+  (shown on the stage card, from 0.14 G to 0.64 G), and some have wind: watch the windsocks and the weather.
   Colonists aboard make the lander heavier.
 - **Land.** Gear down, level, and slowly. Too fast, too tilted, gear up or on a slope, and the lander is lost.
 - **Rescue.** Colonists wave as you fly over. Land beside them (not on them!) and they run aboard: eight seats. Fly them
@@ -39,7 +39,7 @@ The 15-second trailer: [docs/trailer.mp4](docs/trailer.mp4).
   food home for a **FEAST FIESTA**: fireworks, points and a treat from that world's food (an extra lander, a better
   engine or a mended hull).
 - **Cows.** Bump a saucer (it costs nothing: the ships clang apart) and now and then a cow tumbles out and grazes for the
-  rest of the stage. Saucers beam cows back up: shoot one in time to save its cow. Every cow still grazing at the end of
+  rest of the stage. Land beside one for a milk run: it tops up the tank. Saucers beam cows back up: shoot one in time to save its cow. Every cow still grazing at the end of
   a stage is worth a bonus.
 - **Difficulty.** Easy, Normal or Hard, on the title and pause menus: the hull (8, 5 or 3 hits), enemy numbers and fire,
   fuel, landing and the quota. On Easy the hull mends itself and extra repair kits lie along the way.

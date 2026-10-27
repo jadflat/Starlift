@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15 (2026-10-27)
+
+- Smoother on busy worlds: the pictures drawn every frame now share three SD-card blocks, the card cache has a seventh
+  slot, and the banner text is read from the card once instead of every frame. Board, autopilot: Zorg's slow stretch
+  went from 31-33 ms a frame to 28-30, Vulcan's 77 ms hitch is gone (worst 32 ms), Verda's storm 25-27 ms.
+- A milk run: land beside a grazing cow and the tank tops up.
+- The feast: two colonists dance either side of the food, between the pad and the base.
+- Mothership saucers capped at five at a time.
+- To make room: the on-screen wind arrow (the windsocks and the weather show the wind), the who's-who card's wildlife
+  row, and fewer sparks and weather drops at once (32 and 48).
+
 ## 0.14 (2026-10-27)
 
 - Saucers beam grazing cows back up; shoot the saucer before the cow reaches it to save it (300).

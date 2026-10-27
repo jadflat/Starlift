@@ -311,7 +311,11 @@ def bucket():
 
 CARD = {}                                             # the pictures read from STARLIFT.DAT
 # sprites drawn from the card too (each group fits a block, so a frame that draws one of them reads the block once)
-for n in ['LAND3', 'LAND4', 'LAND5', 'LAND6', 'SNATCH0', 'SNATCH1', 'MINE0', 'MINE1', 'TURRET'] + ['LANDUP%d' % i for i in range(7)] + ['MAN_SPIN%d' % i for i in range(8)] + ['SAUCER%d' % i for i in range(4)] + ['MAN_LOOKUP', 'MAN_TALK', 'MAN_CHEER', 'MAN_WAVE2'] + ['LAND0', 'LAND1', 'LAND2', 'MAN_STAND', 'MAN_WAVE1', 'MAN_RUN1', 'MAN_RUN2']:   # (0.12: every sprite on the card)   # (saucers and idle poses: card, to fit flash in 0.8)   # (the gear-down lander up to 45 degrees and the saucers stay in flash: drawn every frame)
+# the pictures drawn nearly every frame share three blocks (the card cache holds six): saucers, stingers and the turret;
+# the upright lander; the common colonist poses and the mines. The rarer ones follow.
+HOT = (['SAUCER%d' % i for i in range(4)] + ['SNATCH0', 'SNATCH1', 'TURRET'] + ['LAND0', 'LAND1', 'LAND2'] +
+       ['MAN_STAND', 'MAN_WAVE1', 'MAN_RUN1', 'MAN_RUN2', 'MAN_CHEER', 'MINE0', 'MINE1'])
+for n in HOT + ['MAN_LOOKUP', 'MAN_TALK', 'MAN_WAVE2'] + ['LANDUP%d' % i for i in range(7)] + ['MAN_SPIN%d' % i for i in range(8)] + ['LAND3', 'LAND4', 'LAND5', 'LAND6']:
     CARD[n] = SPR.pop(n)
 CARD['BASE'] = SPR.pop('BASE')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

@@ -1,16 +1,19 @@
 // STARLIFT.DAT (Card.h): block 0 holds "STARLIFT" and the build's hash (CardIndex.h, written with the file by
 // tools/make_card.py), so a card from another build is refused; then the picture section, then the song section.
-// Five 512 B slots (and CHGfx's scratch buffer while a frame is drawn) keep the blocks used last: the pictures on screen are read once and drawn from RAM after that.
+// Six 512 B slots (and CHGfx's scratch buffer while a frame is drawn) keep the blocks used last: the pictures on screen are read once and drawn from RAM after that.
 #include <CHGame.h>
 #include <Fat.h>
 #include "Card.h"
 #include "CardIndex.h"
+#ifdef SL_TRACE
+#include <stdio.h>
+#endif
 
 namespace card {
 
-enum { SLOTS = 5, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
+enum { SLOTS = 6, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
-static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
+static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
 static uint8_t age[ALL], tick;                    // the least recently used slot is the one to replace
 static uint8_t used[ALL], frameNo;               // the frame each slot was last used in
 static uint8_t misses;                            // blocks read from the card this frame
@@ -34,6 +37,9 @@ void frame() { tag[SLOTS] = 0xffff; frameNo++; misses = 0; }              // the
 const uint8_t *at(uint32_t off) {
     if (!open_) return nullptr;
     const uint16_t blk = (uint16_t)(off >> 9);
+#ifdef SL_TRACE
+    if ((frameNo & 63) == 7) fprintf(stderr, "use f%u b%u lp%d\n", (unsigned)frameNo, (unsigned)blk, (int)lowPri);
+#endif
     for (uint8_t i = 0; i < ALL; i++) if (tag[i] == blk) { age[i] = ++tick; used[i] = frameNo; return slotBuf(i) + (off & 511); }
     // the slot to replace: the least recently used of those not used this frame (a frame that needs more blocks than there
     // are slots reads the extra ones through the scratch slot, so the others stay put and only the extra ones miss)
@@ -42,6 +48,9 @@ const uint8_t *at(uint32_t off) {
         if (used[i] != frameNo && (v == SLOTS || (uint8_t)(tick - age[i]) > (uint8_t)(tick - age[v]))) v = i;
     if (lowPri && misses >= 2) return nullptr;    // the scenery can show up a frame later; a frame cannot be late
     misses++;
+#ifdef SL_TRACE
+    fprintf(stderr, "miss f%u b%u lp%d\n", (unsigned)frameNo, (unsigned)blk, (int)lowPri);
+#endif
     tag[v] = 0xffff;
     if (!fat::read(runs, nRuns, blk, slotBuf(v))) { open_ = false; return nullptr; }
     tag[v] = blk;
