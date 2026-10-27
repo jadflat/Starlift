@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14 (2026-10-27)
+
+- Saucers beam grazing cows back up; shoot the saucer before the cow reaches it to save it (300).
+- Stingers go for the takeaway speeder while it carries the bag: a hit brings it down, the bag falls and another
+  speeder sets out.
+- Each world's food does something of its own at the feast: an extra lander, an engine upgrade or a mended hull.
+- The stage-clear screen counts the feasts and the cows; every cow still grazing is worth 250.
+- Colonists who come round a camp a second time stand on its other side (they no longer stand on each other).
+- The README's GIF and text brought up to date; the trailer linked.
+- To make room: one save page instead of two (a power cut in the middle of a save loses that save); the colonists'
+  dashes between camps and the camp-chain bonus are gone.
+
 ## 0.13 (2026-10-27)
 
 - The aliens dress differently on every world and in each of its two sectors: the saucers' domes, hulls and lights, and

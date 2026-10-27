@@ -6,15 +6,18 @@ flying saucers beam them away.
 
 ![STARLIFT](CHStarlift/docs/gameplay.gif)
 
+The 15-second trailer: [docs/trailer.mp4](docs/trailer.mp4).
+
 ## Controls
 
 | Button | |
 |---|---|
-| LEFT / RIGHT | Tilt the lander |
+| LEFT / RIGHT | Tilt the lander (on the ground: turn the guns round) |
 | A | Main engine (hold; it takes a moment to spool up) |
-| DOWN, twice | Landing gear up or down |
+| DOWN, twice | Landing gear down (it folds up by itself after take-off) |
 | B | Rotary cannon and laser |
-| START | Pause menu (resume, save, quit) |
+| UP, held | Charge shot: let go for three plasma balls, forwards, backwards and down |
+| START | Pause menu (resume, difficulty, save, quit) |
 | START held 3 s | Back to the CHGame menu |
 
 ## How to play
@@ -30,6 +33,16 @@ flying saucers beam them away.
   now and then an engine part that makes the lander stronger for the rest of the game.
 - **The scanner** at the top shows the whole stage: colonists, enemies, items, the base. An arrow at the screen's edge
   points to the next job.
+
+- **Takeaway.** Shoot down a saucer while its order is coming up from the takeaway and the bag drops: a speeder bike
+  races out, grabs it and tosses it into the lander's flip-top lid. Stingers go for the speeder, so cover it. Bring the
+  food home for a **FEAST FIESTA**: fireworks, points and a treat from that world's food (an extra lander, a better
+  engine or a mended hull).
+- **Cows.** Bump a saucer (it costs nothing: the ships clang apart) and now and then a cow tumbles out and grazes for the
+  rest of the stage. Saucers beam cows back up: shoot one in time to save its cow. Every cow still grazing at the end of
+  a stage is worth a bonus.
+- **Difficulty.** Easy, Normal or Hard, on the title and pause menus: the hull (8, 5 or 3 hits), enemy numbers and fire,
+  fuel, landing and the quota. On Easy the hull mends itself and extra repair kits lie along the way.
 
 ## Dangers
 
@@ -64,8 +77,9 @@ card's root, and `Starlift.CHG` to `GAMES\GAMES`. Without the file the game asks
 
 ## Saving
 
-START opens the pause menu: SAVE GAME keeps the stage, score and landers; the title offers CONTINUE. The high score
-and the music and effects volumes (OPTIONS) are kept too.
+START opens the pause menu: SAVE GAME keeps the stage, score and landers; the title offers CONTINUE. The high score,
+the difficulty and the music and effects volumes (OPTIONS) are kept too. Since 0.14 the game uses one save page (it
+needed the room): a power cut in the middle of a save loses that save.
 
 ## Building
 

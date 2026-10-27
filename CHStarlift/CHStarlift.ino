@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.13"
+#define SL_VERSION "0.14"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -90,6 +90,7 @@ static void menuList(const uint8_t *it, int n, int sel, int x, int y);
 static bool busyAt(int x);
 static void drawCritters();
 static void drawBag(int x, int y);
+static void drawBeam(int ux, int uy, int gy);
 static void panel(int y, int h);
 static void flag(int x, int gy, uint8_t kind);
 static void drawAlienBase();
@@ -149,8 +150,8 @@ static bool thrusting;
 
 static uint8_t banner, bannerT;                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
-static uint8_t tripN, killT, kills, flashT, chainMask, ledges;   // chainMask: the camps visited this trip; ledges: the camps on high ledges (double points)
-static uint8_t dlv, dlvT, lidT, partyT, foodOn;                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
+static uint8_t tripN, killT, kills, flashT, ledges;   // ledges: the camps on high ledges (double points)
+static uint8_t dlv, dlvT, lidT, partyT, foodOn, feasts, cowsN;   // feasts: this stage's; cowsN: cows grazing at its end                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
 static int bagX, bagY, scX, scY;                                // px (the speeder's: its middle, the ground under it)
 static int8_t scDir = 1;
 static uint8_t tripNx, bumpT, charge;                          // charge: frames UP has been held (CHARGED: ready)
@@ -422,7 +423,7 @@ static void genStage() {
     quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
     memset(items, 0, sizeof items);
     { const uint8_t *a = PLR.alien[sector & 1]; remap(EMAP, RM(3, a[0]) | RM(5, a[1]) << 8 | RM(11, a[2]) << 16 | RM(6, a[3]) << 24); }
-    dlv = foodOn = partyT = lidT = 0;
+    dlv = foodOn = partyT = lidT = feasts = 0;
     const int nIt = clampi((stage + 2) / 3, 0, 5);
     for (int k = 0; k < nIt + (diff ? 0 : 3); k++) {                          // (easy: three more shield kits)                // things to pick up: supplies, repairs, fuel, now and then an engine part
         int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
@@ -430,12 +431,12 @@ static void genStage() {
         items[k] = { (int16_t)x, (uint8_t)(k >= nIt ? IT_REPAIR : k == 0 ? IT_SUPPLY : (stage % 5 == 4 && k == 1) ? IT_ENGINE : (k & 1) ? IT_REPAIR : IT_FUEL), 1 };
         flatten(x, 24);
     }
-    for (int i = 0, z = 0, c = 0; i < nMen; i++) {
+    for (int i = 0, z = 0, c = 0, pass = 0; i < nMen; i++) {
         Man &m = men[i];
         const bool ledge = (ledges >> z) & 1;
-        if (c >= (ledge ? 2 : 2 + (z + stage) % 3)) { z = (z + 1) % nZones; c = 0; }   // this camp is full: on to the next
+        if (c >= (ledge ? 2 : 2 + (z + stage) % 3)) { if (++z == nZones) { z = 0; pass++; } c = 0; }   // this camp is full: on to the next (round again: the other side)
         const int k = c++;                                                    // its place in the camp
-        const int side = baseRight ? -1 : 1;                                  // camp on the side away from the base
+        const int side = (baseRight ? -1 : 1) * (pass & 1 ? -1 : 1);         // camp on the side away from the base
         m.home = (uint8_t)z;
         m.x = (int16_t)(zoneX[z] + side * (((ledges >> z) & 1) ? 3 + (k & 1) * 7 : 6 + (k & 3) * 8 + (int)(hash(s + i * 13u) % 3)));
         m.y = (int16_t)groundAt(m.x);
@@ -527,7 +528,6 @@ static void wreck() {
     for (auto &m : men) if (m.st == M_ABOARD) { m.st = M_LOST; nLost++; lost++; }
     for (auto &it : items) if (it.st == 2) it.st = 0;                // the supplies go down with it (and the takeaway)
     foodOn = 0;
-    chainMask = 0;
     seats = 0;
     say(lost ? MS_CREW_LOST : MS_LANDER_LOST, 60);
 }
@@ -633,7 +633,12 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
                 }
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
                 for (auto &it : items) if (it.st == 2) { it.st = 0; addScore(500 * (sector + 1), doorX, groundAt(doorX) - 20); say(MS_DELIVERED); sfx(S_SAVED); }
-                if (foodOn) { foodOn = 0; partyT = 200; addScore(2000 * (sector + 1), doorX, groundAt(doorX) - 28); say(MS_FEAST, 90); sfx(S_CLEAR); }
+                if (foodOn) {
+                    foodOn = 0; partyT = 200; feasts++; addScore(2000 * (sector + 1), doorX, groundAt(doorX) - 28); sfx(S_CLEAR);
+                    const int k = planet % 3;                                    // the world's food: a lander, a better engine or a mended hull
+                    if (k == 0) { if (lives < 9) lives++; } else if (k == 1) { if (engineUp < 3) engineUp++; } else shield = shMax();
+                    say((uint8_t)(MS_FED_LANDER + k), 90);
+                }
                 if (fuel < FUEL_MAX) { fuel = (uint16_t)(fuel + 10 > FUEL_MAX ? FUEL_MAX : fuel + 10); if ((frameNo & 3) == 0) sfx(S_FUEL); }
                 if ((frameNo & 31) == 0 && shield < shMax()) shield++;
                 if (seats && ++unloadT >= 12) {
@@ -727,12 +732,6 @@ static void updateMen() {
             if (lst == 1 && absi(dx) < 64 && absi(groundAt(X) - m.y) < 10 && seats < SEATS) {   // run for it
                 m.st = M_RUN; m.face = (int8_t)sgn(dx); m.t = 0; break;
             }
-            if (m.act == D_TREK) {                                                               // running for the next camp
-                const int tx = zoneX[m.by];
-                if (frameNo & 1) { m.face = (int8_t)(tx < m.x ? -1 : 1); manStep(m, m.face); }
-                if (absi(tx - m.x) < 6) { m.home = m.by; m.act = D_CHEER; m.t = 40; addScore(150, -1, 0); say(MS_MADE_IT, 40); }
-                break;
-            }
             if (lst == 0 && absi(dx) < 80 && Y < m.y - 10) {                                     // the lander is near: wave
                 if (m.act != D_WAVE) { m.act = D_WAVE; m.face = (int8_t)(sgn(dx) ? sgn(dx) : 1); }
                 m.t = 8;
@@ -757,10 +756,6 @@ static void updateMen() {
                 } else if (r < 6) { m.act = D_LOOK; m.t = 72; }
                 else if (r < 7) { m.act = D_GAZE; m.t = (uint8_t)(50 + rnd(40)); }
                 else if (r < 9) { m.act = D_WANDER; m.t = (uint8_t)(40 + rnd(60)); m.face = (int8_t)(rnd(2) ? 1 : -1); }
-                else if (stage >= 2 && nZones > 1 && absi(m.x - cam - 64) < 100 && rnd(4) == 0) {   // a dash across to the next camp
-                    m.act = D_TREK; m.by = (uint8_t)clampi(m.home + (baseRight ? 1 : -1), 0, nZones - 1);
-                    if (m.by == m.home) m.by = (uint8_t)(m.home ? m.home - 1 : 1);
-                }
                 else { m.act = D_STAND; m.t = (uint8_t)(40 + rnd(60)); }
             }
             break;
@@ -769,7 +764,7 @@ static void updateMen() {
             if (lst != 1) { m.st = M_IDLE; m.act = D_STAND; m.t = 30; break; }
             if ((frameNo & 3) != 3) manStep(m, sgn(X - m.x));
             if (absi(X - m.x) <= 2) {
-                if (seats < SEATS) { m.st = M_ABOARD; seats++; chainMask |= (uint8_t)(1 << m.home); sfx(S_BOARD); addScore(10, -1, 0); if (seats == SEATS) say(MS_SEATS_FULL, 40); }
+                if (seats < SEATS) { m.st = M_ABOARD; seats++; sfx(S_BOARD); addScore(10, -1, 0); if (seats == SEATS) say(MS_SEATS_FULL, 40); }
                 else { m.st = M_IDLE; m.act = D_STAND; m.t = 40; }
             }
             break;
@@ -793,11 +788,8 @@ static void updateMen() {
             if (absi(m.x - doorX) <= 1) {
                 m.st = M_SAVED; nSaved++; gSaved++; sfx(S_SAVED); tripN++;
                 if (seats == 0 && tripN > 1) {                                  // the last of the trip in: a bonus for bringing many
-                    int camps = 0;
-                    for (uint8_t b = chainMask; b; b >>= 1) camps += b & 1;
-                    addScore(tripN * tripN * 50 + (camps > 1 ? camps * camps * 100 : 0), doorX, m.y - 28);
-                    if (camps > 1) say(MS_CHAIN, 60, camps); else say(MS_TRIP_BONUS_X, 60, tripN);   // a chain of camps in one trip
-                    chainMask = 0;
+                    addScore(tripN * tripN * 50, doorX, m.y - 28);
+                    say(MS_TRIP_BONUS_X, 60, tripN);
                 }
                 for (int k = 0; k < 6; k++) part(doorX, m.y - 6, rnd(24) - 12, -8 - rnd(14), 18, k & 1 ? C_GOLD : C_WHITE);   // a little fanfare of sparks
                 addScore(250 * (sector + 1) * (((ledges >> m.home) & 1) + 1), doorX, m.y - 16);   // from a high ledge: double
@@ -826,7 +818,10 @@ static void killEn(Enemy &e) {
     addScore(PTS[e.kind] * (sector + 1), x, y - 8);
     if (killT) { kills++; if (kills >= 2) { say(kills == 2 ? MS_DOUBLE : kills == 3 ? MS_TRIPLE : MS_RAMPAGE, 40); addScore(100 * kills, -1, 0); } } else kills = 1;
     killT = 45;
-    if (e.kind == E_UFO) flashT = 3;
+    if (e.kind == E_UFO) {
+        flashT = 3;
+        for (auto &c : crit) if (c.kind == 5 && c.vx == (int8_t)(&e - en)) { c.kind = 3; c.vx = 1; c.t = 0; addScore(300, x, y - 10); say(MS_COW_SAVED, 50); }   // its cow falls free
+    }
     if (e.kind == E_MOTHER) {                                                          // it bursts: everyone it took jets down
         for (int k = 0; k < 5; k++) blast(x + rnd(41) - 20, y + rnd(13) - 6, 10 + rnd(8), k * 4);
         int n = 0;
@@ -952,7 +947,8 @@ static void updateEnemies() {
             e.vx = (int8_t)clampi(e.vx + sgn(tx - ex), -14 - sector * 4, 14 + sector * 4);
             e.vy = (int8_t)clampi(e.vy + sgn(ty - ey), -10, 10);
             const int rate = clampi(130 - planet * 6 - sector * 20, 50, 130) * (4 - diff) / 3;
-            if (lst != 2 && absi(X - ex) < 110 && (e.t % rate) == 0) eshot(ex, ey, X, Y, 22 + sector * 6, 0);
+            if (dlv == 3 && absi(scX - ex) < 110 && (e.t % rate) == 0) eshot(ex, ey, scX, scY, 22 + sector * 6, 0);   // the speeder first
+            else if (lst != 2 && absi(X - ex) < 110 && (e.t % rate) == 0) eshot(ex, ey, X, Y, 22 + sector * 6, 0);
             break;
         }
         case E_MINE:
@@ -1090,6 +1086,7 @@ static void updateShots() {
         const int x = s.x >> 4, y = s.y >> 4;
         if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
         if (lst != 2 && absi(x - X) < 7 && absi(y - Y) < 8) { s.life = 0; damage(1); }
+        if (dlv == 3 && absi(x - scX) < 8 && absi(y - scY + 4) < 6) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
     }
     for (auto &q : pt) {
         if (!q.life) continue;
@@ -1591,6 +1588,18 @@ static void updateCritters() {
         }
         c.t++;
         if (c.kind >= 3) {                                              // a cow: tumbles down, then wanders and grazes
+            if (c.kind == 5) {                                              // in a beam
+                const Enemy &e = en[c.vx];
+                if (e.kind != E_UFO) { c.kind = 3; c.vx = 1; c.t = 0; continue; }
+                c.x = (int16_t)(e.x >> 4);
+                if (--c.y < (e.y >> 4) + 4) c.kind = 0;                       // gone
+                continue;
+            }
+            if (c.kind == 4) for (int k = 0; k < ENS; k++) {                  // a saucer passing over: up it goes, now and then
+                const Enemy &e = en[k];
+                if (e.kind == E_UFO && e.st == 0 && absi((e.x >> 4) - c.x) < 4 && rnd(8) == 0) { c.kind = 5; c.vx = (int8_t)k; break; }
+            }
+            if (c.kind == 5) continue;
             if (c.kind == 3) c.y = (int16_t)(c.y + 1 + c.t / 8);
             else if ((c.t & 127) < 40 && (c.t & 3) == 0) { if (c.x < 30 || c.x > W - 30 || rnd(16) == 0) c.vx = (int8_t)-c.vx; } else continue;
             c.x = (int16_t)(c.x + c.vx);
@@ -1606,7 +1615,8 @@ static void drawCritters() {
     for (const auto &c : crit) {
         if (!c.kind) continue;
         if (c.kind >= 3) {                                              // the cow
-            const bool fall = c.kind == 3, eat = !fall && (c.t & 127) >= 40;
+            if (c.kind == 5) { const Enemy &e = en[c.vx]; drawBeam((e.x >> 4) - cam, e.y >> 4, c.y + 1); }   // beamed up, legs kicking
+            const bool fall = c.kind != 4, eat = !fall && (c.t & 127) >= 40;
             blitBC(fall ? (((c.t >> 2) & 1) ? C_COWUP : C_COW) : eat ? C_COWEAT : C_COW, c.x - cam, c.y, fall ? ((c.t >> 3) & 1) : c.vx < 0);
             continue;
         }
@@ -1677,7 +1687,6 @@ static void drawMen() {
             switch (m.act) {
             case D_GAZE: s = &C_MAN_LOOKUP; break;
             case D_WANDER: s = (phase & 8) ? &C_MAN_RUN1 : &C_MAN_STAND; break;
-            case D_TREK: s = (phase & 4) ? &C_MAN_RUN1 : &C_MAN_RUN2; break;
             case D_WAVE: s = (phase & 4) ? &C_MAN_WAVE1 : &C_MAN_WAVE2; break;
             case D_CHEER: if (phase & 8) { s = &C_MAN_CHEER; by--; } break;
             case D_CHAT: {
@@ -2068,15 +2077,16 @@ static void draw() {
     case CLEAR: {
         drawWorld();
 #ifndef SL_SLIM
-        panel(36, 54);
-        textC(40, T(missed ? MS_QUOTA_MISSED : MS_STAGE_CLEAR), missed ? C_RED : C_GOLD);
+        panel(30, 66);
+        textC(34, T(missed ? MS_QUOTA_MISSED : MS_STAGE_CLEAR), missed ? C_RED : C_GOLD);
         char s[28];
-        if (missed) textC(84, T(MS_TRY_AGAIN), C_SILVER);
+        if (missed) textC(86, T(MS_TRY_AGAIN), C_SILVER);
         fmt(s, T(MS_RESCUED), nSaved, T(MS_OF), nMen);
-        textC(52, s, C_WHITE);
+        textC(44, s, C_WHITE);
         fmt(s, T(MS_FUEL_BONUS), fuel / 4);
-        textC(62, s, C_SILVER);
-        if (nSaved == nMen) textC(74, T(MS_ALL_HOME_2000), (frameNo & 4) ? C_GREEN : C_WHITE);
+        textC(54, s, C_SILVER);
+        textC(64, fmt(s, T(MS_TALLY), feasts, T(MS_COWS), cowsN), C_GOLD);
+        if (nSaved == nMen) textC(76, T(MS_ALL_HOME_2000), (frameNo & 4) ? C_GREEN : C_WHITE);
 #endif
         break;
     }
@@ -2248,6 +2258,7 @@ static void update() {
             if (!once) {
                 once = true;
                 if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
+                else if (SL_DLV == 3) { crit[0] = { (int16_t)(LX() + 40), (int16_t)groundAt(LX() + 40), 1, 4, 100 }; spawnEn(E_UFO, LX() + 40, 40); }
                 else { dlv = 2; bagX = LX() + 40; bagY = groundAt(bagX) - 3; scX = LX() - 70; scY = groundAt(scX) - 7; crit[0] = { (int16_t)(LX() + 20), 30, 1, 3, 0 }; }
             }
         }
@@ -2269,6 +2280,9 @@ static void update() {
             if (++endT > 50) {
                 missed = nSaved < quota;
                 state = CLEAR; timer = 150; synth::engine(0);
+                cowsN = 0;
+                for (const auto &c : crit) cowsN += c.kind == 4;
+                addScore(cowsN * 250, -1, 0);
                 addScore(fuel / 4, -1, 0);
                 if (nSaved == nMen) addScore(2000, -1, 0);
                 sfx(S_CLEAR);
