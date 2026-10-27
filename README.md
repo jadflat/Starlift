@@ -6,7 +6,7 @@ flying saucers beam them away.
 
 ![STARLIFT](CHStarlift/docs/gameplay.gif)
 
-The 15-second trailer: [docs/trailer.mp4](docs/trailer.mp4).
+Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
 
 ## Controls
 

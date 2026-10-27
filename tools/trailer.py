@@ -1,4 +1,4 @@
-"""STARLIFT's 15-second trailer: simulator clips cut with B-movie title cards, over the game's own INVASION march.
+"""STARLIFT's 30-second trailer: simulator clips cut with B-movie title cards, over the game's own INVASION march.
 
 Needs the clips in CHStarlift/out/trailer (recorded with the t_*.txt scripts in CHStarlift/tools/scripts, see below) and
 out/music_preview/song5.wav (sh tools/synthcheck.sh). Writes docs/trailer.mp4 (1024x1024, 30 fps). Run from the project:
@@ -65,23 +65,28 @@ def flash(fr, n=2):                                   # a white flash on the cut
     return fr
 
 
+LEN = 900                                             # 30 s at 30 fps
 title = clip('title', 0, 90)
 seq = []
-seq += card([("THEY CAME FOR", 110, WHITE), ("OUR COLONISTS...", 120, GOLD)], 36)
-seq += flash(clip('bot4', 40, 94))
-seq += card([("...AND OUR", 110, WHITE), ("TAKEAWAY!", 170, RED)], 24)
-seq += flash(clip('dlv', 12, 72))
-seq += card([("ONE LANDER.", 150, GOLD)], 18)
-seq += flash(clip('bot5', 240, 285))
-seq += card([("BIG GUNS.", 160, RED)], 15)
-seq += flash(clip('charge', 6, 44))
-seq += card([("SANDWORMS!", 160, GOLD)], 15)
-seq += flash(clip('bot2', 395, 435))
-seq += card([("COWS?!", 200, WHITE)], 15)
-seq += flash(clip('dlv', 84, 109, box=(72, 64, 120, 112)))   # punch in on the cow
-seq += card([("FEAST", 170, GOLD), ("FIESTA!", 170, GREEN)], 30, bg=clip('feast', 20, 50), zoom=0.05)
+seq += card([("THEY CAME FOR", 110, WHITE), ("OUR COLONISTS...", 120, GOLD)], 45)
+seq += flash(clip('bot4', 20, 150))                   # a saucer arrives and beams them up, start to finish
+seq += card([("SO WE", 120, WHITE), ("FIGHT BACK.", 160, RED)], 24)
+seq += flash(clip('bot5', 620, 735))                  # shot down: jet packs, its takeaway order drops, the speeder brings it
+seq += card([("SPEEDY", 130, GOLD), ("DELIVERY!", 160, RED)], 24)
+seq += flash(clip('dlv', 10, 95))
+seq += card([("ONE LANDER.", 150, GOLD)], 21)
+seq += flash(clip('bot5', 255, 305))
+seq += card([("BIG GUNS.", 160, RED)], 21)
+seq += flash(clip('charge', 5, 50))
+seq += card([("SANDWORMS!", 160, GOLD)], 21)
+seq += flash(clip('bot2', 290, 365))
+seq += card([("COWS?!", 200, WHITE)], 21)
+seq += flash(clip('dlv', 80, 115, box=(72, 56, 124, 108)))   # punch in on a grazing cow
+seq += card([("THEY WANT", 120, WHITE), ("THOSE TOO.", 140, GREEN)], 21)
+seq += flash(clip('cowbeam', 7, 50))
+seq += card([("FEAST", 170, GOLD), ("FIESTA!", 170, GREEN)], 66, bg=clip('feast', 8, 74), zoom=0.05)
 end = []                                              # the real title screen, a strip along the bottom
-for i in range(450 - len(seq)):
+for i in range(LEN - len(seq)):
     im = title[(i + 20) % len(title)].copy()
     d = ImageDraw.Draw(im)
     d.rectangle((0, S - 84, S, S), fill=(8, 6, 20))
@@ -90,16 +95,16 @@ for i in range(450 - len(seq)):
     d.text(((S - d.textlength(t, font=f)) / 2, S - 76), t, font=f, fill=GOLD if (i // 8) % 2 else WHITE)
     end.append(im)
 seq += flash(end)
-assert len(seq) == 450, len(seq)
+assert len(seq) == LEN, len(seq)
 
 shutil.rmtree(FR, ignore_errors=True)
 os.makedirs(FR, exist_ok=True)
 for i, im in enumerate(seq):
     scan(im).save(os.path.join(FR, 'f%03d.png' % i))
-song = os.path.join(ROOT, 'out', 'music_preview', 'song5.wav')
-out = os.path.join(ROOT, 'docs', 'trailer.mp4')
+song = os.path.join(ROOT, 'out', 'music_preview', 'song5_32.wav')   # out/synthtest/t.exe 5 32 (see synthcheck.sh)
+out = os.path.join(ROOT, 'docs', 'trailer30.mp4')
 subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', '30', '-i', os.path.join(FR, 'f%03d.png'), '-i', song,
-                '-filter_complex', '[1:a]aresample=44100,atrim=0:15,afade=t=in:d=0.2,afade=t=out:st=14:d=1,volume=0.9[a]',
+                '-filter_complex', '[1:a]aresample=44100,atrim=0:30,afade=t=in:d=0.2,afade=t=out:st=28.5:d=1.5,volume=0.9[a]',
                 '-map', '0:v', '-map', '[a]', '-c:v', 'libopenh264', '-pix_fmt', 'yuv420p', '-b:v', '6M', '-c:a', 'aac', '-b:a', '160k',
                 '-shortest', out], check=True)
 print('wrote', out)
