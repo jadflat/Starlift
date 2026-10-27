@@ -199,3 +199,53 @@ COWUP = COW[::-1]   # tumbling: legs up
 BOSS_HIVE = ['............kkkkkkkkkkkkk............', '.........kkkrrrrmrrrrmrrrkkk.........', '........krrwwrrmmrrrrrmmrrrrk........', '.......krwwrrrrrrrrrrrrrrrrrrk.......', '.....kkrrykkyrrrrykkyrrrrykkyrrk.....', '....krrrrkkrrrrrrkkrrrrrrkkrrrrrk....', '...kmrrrrrrrrrrrrrrrrrrrrrrrrrrrmk...', '...kmmrrmrrmrrmrrmrrmrrmrrmrrmrrmmk..', '....kmmmmmmmmmmmmmmmmmmmmmmmmmmmmk...', '....kkkkmkkkkmkkkkmkkkkmkkkkmkkkk....', '.......kmk..kmk..kmk..kmk..kmk.......', '.......k.....k.....k.....k....k......', '.........k.....k.....k.....k.........']
 BOSS_PRISM = ['.................kkk.................', '................kkwcck...............', '..............kkwwcccckk.............', '............kkwwscccccsskk...........', '.........kkwwsssccccsssssnkk.........', '.......kkwssssssccssssssssnnkk.......', '.....kkwsssysssssssssssysssssnnkk....', '...kkwsssssssssskkkssssssssssssnnkk..', '.kkwssssssssssskkrkkssssssssssssnnkk.', '...kknnnnnnnnnnnkkknnnnnnnnnnnnnkk...', '.....kknnnnnnnnnnnnnnnnnnnnnnnkk.....', '.......kkkkcckkkkkkkkkkcckkkkk.......', '...........kcck.......kcck...........', '............kk.........kk............']
 BOSS_DREAD = ['.........kkkkkkkkkkkkkkkkkkk.........', '......kkkwwsssssssssssssssnnkkk......', '.....kkwwssssssssssssssssssssnnkk....', '....kwsssskkkkksssssssskkkkkssssnk...', '...kwssskkrrrkksssssskkrrrkkssssnk...', '...kwssskrryrrksssssskrryrrkssssnk...', '...kwssskkrrrkkssskssskkrrrkkssssnk..', '..kkssssskkksssskkksssskkkssssssnkk..', '..kysssssssssssskkkkkssssssssssssyk..', '..knnsssskwkwkwkwkwkwkwkwkwssssssnnk.', '..kknnnnnkkkkkkkkkkkkkkkkknnnnnnnkk..', '....kkknnnnrnnnnnnnrnnnnnnnrnnnkkk...', '.......kkkkkkkkkkkkkkkkkkkkkkkk......']
+
+
+def title_logo(text='STARLIFT'):
+    """The title (0.23): tall slanted chrome letters (the font at 2 x 3), white and silver over a horizon, gold to red
+    below; a steel extrusion down and right, an ink outline; an orbit ring in the world's accent colour sweeping behind,
+    and a few sparkles. Letters as HOUSE keys."""
+    GRAD = 'wwwsssssww' + 'n' + 'yyyyrrrrmm'                     # 21 rows: chrome over the horizon, fire below
+    cols = []
+    for ch in text:
+        for c in range(len(FONT[ch][0])):
+            cols.append([FONT[ch][r][c] == '#' for r in range(7)])
+        cols.append([False] * 7)
+    gw, gh = len(cols) * 2 + len(text), 21
+    w, h = gw + 14, gh + 8
+    p = [['.'] * w for _ in range(h)]
+    for t in range(0, 200):                                        # the orbit: a tilted ellipse, behind everything
+        a = t / 200 * 6.2832
+        import math
+        x, y = int(w / 2 + math.cos(a) * (w / 2 - 2)), int(h / 2 + 2 + math.sin(a) * 5 - math.cos(a) * 3)
+        if 0 <= x < w and 0 <= y < h: p[y][x] = 'u'
+    let = [['.'] * w for _ in range(h)]
+    gap = 0
+    for x, col in enumerate(cols):
+        if not any(col): gap += 1                                  # a pixel more between letters
+        for r in range(7):
+            if col[r]:
+                for dy in range(3):
+                    yy = 3 + r * 3 + dy
+                    sl = (gh - (yy - 3)) // 5                        # the slant: higher rows lean right
+                    for dx in range(2):
+                        let[yy][3 + x * 2 + gap + dx + sl] = GRAD[yy - 3]
+    for y in range(h - 1, -1, -1):                                 # the extrusion: three steps down and right
+        for x in range(w - 1, -1, -1):
+            for d in (1,):
+                if let[y][x] == '.' and y - d >= 0 and x - d >= 0 and let[y - d][x - d] not in '.kb':
+                    let[y][x] = 'b'
+                    break
+    out = [[let[y][x] if let[y][x] != '.' else p[y][x] for x in range(w)] for y in range(h)]
+    q = [r[:] for r in out]
+    for y in range(h):                                             # the ink outline round the letters and their extrusion
+        for x in range(w):
+            if out[y][x] in '.u' and any(0 <= x + a < w and 0 <= y + b < h and let[y + b][x + a] != '.' for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                q[y][x] = 'k'
+    for x, y in ((1, 2), (w - 3, 4), (w - 9, h - 2), (9, h - 3), (w // 2, 0)):   # sparkles
+        if q[y][x] == '.': q[y][x] = 'w'
+    return [''.join(r) for r in q]
+
+
+TITLE = title_logo()
+LOGOS['STARLIFT'] = g(TITLE)                          # (0.23: the chrome title replaces the 2x one)

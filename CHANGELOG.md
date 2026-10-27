@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.24 (2026-10-28)
+
+- A new title: tall slanted chrome letters (white and silver over a horizon line, gold to red below) with a steel edge,
+  an orbit ring in the world's accent colour sweeping behind, and sparkles.
+- The cut-scenes are unhurried: the speeder and the lob a quarter slower again, and when the bag is in (or the feast is
+  over) the camera rests on the lander for a moment and play comes back with three seconds of safety (the lander blinks).
+- New moments: a colonist running for the lander now and then trips flat on its face, then gets up and runs on; a cow
+  being beamed up now and then kicks itself free and tumbles down; saucers kept waiting at the drive-through lose their
+  patience and honk; a stinger shot down now and then drops a fuel cell.
+- Board, autopilot: Verda in a storm 25-29 ms a frame on average, Zorg 24-27 and 23-25 (worst frames 31-34 ms).
+- Room for it: the spark bursts share one helper (216 B).
+
 ## 0.23 (2026-10-28)
 
 - A gentler start, on every difficulty: stage 1 needs 2, 3 or 4 of its 8 colonists (Easy, Normal, Hard; was 2, 4, 5),

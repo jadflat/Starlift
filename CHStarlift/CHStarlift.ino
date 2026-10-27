@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.23"
+#define SL_VERSION "0.24"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -472,6 +472,10 @@ static void genStage() {
 static NOINL void part(int x, int y, int vx, int vy, uint8_t life, uint8_t col) {          // x, y px; vx, vy 1/16 px a frame
     for (auto &q : pt) if (!q.life) { q = { (int16_t)(x * 16), (int16_t)(y * 16), (int8_t)vx, (int8_t)vy, life, col }; return; }
 }
+// n sparks from (x, y), x speeds -sx/2..sx/2, y speeds -up..sy-up (1/16 px a frame), in two colours by turns
+static NOINL void burst(int x, int y, int n, int sx, int sy, int up, uint8_t life, uint8_t c1, uint8_t c2) {
+    for (int i = 0; i < n; i++) part(x, y, rnd(sx) - sx / 2, rnd(sy) - up, life, i & 1 ? c1 : c2);
+}
 static NOINL void blast(int x, int y, int r, int delay) {
     for (auto &b : booms) if (!b.t) { b = { (int16_t)x, (int16_t)y, 16, (uint8_t)r, (uint8_t)delay }; break; }
 }
@@ -524,7 +528,7 @@ static void wreck() {
     lst = 2; deadT = 80; shake = 18; flashT = 6; crashN++; cowsOn = 0;
     boom(LX(), LY(), 34, 20);
     for (int k = 0; k < 4; k++) blast(LX() + rnd(25) - 12, LY() + rnd(15) - 9, 8 + rnd(8), 4 + k * 5);   // the tanks go one after another
-    for (int i = 0; i < 14; i++) part(LX(), LY(), rnd(60) - 30, -rnd(50) - 10, 50, i & 1 ? C_SILVER : C_GOLD);   // the hull in pieces
+    burst(LX(), LY(), 14, 60, 50, 60, 50, C_SILVER, C_GOLD);           // the hull in pieces
     sfx(S_CRASH);
     synth::engine(0);
     int lost = 0;
@@ -567,7 +571,7 @@ static void touchDown() {
     addScore(pts, x, LY() - 14);
     say(pts == 100 ? MS_PERFECT_LANDING : MS_LANDED, 40);
     sfx(S_LAND);
-    for (int i = 0; i < 8; i++) part(x + (i & 1 ? 6 : -6), gl, (i & 1 ? 1 : -1) * (8 + rnd(10)), -rnd(6), 14, C_GNDL);
+    burst(x, gl, 8, 40, 6, 6, 14, C_GNDL, C_GND);                      // dust kicked out both ways
     for (auto &m : men)                                                  // landing on a colonist
         if (m.st == M_IDLE && absi(m.x - x) <= 9) { m.st = M_LOST; nLost++; sfx(S_SQUASH); say(MS_SQUASHED, 50); part(m.x, m.y - 4, 0, -12, 20, C_WHITE); }
 }
@@ -631,7 +635,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
                 if (it.st == 1 && absi(it.x - LX()) < 20) {
                     it.st = it.kind == IT_SUPPLY ? 2 : 0;
                     sfx(S_CATCH);
-                    for (int k = 0; k < 8; k++) part(it.x, groundAt(it.x) - 3, rnd(20) - 10, -rnd(20), 16, k & 1 ? C_GOLD : C_WHITE);
+                    burst(it.x, groundAt(it.x) - 3, 8, 20, 20, 20, 16, C_GOLD, C_WHITE);
                     if (it.kind == IT_REPAIR) { shield = shMax(); say(MS_HULL_REPAIRED); }
                     else if (it.kind == IT_FUEL) { fuel = (uint16_t)(fuel + FUEL_MAX / 2 > FUEL_MAX ? FUEL_MAX : fuel + FUEL_MAX / 2); say(MS_FUEL_CELL); }
                     else if (it.kind == IT_ENGINE) { if (engineUp < 3) engineUp++; say(MS_ENGINE_UP); }
@@ -736,6 +740,7 @@ static void updateMen() {
         Man &m = men[i];
         switch (m.st) {
         case M_IDLE: {
+            if (m.act == D_TRIP && m.t) { m.t--; break; }                   // still flat on its face
             const int dx = X - m.x;
             if (lst == 1 && absi(dx) < 64 && absi(groundAt(X) - m.y) < 10 && seats < SEATS) {   // run for it
                 m.st = M_RUN; m.face = (int8_t)sgn(dx); m.t = 0; break;
@@ -771,6 +776,7 @@ static void updateMen() {
         case M_RUN:
             if (lst != 1) { m.st = M_IDLE; m.act = D_STAND; m.t = 30; break; }
             if ((frameNo & 3) != 3) manStep(m, sgn(X - m.x));
+            if (rnd(400) == 0) { m.st = M_IDLE; m.act = D_TRIP; m.t = 36; break; }   // a trip: splat
             if (absi(X - m.x) <= 2) {
                 if (seats < SEATS) { m.st = M_ABOARD; seats++; sfx(S_BOARD); addScore(10, -1, 0); if (seats == SEATS) say(MS_SEATS_FULL, 40); }
                 else { m.st = M_IDLE; m.act = D_STAND; m.t = 40; }
@@ -799,7 +805,7 @@ static void updateMen() {
                     addScore(tripN * tripN * 50, doorX, m.y - 28);
                     say(MS_TRIP_BONUS_X, 60, tripN);
                 }
-                for (int k = 0; k < 6; k++) part(doorX, m.y - 6, rnd(24) - 12, -8 - rnd(14), 18, k & 1 ? C_GOLD : C_WHITE);   // a little fanfare of sparks
+                burst(doorX, m.y - 6, 6, 24, 14, 22, 18, C_GOLD, C_WHITE);   // a little fanfare of sparks
                 addScore(250 * (sector + 1), doorX, m.y - 16);
             }
             break;
@@ -839,6 +845,7 @@ static void killEn(Enemy &e) {
         flashT = 3;
         for (auto &c : crit) if (c.kind == 5 && c.vx == (int8_t)(&e - en)) { c.kind = 3; c.vx = 1; c.t = 0; addScore(300, x, y - 10); say(MS_COW_SAVED, 50); }   // its cow falls free
     }
+    if (e.kind == E_STINGER && rnd(4) == 0) for (auto &it : items) if (!it.st) { it = { (int16_t)x, IT_FUEL, 1 }; break; }   // a fuel cell falls from it
     if (e.kind == E_MOTHER) {                                                          // it bursts: everyone it took jets down
         for (int k = 0; k < 5; k++) blast(x + rnd(41) - 20, y + rnd(13) - 6, 10 + rnd(8), k * 4);
         int n = 0;
@@ -857,7 +864,7 @@ static void killEn(Enemy &e) {
             }
         if (k) { say(k > 1 ? MS_JETPACKS_GO : MS_BAIL_OUT, 50); sfx(S_CATCH); }
         snatch(e, x, y);
-        for (int i = 0; i < 10; i++) part(x, y, rnd(64) - 32, rnd(30) - 24, 30, i & 1 ? C_SILVER : C_GREEN);   // the saucer's plates
+        burst(x, y, 10, 64, 30, 24, 30, C_SILVER, C_GREEN);              // the saucer's plates
         shake = 6;
     }
     e.kind = E_NONE;
@@ -939,6 +946,7 @@ static void updateEnemies() {
                     } else e.st = 0;
                 }
             } else if (e.st == 3) {                                           // in the queue at the diner, shuffling
+                if ((e.t & 127) == 64 && rnd(3) == 0) { e.hit = 10; sfx(S_WARN); }   // impatient: a honk
                 int pos = 0;
                 for (auto &o : en) if (o.kind == E_UFO && (o.st == 3 || o.st == 4) && o.target < e.target) pos++;
                 const int win = burgerX + 35, tx = win + 4 + pos * 26 + (((e.t + e.target * 37) % 110) < 12 ? isin(e.t * 32) / 64 : 0), ty = groundAt(win) - 26;
@@ -1042,7 +1050,8 @@ static NOINL int toward(int v, int t, int step) { return v + clampi(t - v, -step
 
 static void updateDelivery() {
     if (lidT) lidT--;
-    if (partyT && (frameNo & 1) && (--partyT & 7) == 0) {              // the feast (its clock at half speed): fireworks every half second
+    if (dlvT && !--dlvT) invT = 90;                                     // the cut-scene's last look is over: a moment's safety after it
+    if (partyT && (frameNo & 1) && (!--partyT ? (dlvT = 45, false) : (partyT & 7) == 0)) {   // the feast (its clock at half speed): fireworks every half second
         const int fx = basePadX + rnd(81) - 20, fy = 24 + rnd(30);   // over the pad, where the lander sits
         const uint8_t c = (partyT & 16) ? C_GOLD : (partyT & 8) ? C_GREEN : C_RED;
         for (int a = 0; a < 256; a += 21) part(fx, fy, isin(a) / 4, isin(a + 64) / 4, 22, c);
@@ -1058,18 +1067,18 @@ static void updateDelivery() {
     case 2: tx = bagX; ty = groundAt(scX) - 7; break;                  // low along the ground to the bag
     case 3: tx = X - 12 * scDir; ty = Y - 12; bagX = scX; bagY = scY - 2; if (lst == 2) dlv = 5; break;   // up to the lander with it
     case 4:                                                             // tossed into the open lid
-        bagX = toward(bagX, X, 1); bagY = toward(bagY, Y - 8, 1);
-        if (bagX == X && bagY == Y - 8) { dlv = 5; foodOn = 1; sfx(S_CATCH); say(MS_ORDER_UP, 50); }
+        if (frameNo & 3) { bagX = toward(bagX, X, 1); bagY = toward(bagY, Y - 8, 1); }   // (three frames in four: unhurried)
+        if (bagX == X && bagY == Y - 8) { dlv = 5; dlvT = 45; foodOn = 1; sfx(S_CATCH); say(MS_ORDER_UP, 50); }
         return;
     default: tx = scX - scDir * 40; ty = -40; if (scY < -10) dlv = 0; break;   // and away
     }
     if (dlv == 2) scDir = (int8_t)(tx < scX ? -1 : 1);                // (fixed once it has the bag: a side chosen every frame never settled)
-    scX = toward(scX, tx, 1); scY = toward(scY, ty, 1);
+    if (frameNo & 3) { scX = toward(scX, tx, 1); scY = toward(scY, ty, 1); }
     if (absi(tx - scX) < 4 && absi(ty - scY) < 4) { if (dlv == 2) dlv = 3; else if (dlv == 3) { dlv = 4; lidT = 40; sfx(S_GEAR); } }
 }
 
-// a cut-scene playing (the delivery, the feast): where the camera looks, or -999
-static NOINL int cutAt() { return partyT ? (doorX + basePadX + 20) / 2 : (uint8_t)(dlv - 2) < 3 ? scX : -999; }
+// a cut-scene playing (the delivery, the feast, then a pause on the lander): where the camera looks, or -999
+static NOINL int cutAt() { return partyT ? (doorX + basePadX + 20) / 2 : (uint8_t)(dlv - 2) < 3 ? scX : dlvT ? LX() : -999; }   // (dlvT: a last look at the lander)
 
 static void updateShots() {
     updateDelivery();
@@ -1120,7 +1129,7 @@ static void updateShots() {
         if ((q.y >> 4) > groundAt(q.x >> 4)) { q.y = (int16_t)(groundAt(q.x >> 4) * 16); q.vy = (int8_t)(-q.vy / 3); q.vx = (int8_t)(q.vx / 2); }
     }
     for (auto &b : booms) {
-        if (b.delay) { if (--b.delay == 0) { sfx(S_BOOM); for (int i = 0; i < 6; i++) part(b.x, b.y, rnd(40) - 20, rnd(40) - 26, 16, i & 1 ? C_GOLD : C_RED); shake = 8; } }
+        if (b.delay) { if (--b.delay == 0) { sfx(S_BOOM); burst(b.x, b.y, 6, 40, 40, 26, 16, C_GOLD, C_RED); shake = 8; } }
         else if (b.t) b.t--;
     }
 }
@@ -1614,7 +1623,7 @@ static void updateCritters() {
         if (c.kind >= 3) {                                              // a cow: tumbles down, then wanders and grazes
             if (c.kind == 5) {                                              // in a beam
                 const Enemy &e = en[c.vx];
-                if (e.kind != E_UFO) { c.kind = 3; c.vx = 1; c.t = 0; continue; }
+                if (e.kind != E_UFO || rnd(160) == 0) { c.kind = 3; c.vx = 1; c.t = 0; continue; }   // (its saucer gone, or a kick)
                 c.x = (int16_t)(e.x >> 4);
                 if (--c.y < (e.y >> 4) + 4) c.kind = 0;                       // gone
                 continue;
@@ -1710,6 +1719,7 @@ static void drawMen() {
             int by = m.y;
             switch (m.act) {
             case D_GAZE: s = &C_MAN_LOOKUP; break;
+            case D_TRIP: s = SPIN[2]; break;                                // flat out
             case D_WANDER: s = (phase & 8) ? &C_MAN_RUN1 : &C_MAN_STAND; break;
             case D_WAVE: s = (phase & 4) ? &C_MAN_WAVE1 : &C_MAN_WAVE2; break;
             case D_CHEER: if (phase & 8) { s = &C_MAN_CHEER; by--; } break;
@@ -1974,7 +1984,7 @@ static void drawWorld() {
 }
 
 // ---- title, menus ------------------------------------------------------------------------------------------------------
-static void drawLogo(int y) { blit(C_LOGO_STARLIFT, 16, y, false); }
+static void drawLogo(int y) { blit(C_LOGO_STARLIFT, 7, y, false); }   // 114 x 29
 
 static void drawBeam(int ux, int uy, int gy);
 static uint8_t menuItems(uint8_t *it);
@@ -1996,8 +2006,8 @@ static void drawTitle() {
     drawTitleScene();
 
 #ifndef SL_SLIM
-    drawLogo(18);
-    textCS(36, T(MS_RESCUE_THE_COLONISTS), C_WHITE);
+    drawLogo(10);
+    textCS(42, T(MS_RESCUE_THE_COLONISTS), C_WHITE);
     char s[24];
     if (hiScore) { fmt(s, T(MS_HI), hiScore); textCS(2, s, C_SILVER); }
     uint8_t it[5];

@@ -413,7 +413,7 @@ def main():
     where = {}
     for name, p in CARD.items():
         data = pack(p)
-        assert len(data) <= 1024, name                 # at most two blocks: the card cache holds two
+        assert len(data) <= (1536 if name.startswith('LOGO') else 1024), name   # at most two blocks (the title pictures three: drawn alone)
         if len(data) <= 512 and (len(sec) % 512) + len(data) > 512:
             sec += bytes(512 - len(sec) % 512)
         lines.append("static const CSpr C_%s ROM(C_%s) = { %d, %d, %d };   // %d bytes" % (name, name, len(sec), len(p[0]), len(p), len(data)))
