@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2 (2026-10-27)
+
+- A heavier lander (twice the gravity, a stronger, quicker engine), and no ceiling: fly up and out of the screen.
+- Easier: fewer enemies early, gentler landings, a lower quota, more fuel.
+- New: a bullseye bonus for landing dead centre on a pad; chains of camps in one trip; colonists who dash between
+  camps (escort them); camps on high ledges worth double; a mothership every fourth stage (only lasers hurt it;
+  shoot it open to free everyone it took); after stage 16 the worlds come round again, harder.
+- Runs at 30 fps on the board (22-28 ms a frame in storms); a pleasant FM title tune; one small font throughout.
+
 ## 0.1 (2026-10-27)
 
 - First version: a Newtonian rocket lander (spooling engine, landing gear, rotary cannon and laser), colonists to land
