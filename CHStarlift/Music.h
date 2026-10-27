@@ -4,7 +4,7 @@
 
 #define SYN_RATE 8000
 #define SONG_COUNT 9
-#define SONG_MAX 294                 // the largest song blob: the RAM buffer it loads into
+#define SONG_MAX 326                 // the largest song blob: the RAM buffer it loads into
 
 static const int8_t QSINE[65] = { 0,3,6,9,12,16,19,22,25,28,31,34,37,40,43,46,49,51,54,57,60,63,65,68,71,73,76,78,81,83,85,88,90,92,94,96,98,100,102,104,106,107,109,111,112,113,115,116,117,118,120,121,122,122,123,124,125,125,126,126,126,127,127,127,127 };   // a quarter of a sine wave: SIN() builds the rest
 static inline int SIN(uint8_t i) { const uint8_t q = i & 63; const int v = QSINE[(i & 64) ? 64 - q : q]; return (i & 128) ? -v : v; }
@@ -14,5 +14,5 @@ static const uint16_t NOTE_INC16[12] = { 34292, 36331, 38491, 40780, 43205, 4577
 // glide speed (0 = none) and how fast a released note dies
 struct Inst { uint8_t ratio, idx0, idxDecay, idxFloor, amp, volDecay, volFloor, drive, vib, glide, release; };
 enum { SB_STEP = 33, SB_SWEEP, SB_DELAY, SB_SHIFT, SB_NBARS, SB_LEAD, SB_BASS = SB_LEAD + 16, SB_DRUMS = SB_BASS + 16, SB_BARS = SB_DRUMS + 16 };   // a song blob's layout
-static const uint16_t SONG_OFF[SONG_COUNT] = { 0, 246, 492, 738, 1032, 1310, 1604, 492, 1310 };
-static const uint16_t SONG_LEN[SONG_COUNT] = { 246, 246, 246, 294, 278, 294, 294, 246, 294 };
+static const uint16_t SONG_OFF[SONG_COUNT] = { 0, 326, 572, 818, 1112, 1390, 1684, 572, 1390 };
+static const uint16_t SONG_LEN[SONG_COUNT] = { 326, 246, 246, 294, 278, 294, 294, 246, 294 };

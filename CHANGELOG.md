@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8 (2026-10-27)
+
+- A charge shot: hold B (the guns keep firing) and sparks gather at the nose until it glows; let go for a plasma ball that
+  goes through everything in its path, four laser hits to each.
+- Better guns: the laser fires nearly twice as often and reaches further; every cannon round now counts.
+- Easier landings: more speed, tilt and slope allowed; a heavy (not wild) landing costs a pip of hull instead of the lander.
+- The gear folds up by itself once you are clear of the ground after take-off; with the gear down the lander turns more
+  finely and the wind no longer drags it more.
+- Longer safety after a hit, the low-fuel alarm at a third of a tank, an extra lander every 10,000 points, slower enemy
+  fire on Easy (half speed) and Normal (three quarters), and on Easy the hull mends itself (a pip about every 20 s).
+- A new, gentler title tune, MOONGLOW (G major, 84 bpm, a mellow FM lead over a held bass).
+- To make room: the saucers and some colonist poses are drawn from the SD card; explosion rings are dotted.
+
 ## 0.7 (2026-10-27)
 
 - More hull: 8 hits on Easy, 5 on Normal, 3 on Hard (was 5/3/2).

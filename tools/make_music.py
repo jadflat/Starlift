@@ -2,7 +2,7 @@
 synth (CHStarlift/Synth.cpp). A theremin (a near-sine voice that glides between notes and wavers), vibraphones, bells
 and a soft bass, mostly over light drums.
 
-  0 title     STARRISE   C major, 100 bpm             a singing tune over C, Am, F, G (THEREMIN, C lydian augmented, is kept for later)
+  0 title     MOONGLOW   G major, 84 bpm              a gentle tune over G, Em, C, D (STARRISE, the old title, is kept) (THEREMIN, C lydian augmented, is kept for later)
   1 the moon  TRANQUIL   F lydian, 80 bpm             slow bells and a drone, almost no drums
   2 ruins     SANDS      E double harmonic, 100 bpm   an exotic theremin line over a half-time groove
   3 bases     OUTPOST    D dorian, 120 bpm            a busy sequencer and a pulse, four on the floor
@@ -219,9 +219,25 @@ sh = [0, 0, -3, -3, 5, 5, 7, 7]
 add('STARRISE', 100, 18, [LEAD_EPIANO, BASS_FM, BELL_FM], lead_stream(72, 'major', P, order, [0] * 8),
     bass_stream(60, 'pulse', sh), 4, drums('soft'), shift=12)
 
+# ---- the title since 0.8: MOONGLOW. Gentler than STARRISE (which grated): G major, 84 bpm, a mellow low-index FM lead
+# in long notes over I, vi, IV, V, a held bass, a soft bell echo an octave up and hardly any drums
+LEAD_MELLOW = (1, 40, 2, 8, 100, 1, 64, 16, 4, 0, 8)      # a warm, round tone: little FM brightness, a slight waver
+P = {'A': [4, H, H, H, H, H, 2, H, 0, H, H, H, 2, H, 4, H],
+     'B': [5, H, H, H, 4, H, H, H, 2, H, H, H, H, H, N, N],
+     'C': [3, H, H, H, 5, H, 7, H, 9, H, H, H, 7, H, 5, H],
+     'D': [6, H, H, H, 4, H, H, H, 1, H, H, H, H, H, N, N],
+     'E': [7, H, H, H, H, H, 6, H, 4, H, H, H, 2, H, 4, H],
+     'F': [5, H, 4, H, 2, H, H, H, 0, H, H, H, H, H, N, N],
+     'G': [3, H, 2, H, 3, H, 5, H, 4, H, H, H, H, H, 2, H],
+     'K': [6, H, H, H, 4, H, 1, H, 4, H, H, H, H, H, N, N]}
+order = list('ABCD' + 'EFGK' + 'EBCD' + 'AFGK')
+sh = [0, -3, 5, 7, 0, -3, 5, 7]
+add('MOONGLOW', 84, 6, [LEAD_MELLOW, SOFT_BASS, BELL_ECHO], lead_stream(67, 'major', P, order, [0] * 8),
+    bass_stream(55, 'long', sh), 6, drums('air'), shift=12)
+
 # 0 the title; 1..8 the planets in order (Moon, Ares, Cryo, Verda, Vulcan, Titan, Prism, Zorg)
 byname = {sg['name']: sg for sg in SONGS}
-ORDER = ('STARRISE', 'TRANQUIL', 'SANDS', 'OUTPOST', 'JUNGLE', 'INVASION', 'COSMOS', 'SANDS', 'INVASION')
+ORDER = ('MOONGLOW', 'TRANQUIL', 'SANDS', 'OUTPOST', 'JUNGLE', 'INVASION', 'COSMOS', 'SANDS', 'INVASION')
 SONGS = [byname[n] for n in ORDER]
 
 # Each song is one self-contained blob in STARLIFT.DAT (tools/make_card.py puts it there); the game loads the one it
