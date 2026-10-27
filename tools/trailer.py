@@ -23,7 +23,7 @@ FONT = 'C:/Windows/Fonts/impact.ttf'
 
 def clip(name, a, b, box=None):
     """frames a..b of a clip; box: a part of the 128x128 screen (x0, y0, x1, y1) to punch in on."""
-    g = Image.open(os.path.join(CLIPS, name, ('bot' if name.startswith('bot') else name) + '.gif'))
+    g = Image.open(os.path.join(CLIPS, name, ('bot' if name.startswith('bot') else 'boss' if name.startswith('boss') else name) + '.gif'))
     fr = [f.convert('RGB') for f in ImageSequence.Iterator(g)]
     if box:
         fr = [f.crop(tuple(v * 2 for v in box)) for f in fr]
@@ -69,20 +69,19 @@ LEN = 900                                             # 30 s at 30 fps
 title = clip('title', 0, 90)
 seq = []
 seq += card([("THEY CAME FOR", 110, WHITE), ("OUR COLONISTS...", 120, GOLD)], 45)
-seq += flash(clip('bot4', 20, 150))                   # a saucer arrives and beams them up, start to finish
+seq += flash(clip('bot6', 160, 300))                  # saucers beam them up (Titan)
 seq += card([("SO WE", 120, WHITE), ("FIGHT BACK.", 160, RED)], 24)
-seq += flash(clip('bot5', 620, 735))                  # shot down: jet packs, its takeaway order drops, the speeder brings it
-seq += card([("SPEEDY", 130, GOLD), ("DELIVERY!", 160, RED)], 24)
-seq += flash(clip('dlv', 10, 95))
-seq += card([("ONE LANDER.", 150, GOLD)], 21)
-seq += flash(clip('bot5', 255, 305))
-seq += card([("BIG GUNS.", 160, RED)], 21)
-seq += flash(clip('charge', 5, 50))
+seq += flash(clip('bot3', 505, 625))                  # one shot down: its captives bail out on jet packs (Cryo)
+seq += card([("SPEEDY", 130, GOLD), ("DELIVERY!", 160, RED)], 21)
+seq += flash(clip('bot3', 675, 765))                  # its takeaway snatched: the speeder's cut-scene
+seq += card([("FOUR", 150, WHITE), ("BOSSES.", 170, RED)], 21)
+seq += flash(clip('boss4', 5, 38))                    # the Mothership, the Hive, the Prism warship, the Dreadnought
+seq += flash(clip('boss8', 0, 33))
+seq += flash(clip('boss12', 30, 63))
+seq += flash(clip('boss16', 30, 63))
 seq += card([("SANDWORMS!", 160, GOLD)], 21)
-seq += flash(clip('bot2', 290, 365))
+seq += flash(clip('bot2', 305, 370))
 seq += card([("COWS?!", 200, WHITE)], 21)
-seq += flash(clip('dlv', 80, 115, box=(72, 56, 124, 108)))   # punch in on a grazing cow
-seq += card([("THEY WANT", 120, WHITE), ("THOSE TOO.", 140, GREEN)], 21)
 seq += flash(clip('cowbeam', 7, 50))
 seq += card([("FEAST", 170, GOLD), ("FIESTA!", 170, GREEN)], 66, bg=clip('feast', 8, 74), zoom=0.05)
 end = []                                              # the real title screen, a strip along the bottom
