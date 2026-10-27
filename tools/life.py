@@ -180,3 +180,17 @@ MOTHERSHIP = ['...............kkkkkkk...............',      # the boss: a mother
               '......kkkkkkknngggggggnnkkkkkkk......',
               '............kkgglllllggkk............',
               '..............kkgggggkk..............']
+
+SCOOTER = ['......kkk...........',                           # a takeaway speeder bike: a rider in a white helmet, a long fork
+           '.....kwwwk..........',
+           '.....kwkkk..........',
+           '....kwwwk...........',
+           '...kwwswk...k.......',
+           '..kssssssskksk......',
+           'kkssssssssssskkkkkkk',
+           'kmnnnnssnnnnk...kssk',
+           '.kk..kmmk.......kkk.']
+
+COW = ['...........k.k', '.kkkkkkkkkkwwk', 'kwwwkkwwwwkwkw', 'kwwkkkwwwwkwwo', 'kwwwwwwkkwkwoo', '.kwwwwwwwwkkk.', '.kk.k...kk.k..', '.kk.k...kk.k..']   # a cow (beamed up by a saucer, knocked loose)
+COWEAT = ['..............', '.kkkkkkkkkk...', 'kwwwkkwwwwkk..', 'kwwkkkwwwwkwk.', 'kwwwwwwkkwkwwk', '.kwwwwwwwwkwko', '.kk.k...kk.koo', '.kk.k...kk.k..']   # grazing, head down
+COWUP = COW[::-1]   # tumbling: legs up

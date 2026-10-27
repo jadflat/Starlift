@@ -311,7 +311,7 @@ def bucket():
 
 CARD = {}                                             # the pictures read from STARLIFT.DAT
 # sprites drawn from the card too (each group fits a block, so a frame that draws one of them reads the block once)
-for n in ['LAND3', 'LAND4', 'LAND5', 'LAND6', 'SNATCH0', 'SNATCH1', 'MINE0', 'MINE1', 'TURRET'] + ['LANDUP%d' % i for i in range(7)] + ['MAN_SPIN%d' % i for i in range(8)] + ['SAUCER%d' % i for i in range(4)] + ['MAN_LOOKUP', 'MAN_TALK', 'MAN_CHEER', 'MAN_WAVE2']:   # (saucers and idle poses: card, to fit flash in 0.8)   # (the gear-down lander up to 45 degrees and the saucers stay in flash: drawn every frame)
+for n in ['LAND3', 'LAND4', 'LAND5', 'LAND6', 'SNATCH0', 'SNATCH1', 'MINE0', 'MINE1', 'TURRET'] + ['LANDUP%d' % i for i in range(7)] + ['MAN_SPIN%d' % i for i in range(8)] + ['SAUCER%d' % i for i in range(4)] + ['MAN_LOOKUP', 'MAN_TALK', 'MAN_CHEER', 'MAN_WAVE2'] + ['LAND0', 'LAND1', 'LAND2', 'MAN_STAND', 'MAN_WAVE1', 'MAN_RUN1', 'MAN_RUN2']:   # (0.12: every sprite on the card)   # (saucers and idle poses: card, to fit flash in 0.8)   # (the gear-down lander up to 45 degrees and the saucers stay in flash: drawn every frame)
     CARD[n] = SPR.pop(n)
 CARD['BASE'] = SPR.pop('BASE')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -333,6 +333,10 @@ CARD['DESCENT'] = life.g(life.DESCENT)
 CARD['GANTRY'] = life.g(life.GANTRY)
 CARD['PUMP'] = life.g(life.PUMP)
 CARD['MOTHERSHIP'] = life.g(life.MOTHERSHIP)
+CARD['SCOOTER'] = life.g(life.SCOOTER)
+CARD['COW'] = life.g(life.COW)
+CARD['COWEAT'] = life.g(life.COWEAT)
+CARD['COWUP'] = life.g(life.COWUP)
 for n in life.GIANT_ORDER:
     CARD['GI_' + n] = life.g(life.GIANTS[n])
 for n, gr in life.LOGOS.items():
@@ -433,7 +437,7 @@ def main():
     lines.append("static const CSpr *const SPIN[8] = { %s };" % ", ".join("&C_MAN_SPIN%d" % i for i in range(8)))
     lines.append("static const CSpr *const LANDER_UP[7] = { %s };" % ", ".join("&C_LANDUP%d" % i for i in range(7)))
     lines.append("static const CSpr *const SAUCER[4] = { %s };" % ", ".join("&C_SAUCER%d" % i for i in range(4)))
-    lines.append("static const Spr *const LANDER[3] = { %s };   // up to 30 degrees, in flash" % ", ".join("&S_LAND%d" % i for i in range(3)))
+    lines.append("static const CSpr *const LANDER[3] = { %s };   // up to 30 degrees" % ", ".join("&C_LAND%d" % i for i in range(3)))
     lines.append("static const CSpr *const LANDER_STEEP[4] = { &C_LAND3, &C_LAND4, &C_LAND5, &C_LAND6 };   // 45 to 90 degrees, from the card")
     open(os.path.join(ROOT, 'CHStarlift', 'Sprites.h'), 'w', newline='').write("\n".join(lines) + "\n")
     print("Sprites.h: %d sprites, %d bytes; card pictures %d bytes" % (len(SPR), total, len(sec)))

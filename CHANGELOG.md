@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12 (2026-10-27)
+
+- Shoot down a saucer while its takeaway order is coming up and you get a bonus (500 a sector), and the bag drops: a
+  speeder bike from the takeaway races out, its rider grabs the bag, flies up and tosses it into the lander's flip-top
+  lid ("ORDER UP!").
+- Bring the food home to the base pad for a FEAST FIESTA: 2,000 a sector, fireworks over the pad, the feast at the door.
+- Bump a saucer and now and then (1 in 5) a cow tumbles out ("HOLY COW!"). It lands, moos, and wanders the stage
+  grazing for the rest of it.
+- To make room: every sprite now comes from the SD card; explosions lose their dotted shock rings; a few small trims.
+
 ## 0.11 (2026-10-27)
 
 - On the ground, LEFT and RIGHT turn the guns round (they kept the way you last flew).
