@@ -4,6 +4,7 @@
 
 - Heavier: two and a half times the worlds' gravity, a faster fall, a stronger engine to match.
 - Above the screen the engine fades out within a third of a screen: you pop up and drop back, no floating.
+- Play runs a fifth faster (an extra game step every fifth frame).
 
 ## 0.3 (2026-10-27)
 

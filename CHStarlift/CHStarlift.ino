@@ -2202,6 +2202,7 @@ void loop() {
     startPrev = st;
     dbg::markRenderStart();
     update();
+    if (state == PLAY && (frameNo % 5) == 0) update();                // play runs a fifth faster: an extra step every fifth frame
     gfx_wait();
     if (saveDue) {
         saveDue = false;
