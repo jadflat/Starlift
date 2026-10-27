@@ -55,35 +55,35 @@ PL = dict(ROCK=0, SPIKES=1, BULB=2, FERN=3, FLOWER=4, TUBE=5, EYE=6, CACTUS=7, M
 FLY = dict(NONE=0, BAT=1, JELLY=2, RAY=3)
 CRAWL = dict(NONE=0, HOPPER=1, BEETLE=2, SNAIL=3)
 WORLDS = [
-    dict(name="THE MOON", base=0, coll=0, place="SEA OF TRANQUILITY", shop="BURGERS", food='BURGER', shopc='RED', basec='SILVER',
+    dict(name="THE MOON", alien=(('GREEN','SILVER','STEEL','RED'),('ACC','GOLD','RED','GREEN')), base=0, coll=0, place="SEA OF TRANQUILITY", shop="BURGERS", food='BURGER', shopc='RED', basec='SILVER',
          pal=[(2, 2, 10), (14, 14, 34), (92, 92, 104), (132, 132, 140), (74, 74, 84), (40, 40, 48), (112, 112, 120), (184, 184, 192), (40, 90, 230)],
          grav=11, theme='MOON', wx='METEOR', sky='EARTH', style=('JAGGED', 'SMOOTH', 'SMOOTH'), tile='STONES', air=0, clouds='INK', crack='INK',
          fly='NONE', crawl='NONE', plants=('ROCK', 'ROCK', 'ROCK'), wind=0, ads=("LUNA COLA", "CRATER WAX", "MOON PIES")),
-    dict(name="SABULON", base=2, coll=2, worms=2, place="THE DEEP DESERT", shop="NOODLES", food='NOODLES', shopc='GOLD', basec='GNDL',
+    dict(name="SABULON", alien=(('GREEN','STEEL','INK','RED'),('ACC','WHITE','SILVER','GREEN')), base=2, coll=2, worms=2, place="THE DEEP DESERT", shop="NOODLES", food='NOODLES', shopc='GOLD', basec='GNDL',
          pal=[(150, 82, 40), (244, 186, 112), (186, 120, 76), (222, 160, 92), (196, 132, 70), (150, 96, 50), (214, 160, 94), (248, 214, 150), (90, 170, 255)],
          grav=24, theme='RUINS', wx='DUST', sky='SUN', style=('MESA', 'SMOOTH', 'SMOOTH'), tile='STRATA', air=1, clouds='SKY1', crack='INK',
          fly='BAT', crawl='BEETLE', plants=('ROCK', 'CACTUS', 'ROCK'), wind=3, ads=("STILLSUIT CO", "WORM TOURS", "SAND SPA")),
-    dict(name="CRYO", base=1, coll=1, place="POLAR OUTPOST", shop="ICE CREAM", food='ICECREAM', shopc='ACC', basec='WHITE',
+    dict(name="CRYO", alien=(('ACC','GOLD','RED','GREEN'),('GREEN','SILVER','STEEL','RED')), base=1, coll=1, place="POLAR OUTPOST", shop="ICE CREAM", food='ICECREAM', shopc='ACC', basec='WHITE',
          pal=[(4, 10, 40), (34, 70, 140), (150, 186, 228), (96, 132, 192), (56, 86, 146), (64, 92, 146), (172, 210, 240), (244, 250, 255), (0, 230, 255)],
          grav=19, theme='BASE', wx='SNOW', sky='AURORA', style=('SPIKES', 'JAGGED', 'SMOOTH'), tile='STONES', air=1, clouds='INK', crack='GNDD',
          fly='RAY', crawl='HOPPER', plants=('SPIKES', 'ROCK', 'TUBE'), wind=2, ads=("ICE-O-MATIC", "FROST FUEL", "SNOW TIRES")),
-    dict(name="VERDA", base=2, coll=3, place="THE LOST TEMPLE", shop="PIZZA", food='PIZZA', shopc='GREEN', basec='GNDL',
+    dict(name="VERDA", alien=(('GOLD','SILVER','STEEL','RED'),('RED','WHITE','SILVER','GREEN')), base=2, coll=3, place="THE LOST TEMPLE", shop="PIZZA", food='PIZZA', shopc='GREEN', basec='GNDL',
          pal=[(64, 22, 96), (222, 112, 160), (130, 84, 148), (44, 112, 76), (22, 70, 46), (50, 34, 26), (44, 140, 60), (148, 224, 94), (255, 170, 60)],
          grav=33, theme='RUINS', wx='RAIN', sky='GIANT', style=('SMOOTH', 'JAGGED', 'SMOOTH'), tile='STONES', air=2, clouds='FAR', crack='INK',
          fly='JELLY', crawl='HOPPER', plants=('BULB', 'FERN', 'MUSH'), wind=0, ads=("VINE JUICE", "TEMPLE TOURS", "SPORE-TEX")),
-    dict(name="VULCAN", base=3, coll=0, place="THE FORGE", shop="HOT DOGS", food='HOTDOG', shopc='ACC', basec='STEEL',
+    dict(name="VULCAN", alien=(('ACC','SILVER','STEEL','GREEN'),('GREEN','WHITE','STEEL','GREEN')), base=3, coll=0, place="THE FORGE", shop="HOT DOGS", food='HOTDOG', shopc='ACC', basec='STEEL',
          pal=[(24, 0, 2), (150, 32, 12), (84, 24, 22), (50, 16, 18), (28, 10, 14), (22, 10, 10), (64, 32, 28), (124, 62, 42), (255, 124, 0)],
          grav=41, theme='ALIEN', wx='ASH', sky='REDSUN', style=('CONES', 'JAGGED', 'JAGGED'), tile='STRATA', air=1, clouds='FAR', crack='ACC',
          fly='BAT', crawl='BEETLE', plants=('FLOWER', 'ROCK', 'SPIKES'), wind=1, ads=("LAVA LAMPS", "MAGMA MINTS", "HOT ROCKS")),
-    dict(name="TITAN", base=1, coll=2, place="RING STATION", shop="FISH+CHIPS", food='FISH', shopc='STEEL', basec='GNDL',
+    dict(name="TITAN", alien=(('RED','GOLD','STEEL','GREEN'),('GREEN','SILVER','STEEL','RED')), base=1, coll=2, place="RING STATION", shop="FISH+CHIPS", food='FISH', shopc='STEEL', basec='GNDL',
          pal=[(112, 60, 12), (232, 172, 72), (174, 114, 54), (124, 78, 42), (84, 52, 30), (70, 46, 26), (162, 112, 62), (222, 172, 104), (120, 230, 255)],
          grav=9, theme='BASE', wx='DRIZZLE', sky='RINGED', style=('SMOOTH', 'MESA', 'SMOOTH'), tile='STRATA', air=2, clouds='SKY1', crack='INK',
          fly='JELLY', crawl='SNAIL', plants=('TUBE', 'MUSH', 'ROCK'), wind=2, ads=("RING RENTALS", "GAS-O-LINE", "METHANE FIZZ")),
-    dict(name="PRISM", base=3, coll=1, place="CRYSTAL SANCTUM", shop="SUSHI", food='SUSHI', shopc='WHITE', basec='GNDL',
+    dict(name="PRISM", alien=(('GOLD','WHITE','SILVER','RED'),('RED','GREEN','STEEL','GREEN')), base=3, coll=1, place="CRYSTAL SANCTUM", shop="SUSHI", food='SUSHI', shopc='WHITE', basec='GNDL',
          pal=[(20, 0, 40), (122, 40, 144), (94, 52, 146), (144, 72, 176), (72, 30, 104), (50, 20, 72), (150, 92, 194), (232, 172, 255), (90, 255, 230)],
          grav=29, theme='RUINS', wx='GLINT', sky='TWINSUN', style=('SPIKES', 'SPIKES', 'JAGGED'), tile='CRYSTAL', air=0, clouds='INK', crack='ACC',
          fly='RAY', crawl='SNAIL', plants=('SPIKES', 'BULB', 'EYE'), wind=0, ads=("GEM SHINE", "PRISM TV", "SPARKLE-OS")),
-    dict(name="ZORG", base=0, coll=3, place="ZORG PRIME", shop="GLORP PIES", food='PIE', shopc='GREEN', basec='STEEL',
+    dict(name="ZORG", alien=(('RED','SILVER','STEEL','GREEN'),('GOLD','GREEN','STEEL','RED')), base=0, coll=3, place="ZORG PRIME", shop="GLORP PIES", food='PIE', shopc='GREEN', basec='STEEL',
          pal=[(0, 10, 18), (22, 72, 72), (34, 64, 76), (22, 46, 56), (12, 28, 38), (14, 20, 26), (52, 72, 82), (112, 152, 162), (180, 255, 60)],
          grav=37, theme='ALIEN', wx='ACID', sky='MOONS', style=('SMOOTH', 'MESA', 'SMOOTH'), tile='CRYSTAL', air=1, clouds='FAR', crack='INK',
          fly='JELLY', crawl='BEETLE', plants=('EYE', 'TUBE', 'BULB'), wind=1, ads=("EAT GLORP", "ZORG-O-RAMA", "PROBE U")),
@@ -103,7 +103,7 @@ for w in WORLDS:
         r += bytes(c)
     r += bytes([w['grav'], TH[w['theme']], WX[w['wx']], SKY[w['sky']]] + [STY[x] for x in w['style']] +
                [TL[w['tile']], w['air'], C[w['clouds']], C[w['crack']], FOOD[w['food']], C[w['shopc']], C[w['basec']],
-                FLY[w['fly']], CRAWL[w['crawl']]] + [PL[x] for x in w['plants']] + [w['wind'], w['base'], w['coll'], w.get('worms', 0)])
+                FLY[w['fly']], CRAWL[w['crawl']]] + [PL[x] for x in w['plants']] + [w['wind'], w['base'], w['coll'], w.get('worms', 0)] + [C[c] for sc in w['alien'] for c in sc])   # alien: the saucers' etc. colours, a scheme a sector
     r += fixed(w['name'], 12) + fixed(w['place'], 20) + fixed(w['shop'], 12)
     for a in w['ads']:
         r += fixed(a, 14)

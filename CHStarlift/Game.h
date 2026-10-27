@@ -14,7 +14,8 @@ enum Tile : uint8_t { TL_STONES, TL_BRICKS, TL_STRATA, TL_CRYSTAL };
 struct Planet {
     uint8_t pal[9][3];                                  // SKY0, SKY1, FAR, MID, NEAR, GNDD, GND, GNDL, ACC
     uint8_t grav, theme, weather, sky, style[3], tile, air, clouds, crack;   // grav: 1/1024 px a frame squared (64 = 1 G)
-    uint8_t food, shopc, basec, fly, crawl, plants[3], wind, base, coll, worms;     // the takeaway's food and colour, the base's colour, the wildlife, wind 0-3, the base's and the aliens' designs
+    uint8_t food, shopc, basec, fly, crawl, plants[3], wind, base, coll, worms;
+    uint8_t alien[2][4];                                // each sector's alien colours: the saucers' dome, hull and shade, and the creatures' bodies     // the takeaway's food and colour, the base's colour, the wildlife, wind 0-3, the base's and the aliens' designs
     char name[12], place[20], shop[12], ads[3][14];
 };
 enum State : uint8_t { TITLE, INTRO, PLAY, CLEAR, OVER, WIN, PAUSED, HELP, OPTIONS };

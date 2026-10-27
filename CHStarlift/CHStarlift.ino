@@ -20,11 +20,15 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.12"
+#define SL_VERSION "0.13"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
 static const uint8_t MAP[14] = { C_INK, C_WHITE, C_GREEN, C_GREEN, C_WHITE, C_SILVER, C_RED, C_RED, C_GOLD, C_STEEL, C_ACC, C_STEEL, C_GOLD, C_ACC };
+static uint8_t EMAP[14];
+// a copy of MAP with some entries changed: up to four bytes of (HOUSE index << 4 | game colour), lowest first
+static NOINL void remap(uint8_t *mp, uint32_t p) { memcpy(mp, MAP, 14); for (; p; p >>= 8) mp[(p >> 4) & 15] = p & 15; }
+#define RM(i, c) ((uint32_t)((i) << 4 | (c)))                                   // the same for the aliens: each world (and sector) paints its saucers and creatures its own way
 
 // ---- sound: 1950s science fiction. Warbling sines for ray guns and saucers, noise for blasts ------------------
 enum Sfx : uint8_t { S_LASER, S_BOOM, S_CRASH, S_HIT, S_BOARD, S_SAVED, S_LAND, S_UFO, S_BEAM, S_TAKEN, S_ZAP, S_FUEL, S_LOW,
@@ -417,6 +421,7 @@ static void genStage() {
     nMen = (uint8_t)clampi(8 + stage, 8, MEN);
     quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
     memset(items, 0, sizeof items);
+    { const uint8_t *a = PLR.alien[sector & 1]; remap(EMAP, RM(3, a[0]) | RM(5, a[1]) << 8 | RM(11, a[2]) << 16 | RM(6, a[3]) << 24); }
     dlv = foodOn = partyT = lidT = 0;
     const int nIt = clampi((stage + 2) / 3, 0, 5);
     for (int k = 0; k < nIt + (diff ? 0 : 3); k++) {                          // (easy: three more shield kits)                // things to pick up: supplies, repairs, fuel, now and then an engine part
@@ -425,12 +430,14 @@ static void genStage() {
         items[k] = { (int16_t)x, (uint8_t)(k >= nIt ? IT_REPAIR : k == 0 ? IT_SUPPLY : (stage % 5 == 4 && k == 1) ? IT_ENGINE : (k & 1) ? IT_REPAIR : IT_FUEL), 1 };
         flatten(x, 24);
     }
-    for (int i = 0; i < nMen; i++) {
+    for (int i = 0, z = 0, c = 0; i < nMen; i++) {
         Man &m = men[i];
-        const int z = i % nZones;
+        const bool ledge = (ledges >> z) & 1;
+        if (c >= (ledge ? 2 : 2 + (z + stage) % 3)) { z = (z + 1) % nZones; c = 0; }   // this camp is full: on to the next
+        const int k = c++;                                                    // its place in the camp
         const int side = baseRight ? -1 : 1;                                  // camp on the side away from the base
         m.home = (uint8_t)z;
-        m.x = (int16_t)(zoneX[z] + side * (((ledges >> z) & 1) ? 4 + (int)(hash(s + i * 13u) % 8) : 6 + (int)(hash(s + i * 13u) % 18)));
+        m.x = (int16_t)(zoneX[z] + side * (((ledges >> z) & 1) ? 3 + (k & 1) * 7 : 6 + (k & 3) * 8 + (int)(hash(s + i * 13u) % 3)));
         m.y = (int16_t)groundAt(m.x);
         m.st = M_IDLE; m.act = D_STAND; m.t = (uint8_t)rnd(60); m.face = (int8_t)(rnd(2) ? 1 : -1); m.look = (uint8_t)(hash(s + i * 71u) & 31);
     }
@@ -556,7 +563,6 @@ static void touchDown() {
     onPad = (x >= basePadX && x < basePadX + 40) ? 2 : (x >= startPadX && x < startPadX + 40) ? 1 : 0;
     addScore(pts, x, LY() - 14);
     say(pts == 100 ? MS_PERFECT_LANDING : MS_LANDED, 40);
-    if (onPad && absi(x - (onPad == 2 ? basePadX : startPadX) - 20) <= 2) { addScore(200, x, LY() - 22); say(MS_BULLSEYE, 50); }   // dead centre
     sfx(S_LAND);
     for (int i = 0; i < 8; i++) part(x + (i & 1 ? 6 : -6), gl, (i & 1 ? 1 : -1) * (8 + rnd(10)), -rnd(6), 14, C_GNDL);
     for (auto &m : men)                                                  // landing on a colonist
@@ -842,7 +848,6 @@ static void killEn(Enemy &e) {
             addScore(500 * (sector + 1), x, y - 16); say(MS_FOOD_SNATCHED, 60);
             if (!dlv && !foodOn) { dlv = 1; bagX = x; bagY = y + 6; }
         }
-        blast(x - 5, y + 2, 9, 5); blast(x + 6, y - 1, 8, 9);
         for (int i = 0; i < 10; i++) part(x, y, rnd(64) - 32, rnd(30) - 24, 30, i & 1 ? C_SILVER : C_GREEN);   // the saucer's plates
         shake = 6;
     }
@@ -1187,6 +1192,7 @@ static void drawSky() {
     }
 }
 
+
 static void drawSkyObjects() {
     const Planet &p = PLR;
     const int pc = cam >> 6;
@@ -1201,7 +1207,7 @@ static void drawSkyObjects() {
     switch (p.sky) {
     default: {                                                  // a planet, a sun or moons: a picture from the card
         uint8_t mp[14];
-        memcpy(mp, MAP, 14); mp[7] = C_SKY0; mp[9] = C_FAR; mp[12] = C_GNDL;
+        remap(mp, RM(7, C_SKY0) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);
         const CSpr &c = PK.sky;
         blit(c, SKY_AT[p.sky][0] - pc - c.w / 2, SKY_AT[p.sky][1] - c.h / 2, false, 255, mp);
         break;
@@ -1216,7 +1222,7 @@ static void drawSkyObjects() {
     }
     {                                                           // the world's sky giant, drifting across far away
         uint8_t mp[14];
-        memcpy(mp, MAP, 14); mp[7] = C_MID; mp[9] = C_FAR; mp[12] = C_GNDL;
+        remap(mp, RM(7, C_MID) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);
         const CSpr &g = PK.giant;
         const int gx = 150 - (int)(((uint32_t)frameNo / 3 + stage * 97u) % 420u), gy = (stage & 7) == 1 ? 50 : TOP + 14 + isin(frameNo + stage * 30) / 20;
         if ((stage & 7) != 1 || ((frameNo >> 8) & 1)) blit(g, gx, gy, false, 255, mp);   // the far worm only shows now and then
@@ -1325,7 +1331,7 @@ static void drawGroundCols() {
 static void structure(int n, int sx, int base, int L, uint32_t h) {
     const CSpr &c = PK.st[n];
     uint8_t mp[14];
-    memcpy(mp, MAP, 14); mp[2] = LDARK[L]; mp[3] = LBODY[L]; mp[4] = LLIT[L];
+    remap(mp, RM(2, LDARK[L]) | RM(3, LBODY[L]) << 8 | RM(4, LLIT[L]) << 16);
     const int x = sx, y = base - c.h + 1;
     blit(c, x, y, ((h >> 22) & 1) && n != 3, 255, mp);
     const int8_t *li = STRUCT_LIGHT[PLR.theme - 1][n];
@@ -1450,8 +1456,9 @@ static void drawPointer() {                                 // an arrow at the e
     if (state != PLAY || lst == 2 || !(frameNo & 8)) return;
     int tx = -1;
     uint8_t c = C_WHITE;
-    if (seats >= SEATS || (seats && nearestIdle(LX(), 9999) < 0)) { tx = basePadX + 20; c = C_ACC; }
-    else { const int i = nearestIdle(LX(), 9999); if (i >= 0) tx = men[i].x; }
+    const int i = nearestIdle(LX(), 9999);
+    if (seats >= SEATS || (seats && i < 0)) { tx = basePadX + 20; c = C_ACC; }
+    else if (i >= 0) tx = men[i].x;
     if (tx < 0 || (tx >= cam && tx < cam + 128)) return;
     const int left = tx < cam, x = left ? 1 : 126, y = 70;
     for (int k = 0; k < 4; k++) R(left ? x + k : x - k, y - k, 1, 2 * k + 1, c);
@@ -1467,7 +1474,7 @@ static void drawGroundThings() {
     if (bx > -50 && bx < 130) {
         const int gy = groundAt(buildX + 22);
         uint8_t mp[14];                                                  // the base in this world's colours
-        memcpy(mp, MAP, 14); mp[5] = PLR.basec;
+        remap(mp, RM(5, PLR.basec));
         blit(PK.base, bx, gy - PK.base.h + 1, !baseRight, 255, mp);
         flag(baseRight ? bx - 4 : bx + 46, gy, 0);
     }
@@ -1532,7 +1539,7 @@ static void drawDiner() {
     if (bx < -60 || bx > 140) return;
     const int gy = groundAt(burgerX + 30), top = gy - 37;
     uint8_t mp[14];                                                      // the shop's own colour
-    memcpy(mp, MAP, 14); mp[6] = PLR.shopc;
+    remap(mp, RM(6, PLR.shopc));
     blit(PK.shop, bx, top, false, 255, mp);
     blit(PK.food, bx + 44, top + 1, false);
     const bool flicker = (hash((uint32_t)(frameNo >> 1)) & 63) == 0;
@@ -1557,7 +1564,7 @@ static bool busyAt(int x) {
 }
 static void plant(uint8_t k, int x, int gy, uint32_t h) {          // from the card; the ground's tones are this world's
     uint8_t mp[14];
-    memcpy(mp, MAP, 14); mp[9] = C_GND; mp[12] = C_GNDL; mp[7] = C_GNDD;
+    remap(mp, RM(9, C_GND) | RM(12, C_GNDL) << 8 | RM(7, C_GNDD) << 16);
     blitBC(PK.plant[k][((frameNo >> 4) + (int)(h >> 9)) & 1], x, gy + 1, (h >> 11) & 1, 255, mp);
 }
 static void drawPlants() {
@@ -1641,9 +1648,8 @@ static const uint8_t SUIT[6][3] = { { C_WHITE, C_SILVER, C_GOLD }, { C_GOLD, C_R
                                     { C_WHITE, C_ACC, C_GOLD }, { C_WHITE, C_GOLD, C_ACC }, { C_SILVER, C_RED, C_GOLD } };   // highlight, suit, visor
 static NOINL const uint8_t *manMap(uint8_t look) {
     static uint8_t m[14];
-    memcpy(m, MAP, 14);
     const uint8_t *su = SUIT[look % 6];
-    m[1] = su[0]; m[5] = su[1]; m[8] = su[2];
+    remap(m, RM(1, su[0]) | RM(5, su[1]) << 8 | RM(8, su[2]) << 16);
     return m;
 }
 static void manKit(const Man &m, int sx, int by, bool jet) {
@@ -1713,11 +1719,11 @@ static void drawEnemies() {
                 drawBeam(sx, sy, gy + 2);
                 drawBag(sx, by);
             }
-            blit(*SAUCER[(frameNo >> 2) & 3], sx - 11, sy - 5, false, solid);
+            blit(*SAUCER[(frameNo >> 2) & 3], sx - 11, sy - 5, false, solid, EMAP);
             for (int k = 0; k < e.cargo && e.st < 3; k++) pset(sx - 4 + k * 2, sy - 3, (frameNo + k * 4) & 8 ? C_WHITE : C_GOLD);
             break;
-        case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid); break;
-        case E_MINE: blit((frameNo & 4) ? C_MINE0 : C_MINE1, sx - 4, sy - 4, false, solid); break;
+        case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid, EMAP); break;
+        case E_MINE: blit((frameNo & 4) ? C_MINE0 : C_MINE1, sx - 4, sy - 4, false, solid, EMAP); break;
         case E_WORM: {
             const int gy = groundAt(e.x >> 4);
 #ifdef SL_TRACE
@@ -1743,14 +1749,14 @@ static void drawEnemies() {
             break;
         }
         case E_MOTHER:
-            blit(C_MOTHERSHIP, sx - 18, sy - 7, false, solid);
+            blit(C_MOTHERSHIP, sx - 18, sy - 7, false, solid, EMAP);
             if (frameNo & 8) pset(sx - 16 + ((frameNo >> 2) % 9) * 4, sy, C_RED);       // a light running round its rim
             R(sx - 12, sy - 10, e.hp * 24 / clampi(40 + stage * 2, 40, 120), 1, C_RED);                 // how much it can still take
             break;
         case E_TURRET: {
             const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);
             for (int k = 0; k < 5; k++) pset(sx + dx * k / 4, sy - 4 - k, C_STEEL);
-            blit(C_TURRET, sx - 6, sy - 4, false, solid);
+            blit(C_TURRET, sx - 6, sy - 4, false, solid, EMAP);
             break;
         }
         }
@@ -2017,7 +2023,7 @@ static void drawIntro() {
         int y = 32;
         auto row = [&](uint8_t msg, uint8_t col) { text35(32, y + 3, T(msg), col); y += 13; };
         blitBC(C_MAN_WAVE1, 17, y + 11, false); row(MS_R_COLONIST, C_GREEN);
-        blit(*SAUCER[(frameNo >> 2) & 3], 6, y + 2, false); row(MS_R_UFO, C_RED);
+        blit(*SAUCER[(frameNo >> 2) & 3], 6, y + 2, false, 255, EMAP); row(MS_R_UFO, C_RED);
         blit(C_SNATCH0, 10, y, false); row(MS_R_STINGER, C_RED);
         blit(C_MINE0, 13, y + 1, false); row(MS_R_MINE, C_GOLD);
         if (has[E_TURRET]) { blit(C_TURRET, 11, y + 3, false); row(MS_R_TURRET, C_RED); }

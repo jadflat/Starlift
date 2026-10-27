@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13 (2026-10-27)
+
+- The aliens dress differently on every world and in each of its two sectors: the saucers' domes, hulls and lights, and
+  the stingers', mines', turrets' and mothership's colours (two schemes a world, in its record on the SD card).
+- Colonists camp in groups of 2, 3 and 4 (pairs on the high ledges), 8 px apart.
+- To make room: the bullseye bonus is gone (it also went off when hopping on the start pad), a saucer's shoot-down has
+  one blast fewer, and the palette maps share one helper.
+
 ## 0.12 (2026-10-27)
 
 - Shoot down a saucer while its takeaway order is coming up and you get a bonus (500 a sector), and the bag drops: a
