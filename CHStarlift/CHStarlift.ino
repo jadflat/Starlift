@@ -86,11 +86,15 @@ static void drawDiner();
 static void drawSigns();
 
 // ---- state ------------------------------------------------------------------------------------------------------
-enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, MEN = 20, ENS = 12, SHOTS = 10, ESHOTS = 12, PARTS = 56, WXN = 80,
+#ifdef SL_SLIM                                     // a board perf build: a little RAM back for the debug image
+enum { ESHOTS = 8, PARTS = 40, WXN = 48, CRITS = 4, MEN = 18 };
+#else
+enum { ESHOTS = 12, PARTS = 56, WXN = 64, CRITS = 6, MEN = 20 };
+#endif
+enum { W = 1920, HN = W / 4 + 1, TOP = 16, CEIL = 20, ENS = 12, SHOTS = 10,
        SEATS = 8, FUEL_MAX = 1200, ZONES = 8 };
 static uint8_t hgt[HN];                     // the ground's top (screen y) every 4 px
 static uint8_t tile[16][16];                // the ground's texture by column (it repeats every 16 px), 0 crack .. 3 lit, built for each planet
-static uint8_t scanY[120];                  // the scanner's ground line
 static Man men[MEN];
 static uint8_t nMen, nSaved, nLost, quota;                // quota: how many must reach the base
 enum : uint8_t { IT_SUPPLY, IT_REPAIR, IT_FUEL, IT_ENGINE };
@@ -115,13 +119,15 @@ static int startPadX, basePadX, buildX, doorX;          // pads: the left end of
 static int alienX, burgerX;                               // the aliens' bucket (its left); the Moon's diner (its left, -1 elsewhere)
 static uint8_t ticket, tubeT;                             // the diner's next order number; the bucket's tubes glowing
 struct Critter { int16_t x, y; int8_t vx; uint8_t kind, t; };   // background wildlife: x px, y px
-static Critter crit[6];
+static Critter crit[CRITS];
 struct Sign { int16_t x, y; int8_t vx; uint8_t ad, on; };      // an advert flying on little rockets
 static Sign signs[2];
 static int frameNo, timer, cam, shake, lightT, endT, warnT, spawnT;
 static int windV;                                         // the wind's push on the lander, 1/256 px a frame
 static uint32_t rng = 1;
-static uint8_t wxLvl;                                     // this stage's weather, rolled when it is built: 0 clear .. 3 a storm
+static uint8_t wxLvl;
+static int topsAt[4] = { -9999, -9999, -9999, -9999 };       // the layer x of column 0 when the tops were made (-9999: none)
+                                     // this stage's weather, rolled when it is built: 0 clear .. 3 a storm
 static bool loadReq;                                      // the stage's world is to be read from the card and the stage built
 
 // the lander: position 1/256 px, velocity 1/256 px a frame
@@ -170,7 +176,7 @@ RAMFUNC(pset) static void pset(int x, int y, uint8_t c) {                       
 static NOINL void hl(int x, int y, int w, uint8_t c) { if (w > 0) gfx_hline(x, y, w, c); }
 
 // Run-length rows from flash or from the card. solid: 255 = the sprite's colours, else one colour for every pixel (a hit flash)
-static void blitRd(Rd &rd, int w, int h, int x, int y, bool flip, uint8_t solid, const uint8_t *map) {
+RAMFUNC(blitRd) static void blitRd(Rd &rd, int w, int h, int x, int y, bool flip, uint8_t solid, const uint8_t *map) {
     if (x >= 128 || y >= 128 || x + w <= 0 || y + h <= 0) return;
     uint8_t lut[16];
     for (int k = 0; k < 14; k++) lut[k] = solid != 255 ? solid : map[k];
@@ -416,16 +422,12 @@ static void genStage() {
         spawnEn(E_TURRET, x, groundAt(x) - 3);
     }
     for (int k = 0; k < PLR.worms; k++) if (Enemy *e = spawnEn(E_WORM, 500 + k * 700, 100)) e->hp = 12;
-    for (int i = 0; i < 120; i++) {                                           // the scanner's ground line
-        int m = 127;
-        for (int x = i * 16; x < i * 16 + 16; x += 4) m = m < groundAt(x) ? m : groundAt(x);
-        scanY[i] = (uint8_t)(9 + (m - TOP) * 6 / 112);
-    }
     buildTile();
     memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
     placeLanderOnPad(startPadX);
     cam = clampi(LX() - 64, 0, W - 128);
     spawnT = 150; endT = 0; lightT = 0; warnT = 0;
+    for (auto &t : topsAt) t = -9999;                              // a new world: the layers' tops are made afresh
     wxLvl = (uint8_t)rnd(4);
 #ifdef SL_STORM
     wxLvl = 3;                                                     // a perf test: the worst weather
@@ -1033,8 +1035,11 @@ static void drawWeather() {
 static uint8_t topA[4][128];                       // each layer's top per screen column: far, mid, near, ground
 
 static void drawSky() {
-    // a dithered gradient: SKY0 above, SKY1 lower down, then SKY1 into FAR towards the horizon (a haze)
-    for (int y = TOP; y < 128; y++) {
+    // a dithered gradient: SKY0 above, SKY1 lower down, then SKY1 into FAR towards the horizon (a haze); only down to the
+    // far hills' lowest point, as everything under it is covered
+    int low = TOP;
+    for (int x = 0; x < 128; x++) if (topA[0][x] > low) low = topA[0][x];
+    for (int y = TOP; y < low; y++) {
         const int lv = (y - TOP) * 7 / 80;
         const uint8_t s0 = (C_SKY0 << 4) | C_SKY0, s1 = (C_SKY1 << 4) | C_SKY1, d01 = (C_SKY1 << 4) | C_SKY0, d10 = (C_SKY0 << 4) | C_SKY1;
         const uint8_t f1 = (C_FAR << 4) | C_SKY1, f2 = (C_SKY1 << 4) | C_FAR;
@@ -1110,9 +1115,16 @@ static void drawSkyObjects() {
 // a layer's colours: its own, a lighter one for slopes facing the light, a darker one for the others
 static const uint8_t LBODY[3] = { C_FAR, C_MID, C_NEAR }, LLIT[3] = { C_SKY1, C_FAR, C_MID }, LDARK[3] = { C_MID, C_NEAR, C_GNDD };
 
+// each layer's tops (3 the ground) are kept from frame to frame: when the camera moves they slide along and only the
+// columns coming into view are worked out (the far layer, at 1/8 of the speed, mostly does not move at all)
 static void layerTops(int L) {
-    const int lc = cam >> (3 - L);
-    for (int x = 0; x < 128; x++) topA[L][x] = (uint8_t)clampi(layerH(L, lc + x), TOP, 127);
+    const int lc = L == 3 ? cam : cam >> (3 - L), d = lc - topsAt[L];
+    if (!d) return;
+    int x0 = 0, x1 = 128;
+    if (d > 0 && d < 128) { memmove(topA[L], topA[L] + d, 128 - d); x0 = 128 - d; }
+    else if (d < 0 && d > -128) { memmove(topA[L] - d, topA[L], 128 + d); x1 = -d; }
+    for (int x = x0; x < x1; x++) topA[L][x] = (uint8_t)clampi(L == 3 ? groundAt(lc + x) : layerH(L, lc + x), TOP, 127);
+    topsAt[L] = lc;
 }
 
 // fill one layer's columns from its top down to the next layer's top: slope lighting and a stone texture
@@ -1255,13 +1267,13 @@ static void drawPad(int px, bool base) {
     pset(sx - 1, gy - 7, lamp); pset(sx + 40, gy - 7, lamp);
     if (base) {                                                     // the fuel pump
         const int fx = baseRight ? sx + 42 : sx - 6;
-        R(fx, gy - 9, 4, 9, C_GOLD); R(fx, gy - 9, 4, 1, C_WHITE); R(fx + 1, gy - 6, 2, 2, (lst == 1 && onPad == 2 && (frameNo & 4)) ? C_GREEN : C_INK);
+        blit(C_PUMP, fx, gy - 9, false);
+        if (lst == 1 && onPad == 2 && (frameNo & 4)) R(fx + 1, gy - 6, 2, 2, C_GREEN);                // pumping
         gfx_text(sx + 8, gy + 4, T(MS_BASE), C_GOLD);
     } else {                                                        // a launch gantry
         const int gx = baseRight ? sx - 10 : sx + 44;
-        R(gx, gy - 30, 1, 30, C_STEEL); R(gx + 5, gy - 30, 1, 30, C_STEEL);
-        for (int y = gy - 30; y < gy; y += 5) { R(gx, y, 6, 1, C_STEEL); pset(gx + 2 + ((y >> 2) & 1), y + 2, C_STEEL); }
-        pset(gx + 2, gy - 32, (frameNo & 16) ? C_RED : C_STEEL);
+        blit(C_GANTRY, gx, gy - 32, false);
+        if (frameNo & 16) pset(gx + 2, gy - 32, C_STEEL);
     }
 }
 
@@ -1597,7 +1609,7 @@ static void drawEnemies() {
             for (int k = 0; k < e.cargo && e.st < 3; k++) pset(sx - 4 + k * 2, sy - 3, (frameNo + k * 4) & 8 ? C_WHITE : C_GOLD);
             break;
         case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid); break;
-        case E_MINE: blit((frameNo & 4) ? S_MINE0 : S_MINE1, sx - 4, sy - 4, false, solid); break;
+        case E_MINE: blit((frameNo & 4) ? C_MINE0 : C_MINE1, sx - 4, sy - 4, false, solid); break;
         case E_WORM: {
             const int gy = groundAt(e.x >> 4);
             if (e.st == 0) {                                            // the sand heaves and ripples above it
@@ -1618,7 +1630,7 @@ static void drawEnemies() {
         case E_TURRET: {
             const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);
             for (int k = 0; k < 5; k++) pset(sx + dx * k / 4, sy - 4 - k, C_STEEL);
-            blit(S_TURRET, sx - 6, sy - 4, false, solid);
+            blit(C_TURRET, sx - 6, sy - 4, false, solid);
             break;
         }
         }
@@ -1629,7 +1641,7 @@ static void drawLander() {
     if (lst == 2) return;
     if (invT && (frameNo & 2) && lst != 1) return;
     const int sx = LX() - cam, sy = LY();
-    const CSpr &s = gear ? *LANDER[absi(ang)] : *LANDER_UP[absi(ang)];
+
     if (thrusting) {                                                // the flame, along the hull's axis
         int nx, ny;
         hullPt(0, 9, nx, ny);
@@ -1649,7 +1661,8 @@ static void drawLander() {
             for (int d = -1; d <= 1; d += 2) { const int x = sx + d * rr; pset(x, y, c); if (rr > 4) { pset(x - d, y - 1, c); if ((x + frameNo) & 1) pset(x + d, y - 2, C_GND); } }
         }
     }
-    blit(s, sx - 11, sy - 11, ang < 0);
+    const int a = absi(ang);
+    if (!gear) blit(*LANDER_UP[a], sx - 11, sy - 11, ang < 0); else if (a < 3) blit(*LANDER[a], sx - 11, sy - 11, ang < 0); else blit(*LANDER_STEEP[a - 3], sx - 11, sy - 11, ang < 0);
     if (absi(ang) < 3) {                                             // the gun pod
         const int gx = sx + facing * 7, gy = sy + 1;
         pset(gx, gy, C_STEEL); pset(gx + facing, gy, gunCd ? ((frameNo & 1) ? C_WHITE : C_GOLD) : C_SILVER); pset(gx, gy + 1, (frameNo & 2) && gunCd ? C_SILVER : C_STEEL);
@@ -1706,7 +1719,7 @@ static void drawHud() {
     text35(127 - text35Width(s), 1, s, C_WHITE);
     // the scanner: the whole stage, 16 px to a dot
     R(3, 8, 122, 1, C_STEEL);
-    for (int i = 0; i < 120; i++) pset(4 + i, scanY[i], C_GNDD);
+    for (int i = 0; i < 120; i++) { const int m = hgt[i * 4] < hgt[i * 4 + 2] ? hgt[i * 4] : hgt[i * 4 + 2]; pset(4 + i, 9 + ((m - TOP) * 7 >> 7), C_GNDD); }   // the ground line
     const int c0 = 4 + cam / 16;
     R(c0, 9, 1, 6, C_STEEL); R(c0 + 8, 9, 1, 6, C_STEEL);
     R(4 + (basePadX + 20) / 16 - 1, 13, 3, 2, C_ACC);
@@ -1724,8 +1737,7 @@ static void drawWorld() {
     if (shake) cam += (frameNo & 1) ? (shake >> 2) : -(shake >> 2);
     cam = clampi(cam, 0, W - 128);
     dbg::profStart();
-    for (int L = 0; L < 3; L++) layerTops(L);
-    for (int x = 0; x < 128; x++) topA[3][x] = (uint8_t)clampi(groundAt(cam + x), TOP, 127);
+    for (int L = 0; L < 4; L++) layerTops(L);
     dbg::prof(0);
     drawSky();
     dbg::prof(1);
@@ -1770,8 +1782,7 @@ static void drawLogo(int y) { blit(C_LOGO_STARLIFT, 16, y, false); }
 static void drawBeam(int ux, int uy, int gy);
 static uint8_t menuItems(uint8_t *it);
 static void drawTitleScene() {
-    for (int L = 0; L < 3; L++) layerTops(L);
-    for (int x = 0; x < 128; x++) topA[3][x] = (uint8_t)clampi(groundAt(cam + x), TOP, 127);
+    for (int L = 0; L < 4; L++) layerTops(L);
     drawSky(); drawSkyObjects();
     for (int L = 0; L < 3; L++) { drawLayerCols(L); drawStructures(L); }
     drawGroundCols();
@@ -1828,13 +1839,11 @@ static void drawHelp() {
         const uint8_t *r = card::at(CARD_TXT + HELP_OFF[i]);
         if (r && r[0] == helpPage) text35(r[1], r[2], (const char *)r + 4, r[3]);
     }
-    if (helpPage == 0) blit(*LANDER[(frameNo >> 5) % 3], 52, 74, false);
-    else if (helpPage == 1) { blitBC(S_MAN_WAVE1, 40, 116, false); blitBC(S_MAN_CHEER, 60, 116, true, 255, manMap(1)); blitBC(S_MAN_STAND, 80, 116, false, 255, manMap(2)); }
-    else {
+    if (helpPage == 2) {
         blit(*SAUCER[(frameNo >> 2) & 3], 8, 24, false);
         blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, 12, 48, false);
-        blit(S_MINE0, 15, 68, false);
-        blit(S_TURRET, 13, 84, false);
+        blit(C_MINE0, 15, 68, false);
+        blit(C_TURRET, 13, 84, false);
     }
     char s[8];
     text35(9, 114, fmt(s, "", helpPage + 1, T(MS_3)), C_STEEL);
@@ -2150,7 +2159,11 @@ void setup() {
     chgame.setFrameRate(30);
     SaveData dsv;
     uint8_t flag = 0;
+#ifdef SL_SLIM
+    if (false) {
+#else
     if (save::load(MAGIC, 1, dsv, &flag)) {
+#endif
         hiScore = dsv.hi;
         if (flag == 1 && dsv.stage < 16) hasSave = true;
         sv = dsv;
@@ -2175,8 +2188,10 @@ void loop() {
     gfx_wait();
     if (saveDue) {
         saveDue = false;
+#ifndef SL_SLIM                                                   // (a board perf build does not save)
         save::store(MAGIC, 1, sv, saveFlag ? 1 : 0);
         hasSave = saveFlag && save::available();
+#endif
         if (hasSave) titleSel = 0;
     }
     card::frame();
