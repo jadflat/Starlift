@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5 (2026-10-27)
+
+- Difficulty: Easy, Normal or Hard, on the title menu and the pause menu (enemies, fire, hull, fuel, landing, quota).
+- A who's-who card before each stage: what it holds and what to do about each (rescue, shoot, avoid, lasers only, harmless).
+- To make room: the rocket-borne signs and the Moon's meteors are gone; a simpler windsock.
+
 ## 0.4 (2026-10-27)
 
 - Heavier: two and a half times the worlds' gravity, a faster fall, a stronger engine to match.

@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.4"
+#define SL_VERSION "0.5"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -76,14 +76,15 @@ static Pack PK;
 static Planet PLR;                                         // the world being shown, loaded from the card (CARD_PLANET)
 static_assert(sizeof(Planet) == PLANET_LEN, "Planet must match tools/make_card.py");
 
-static void adBoard(int x, int y, const char *t, bool rockets, uint32_t h);
+static void adBoard(int x, int y, const char *t, uint32_t h);
 static void drawPlants();
+static inline uint8_t shMax();
+static void menuList(const uint8_t *it, int n, int sel, int x, int y);
 static bool busyAt(int x);
 static void drawCritters();
-static void flag(int x, int gy, bool alien);
+static void flag(int x, int gy, uint8_t kind);
 static void drawAlienBase();
 static void drawDiner();
-static void drawSigns();
 
 // ---- state ------------------------------------------------------------------------------------------------------
 #ifdef SL_SLIM                                     // a board perf build: a little RAM back for the debug image
@@ -120,8 +121,7 @@ static int alienX, burgerX;                               // the aliens' bucket 
 static uint8_t ticket, tubeT;                             // the diner's next order number; the bucket's tubes glowing
 struct Critter { int16_t x, y; int8_t vx; uint8_t kind, t; };   // background wildlife: x px, y px
 static Critter crit[CRITS];
-struct Sign { int16_t x, y; int8_t vx; uint8_t ad, on; };      // an advert flying on little rockets
-static Sign signs[2];
+
 static int frameNo, timer, cam, shake, lightT, endT, warnT, spawnT;
 static int windV;                                         // the wind's push on the lander, 1/256 px a frame
 static uint32_t rng = 1;
@@ -142,6 +142,7 @@ static uint8_t banner, bannerT;                            // a message (MS_...)
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
 static uint8_t tripN, killT, kills, flashT, chainMask, ledges;   // chainMask: the camps visited this trip; ledges: the camps on high ledges (double points)
 static uint8_t tripNx;               // colonists home this landing; the kill chain; the screen flash
+static uint8_t diff = 1;                                   // 0 easy, 1 normal, 2 hard (saved)
 static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
 static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
 static bool newHi;
@@ -358,7 +359,7 @@ static void placeLanderOnPad(int padX) {
     lx = (int32_t)(padX + 20) << 8;
     ly = (int32_t)(groundAt(padX + 20) - 8) << 8;
     lvx = lvy = 0; ang = 0; lst = 1; gear = 1; onPad = padX == basePadX ? 2 : 1;
-    fuel = FUEL_MAX; shield = 3; deadT = 0; invT = 60; dryT = 0;
+    fuel = FUEL_MAX; shield = shMax(); deadT = 0; invT = 60; dryT = 0;
     facing = (int8_t)(baseRight ? 1 : -1);
     if (onPad == 2) facing = (int8_t)-facing;
 }
@@ -402,7 +403,7 @@ static void genStage() {
     }
     memset(men, 0, sizeof men);
     nMen = (uint8_t)clampi(8 + stage, 8, MEN);
-    quota = (uint8_t)((nMen * clampi(40 + stage * 3, 40, 85) + 99) / 100);   // two in five at first, more each stage
+    quota = (uint8_t)((nMen * clampi(25 + diff * 15 + stage * 3, 25, 90) + 99) / 100);   // two in five at first, more each stage
     memset(items, 0, sizeof items);
     for (int k = 0; k < clampi((stage + 2) / 3, 0, 5); k++) {                // things to pick up: supplies, repairs, fuel, now and then an engine part
         int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
@@ -439,7 +440,7 @@ static void genStage() {
 #ifdef SL_STORM
     wxLvl = 3;                                                     // a perf test: the worst weather
 #endif ticket = 0; tubeT = 0;
-    memset(crit, 0, sizeof crit); memset(signs, 0, sizeof signs);
+    memset(crit, 0, sizeof crit);
 }
 
 // ---- effects ------------------------------------------------------------------------------------------------------
@@ -463,6 +464,7 @@ static NOINL void addScore(int v, int x, int y) {
     if (x >= 0) for (auto &q : pops) if (!q.t) { q = { (int16_t)x, (int16_t)y, (uint16_t)v, 30 }; break; }
 }
 static NOINL void say(uint8_t id, uint8_t t = 50, int num = -1) { banner = id; bannerT = t; bannerNum = (int8_t)num; }
+static inline uint8_t shMax() { return diff ? 4 - diff : 5; }   // hits the hull takes: 5 easy, 3 normal, 2 hard
 static int gHund() { const int g = PLR.grav + (sector ? PLR.grav / 8 : 0); return g * 100 / 64; }   // gravity in hundredths of a G
 
 // ---- save ---------------------------------------------------------------------------------------------------------
@@ -470,14 +472,14 @@ static const uint32_t MAGIC = save::magic("SLFT");
 static SaveData sv;
 static bool saveDue, saveFlag, hasSave;
 static void saveProgress(bool inGame) {
-    sv = { hiScore, score, (uint8_t)stage, (uint8_t)lives, musicV, fxV };
+    sv = { hiScore, score, (uint8_t)stage, (uint8_t)lives, musicV, fxV, diff };
     saveFlag = inGame; saveDue = true;
 }
 
 static void newStage() {
     planet = stage & 7;
     loadReq = true;
-    state = INTRO; timer = 110;
+    state = INTRO; timer = 210;                                            // the stage card, then who's who
     synth::music(1 + planet);
 }
 static void newGame() {
@@ -523,7 +525,7 @@ static void hullPt(int dx, int dy, int &x, int &y) {
 static void touchDown() {
     const int x = LX();
     const int gl = groundAt(x - 7), gr = groundAt(x + 7);
-    const bool level = absi(gl - gr) <= 2, upright = absi(ang) <= 1, soft = lvy <= 230 && absi(lvx) <= 140;
+    const bool level = absi(gl - gr) <= 2, upright = absi(ang) <= 1, soft = lvy <= 270 - diff * 40 && absi(lvx) <= 170 - diff * 30;
     if (!gear || !level || !upright || !soft) {
         if (!gear) say(MS_GEAR_UP, 60);
         else if (!level) say(MS_TOO_STEEP, 60);
@@ -580,7 +582,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
                     it.st = it.kind == IT_SUPPLY ? 2 : 0;
                     sfx(S_CATCH);
                     for (int k = 0; k < 8; k++) part(it.x, groundAt(it.x) - 3, rnd(20) - 10, -rnd(20), 16, k & 1 ? C_GOLD : C_WHITE);
-                    if (it.kind == IT_REPAIR) { shield = 3; say(MS_HULL_REPAIRED); }
+                    if (it.kind == IT_REPAIR) { shield = shMax(); say(MS_HULL_REPAIRED); }
                     else if (it.kind == IT_FUEL) { fuel = (uint16_t)(fuel + FUEL_MAX / 2 > FUEL_MAX ? FUEL_MAX : fuel + FUEL_MAX / 2); say(MS_FUEL_CELL); }
                     else if (it.kind == IT_ENGINE) { if (engineUp < 3) engineUp++; say(MS_ENGINE_UP); }
                     else say(MS_SUPPLIES);
@@ -589,7 +591,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
                 for (auto &it : items) if (it.st == 2) { it.st = 0; addScore(500 * (sector + 1), doorX, groundAt(doorX) - 20); say(MS_DELIVERED); sfx(S_SAVED); }
                 if (fuel < FUEL_MAX) { fuel = (uint16_t)(fuel + 10 > FUEL_MAX ? FUEL_MAX : fuel + 10); if ((frameNo & 3) == 0) sfx(S_FUEL); }
-                if ((frameNo & 31) == 0 && shield < 3) shield++;
+                if ((frameNo & 31) == 0 && shield < shMax()) shield++;
                 if (seats && ++unloadT >= 12) {
                     unloadT = 0;
                     for (auto &m : men) if (m.st == M_ABOARD) {
@@ -627,7 +629,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
         if (LY() < TOP) t = LY() > -24 ? t * (LY() + 24) / (TOP + 24) : 0;            // above the screen the air thins fast: no hanging up there
         lvx += (int16_t)((t * 3 * sinA(ang)) >> 11);                          // the push sideways half as strong again: tilting carries you across
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
-        if (thr) fuel--;
+        if (thr && (diff || (frameNo & 1))) fuel--;                         // (easy: half the fuel)
         if (fuel == FUEL_MAX / 4) { sfx(S_LOW); say(MS_LOW_FUEL, 50); }
         if (!fuel) say(MS_FUEL_EMPTY, 60);
         if (frameNo & 1) { int nx, ny; hullPt(0, 10, nx, ny); part(nx, ny, (-sinA(ang) >> 5) + rnd(5) - 2, (cosA(ang) >> 5) + rnd(3), 10, (frameNo & 2) ? C_STEEL : C_SILVER); }
@@ -816,14 +818,14 @@ static void updateEnemies() {
     }
     bool idle = false;
     for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE) idle = true;
-    const int want = clampi(1 + stage / 2, 1, 6);
+    const int want = clampi(diff + stage / 2, 1, 5 + diff);
     if (spawnT) spawnT--;
     else if (fliers < want) {
         const int side = rnd(2) ? 1 : -1;
         const int x = clampi(cam + 64 + side * (150 + rnd(110)), 20, W - 20);
         uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) ? E_STINGER : E_MINE);
         if (Enemy *e = spawnEn(k, x, 28 + rnd(30))) { if (k == E_UFO) { sfx(S_UFO); } e->vx = (int8_t)(-side * 8); }
-        spawnT = clampi(240 - stage * 8, 90, 240);                   // enemies come spaced out: time for a rescue between them
+        spawnT = clampi(240 - stage * 8, 90, 240) * (4 - diff) / 3;                   // enemies come spaced out: time for a rescue between them
     }
     for (int ei = 0; ei < ENS; ei++) {
         Enemy &e = en[ei];
@@ -901,7 +903,7 @@ static void updateEnemies() {
             const int tx = X + (ex < X ? -48 : 48), ty = Y - 6 + isin(e.t * 3) / 16;
             e.vx = (int8_t)clampi(e.vx + sgn(tx - ex), -14 - sector * 4, 14 + sector * 4);
             e.vy = (int8_t)clampi(e.vy + sgn(ty - ey), -10, 10);
-            const int rate = clampi(130 - planet * 6 - sector * 20, 50, 130);
+            const int rate = clampi(130 - planet * 6 - sector * 20, 50, 130) * (4 - diff) / 3;
             if (lst != 2 && absi(X - ex) < 110 && (e.t % rate) == 0) eshot(ex, ey, X, Y, 22 + sector * 6, 0);
             break;
         }
@@ -1006,7 +1008,7 @@ static void updateShots() {
 
 // ---- weather --------------------------------------------------------------------------------------------------------
 static uint8_t wxX[WXN], wxY[WXN];
-static int lastCam, meteorT, meteorX, meteorY;
+static int lastCam;
 // rain, (ash,) drizzle, acid: how fast a streak falls, its head and its tail
 static const uint8_t FALL[5][3] = { { 5, C_SILVER, C_STEEL }, { 0, 0, 0 }, { 2, C_GNDL, C_SKY1 }, { 0, 0, 0 }, { 4, C_GREEN, C_GREEN } };
 static void updateWeather() {
@@ -1037,8 +1039,6 @@ static void updateWeather() {
         wxX[i] = (uint8_t)x; wxY[i] = (uint8_t)y;
     }
     if (!lightT && wxLvl >= 2 && p.weather != WX_SNOW && p.weather != WX_GLINT && p.weather != WX_METEOR && rnd(wxLvl == 3 ? 150 : 500) == 0) { lightT = 8; sfx(S_BOOM); }   // lightning
-    if (p.weather == WX_METEOR && !meteorT && rnd(120) == 0) { meteorT = 20; meteorX = 20 + rnd(90); meteorY = 18 + rnd(20); }
-    if (meteorT) meteorT--;
 }
 
 static void drawWeather() {
@@ -1143,7 +1143,6 @@ static void drawSkyObjects() {
             }
         }
     }
-    if (meteorT) for (int k = 0; k < 6; k++) pset(meteorX + (20 - meteorT) * 3 - k, meteorY + (20 - meteorT) - k / 2, k < 2 ? C_WHITE : k < 4 ? C_SILVER : C_STEEL);
     if (lightT > 4) {                                          // a lightning bolt from the clouds
         int x = 30 + (frameNo * 37) % 70;
         for (int y = TOP + 8; y < 80; y++) { x += ((hash((uint32_t)(y + frameNo)) & 3) == 0) - ((hash((uint32_t)(y * 3 + frameNo)) & 3) == 0); pset(x, y, PLR.weather == WX_ACID ? C_GREEN : C_WHITE); }
@@ -1287,7 +1286,7 @@ static void drawStructures(int L) {
             const char *t = PLR.ads[(h >> 20) % 3];
             const int w = text35Width(t) + 6;
             R(sx + 3, base - 16, 1, 16, LDARK[L]); R(sx + w - 4, base - 16, 1, 16, LDARK[L]);
-            adBoard(sx, base - 27, t, false, h);
+            adBoard(sx, base - 27, t, h);
             continue;
         }
         structure((int)((h >> 12) % 6), sx, base, L, h);
@@ -1318,12 +1317,8 @@ static void drawPad(int px, bool base) {
 static void windsock(int x, int gy) {
     if (x < -12 || x > 136) return;
     R(x, gy - 12, 1, 12, C_STEEL);
-    const int dir = windV < 0 ? -1 : 1, len = 2 + absi(windV) / 32, droop = 5 - len / 2;
-    for (int k = 1; k <= len; k++) {
-        const int y = gy - 12 + (droop > 0 ? k * droop / len : 0) + ((isin(frameNo * 8 + k * 30) > 80) ? 1 : 0);
-        const uint8_t c = ((k + 1) >> 1) & 1 ? C_RED : C_WHITE;
-        pset(x + dir * k, y, c); if (k < len - 1) pset(x + dir * k, y + 1, c);
-    }
+    const int dir = windV < 0 ? -1 : 1, len = 2 + absi(windV) / 32;
+    for (int k = 1; k <= len; k++) pset(x + dir * k, gy - 12 + (len < 4 ? k / 2 : 0), ((k + 1) >> 1) & 1 ? C_RED : C_WHITE);   // stiff in a gale, drooping in a breeze
 }
 
 static void drawMoonTableau() {
@@ -1332,18 +1327,7 @@ static void drawMoonTableau() {
     const int fxw = baseRight ? startPadX + 74 : startPadX - 34, fx = fxw - cam;
     if (fx < -60 || fx > 180) return;
     const int gy = groundAt(fxw);
-    R(fx, gy - 24, 1, 24, C_SILVER);
-    R(fx, gy - 24, 13, 1, C_SILVER);
-    static const int8_t WAVE[8] = { 0, 0, 1, 1, 1, 0, 0, -1 };
-    for (int c = 0; c < 12; c++) {
-        const int off = c < 2 ? 0 : WAVE[(c + (frameNo >> 2)) & 7] * (c > 6 ? 2 : 1) / 1;
-        for (int r = 0; r < 7; r++) {
-            uint8_t col = (r & 1) ? C_WHITE : C_RED;
-            if (c < 5 && r < 4) col = (((c + r) & 1) && c > 0 && r > 0 && r < 3) ? C_WHITE : C_ACC;   // the stars on blue
-            if (c >= 10 && ((frameNo >> 2) & 1) && r == 6) continue;
-            pset(fx + 1 + c, gy - 23 + r + off, col);
-        }
-    }
+    flag(fx, gy, 2); R(fx, gy - 25, 13, 1, C_SILVER);                      // the flag, held out by its crossbar
     blitBC(C_DESCENT, fx + (baseRight ? 28 : -20), groundAt(fxw + (baseRight ? 28 : -20)), !baseRight);   // the descent stage left behind
     for (int wx = fxw - 70; wx < fxw + 70; wx += 3) {               // boot prints from the pad to the flag and around
         const int s = wx - cam;
@@ -1392,17 +1376,16 @@ static void drawGroundThings() {
         uint8_t mp[14];                                                  // the base in this world's colours
         memcpy(mp, MAP, 14); mp[5] = PLR.basec;
         blit(PK.base, bx, gy - PK.base.h + 1, !baseRight, 255, mp);
-        flag(baseRight ? bx - 4 : bx + 46, gy, false);
+        flag(baseRight ? bx - 4 : bx + 46, gy, 0);
     }
     drawAlienBase();
     drawItems();
     drawDiner();
     if (planet == 0) drawMoonTableau();
-    drawSigns();
 }
 
 // a flag on a pole, rippling: the colony's (a gold star) or the aliens' (an eye)
-static void flag(int x, int gy, bool alien) {
+static void flag(int x, int gy, uint8_t kind) {
     if (x < -14 || x > 130) return;
     R(x, gy - 24, 1, 24, C_SILVER); pset(x, gy - 25, C_GOLD);
     static const int8_t WAVE[8] = { 0, 0, 1, 1, 1, 0, 0, -1 };
@@ -1410,7 +1393,8 @@ static void flag(int x, int gy, bool alien) {
         const int off = c > 1 ? WAVE[(c + (frameNo >> 2)) & 7] : 0;
         for (int r = 0; r < 7; r++) {
             uint8_t col;
-            if (alien) {
+            if (kind == 2) col = (c < 5 && r < 4) ? ((((c + r) & 1) && c && r && r < 3) ? C_WHITE : C_ACC) : (r & 1) ? C_WHITE : C_RED;   // the stars and stripes
+            else if (kind) {
                 const int d = (c - 5) * (c - 5) + (r - 3) * (r - 3) * 2;
                 col = d == 0 ? C_INK : d < 3 ? C_RED : d < 9 ? C_WHITE : C_GREEN;
             } else {
@@ -1445,7 +1429,7 @@ static void drawAlienBase() {
         R(bx + TX[t], y, 2, 3, C_GREEN); pset(bx + TX[t], y + 1, C_WHITE);
     }
     if (tubeT && (frameNo & 2)) R(bx + 6, gy - COLL_TOP[PLR.coll] + 1, 28, 1, C_WHITE);       // a splash as one goes in
-    flag(bx + 39, gy, true);
+    flag(bx + 39, gy, 1);
 }
 
 // the Moon's drive-through diner: a lit neon sign, an open sign, arrows down the lane
@@ -1521,8 +1505,8 @@ static void drawCritters() {
     }
 }
 
-// adverts for each world's goods: neon boards on the hills, and signs flown about on little rockets
-static void adBoard(int x, int y, const char *t, bool rockets, uint32_t h) {
+// adverts for each world's goods: neon boards on the hills
+static void adBoard(int x, int y, const char *t, uint32_t h) {
     const int w = text35Width(t) + 6, ht = 11;
     if (x > 128 || x + w < 0) return;
     R(x, y, w, ht, C_INK);
@@ -1531,25 +1515,6 @@ static void adBoard(int x, int y, const char *t, bool rockets, uint32_t h) {
     const int ph = (frameNo + (int)(h & 255)) & 63;
     const bool on = (h & 4) ? ph < 44 || (ph & 4) : true;             // some boards blink off and on, the rest pulse
     if (on && (hash((uint32_t)(frameNo >> 1) + h) & 63) != 0) text35(x + 3, y + 3, t, (ph & 32) ? C_ACC : (h & 8) ? C_GOLD : C_WHITE);   // neon, flickering now and then
-    if (rockets) for (int k = 0; k < 2; k++) {
-        const int rx = k ? x + w - 4 : x + 2;
-        R(rx, y + ht, 2, 3, C_STEEL); pset(rx, y + ht, C_SILVER);
-        const int f = 1 + ((frameNo + rx) & 3);
-        for (int j = 0; j < f; j++) pset(rx + (j & 1), y + ht + 3 + j, j ? C_RED : C_GOLD);
-    }
-}
-static void updateSigns() {
-    for (auto &g : signs) {
-        if (!g.on) {
-            if (rnd(500) == 0) { const bool left = rnd(2); g.on = 1; g.ad = (uint8_t)rnd(3); g.x = (int16_t)(cam + (left ? -64 : 150)); g.vx = (int8_t)(left ? 1 : -1); g.y = (int16_t)(TOP + 8 + rnd(20)); }
-            continue;
-        }
-        if (frameNo & 1) g.x = (int16_t)(g.x + g.vx);
-        if (g.x < cam - 220 || g.x > cam + 350) g.on = 0;
-    }
-}
-static void drawSigns() {
-    for (const auto &g : signs) if (g.on) adBoard(g.x - cam, g.y + isin(frameNo * 4 + g.ad * 50) / 64, PLR.ads[g.ad], true, g.ad * 77u);
 }
 
 static void drawBeam(int ux, int uy, int gy) {                       // the tractor beam: a shimmering green cone
@@ -1758,7 +1723,7 @@ static void drawHud() {
     text35(35, 1, fmt(q, "", nSaved, "/", quota), nSaved >= quota ? C_GREEN : C_GOLD);
     for (int i = 0; i < SEATS; i++) { const uint8_t c = i < seats ? C_WHITE : C_STEEL; R(57 + i * 4, 2, 3, 4, c); pset(58 + i * 4, 3, i < seats ? C_GOLD : C_INK); }
     // shield and lives
-    for (int i = 0; i < 3; i++) R(90 + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
+    for (int i = 0; i < shMax(); i++) R(90 + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
     char s[12];
     fmt(s, "", score);
     text35(127 - text35Width(s), 1, s, C_WHITE);
@@ -1846,19 +1811,28 @@ static void drawTitle() {
     textCS(36, T(MS_RESCUE_THE_COLONISTS), C_WHITE);
     char s[24];
     if (hiScore) { fmt(s, T(MS_HI), hiScore); textCS(2, s, C_SILVER); }
-    uint8_t it[4];
+    uint8_t it[5];
     const uint8_t n = menuItems(it);
-    R(30, 84, 68, n * 9 + 5, C_INK); R(30, 84, 68, 1, C_GOLD); R(30, 84 + n * 9 + 4, 68, 1, C_GOLD);
-    for (uint8_t i = 0; i < n; i++) text35(40, 87 + i * 9, T(it[i]), titleSel == i ? C_WHITE : C_STEEL);
-    text35(33, 87 + titleSel * 9, T(MS_X52), (frameNo & 8) ? C_GOLD : C_RED);
+    R(22, 74, 84, n * 9 + 5, C_INK); R(22, 74, 84, 1, C_GOLD); R(22, 74 + n * 9 + 4, 84, 1, C_GOLD);
+    menuList(it, n, titleSel, 32, 77);
     text35(2, 122, "V" SL_VERSION, C_SILVER);
 #endif
+}
+
+static NOINL void menuList(const uint8_t *it, int n, int sel, int x, int y) {
+    for (int i = 0; i < n; i++) {
+        char b[32];
+        if (it[i] == MS_DIFF) fmt(b, T(MS_DIFF), -1, T((uint8_t)(MS_EASY + diff))); else fmt(b, T(it[i]));
+        text35(x, y + i * 9, b, sel == i ? C_WHITE : C_STEEL);
+    }
+    text35(x - 7, y + sel * 9, ">", (frameNo & 8) ? C_GOLD : C_RED);
 }
 
 static uint8_t menuItems(uint8_t *it) {
     uint8_t n = 0;
     if (hasSave) it[n++] = MS_CONTINUE;
     it[n++] = hasSave ? MS_NEW_GAME : MS_START;
+    it[n++] = MS_DIFF;
     it[n++] = MS_HOW_TO_PLAY;
     it[n++] = MS_OPTIONS;
     return n;
@@ -1876,8 +1850,6 @@ static void drawHelp() {
         const uint8_t *r = o ? card::at(CARD_TXT + (uint32_t)(o[0] | o[1] << 8)) : nullptr;
         if (r && r[0] == helpPage) text35(r[1], r[2], (const char *)r + 4, r[3]);
     }
-    char s[8];
-    text35(9, 114, fmt(s, "", helpPage + 1, T(MS_3)), C_STEEL);
     if (frameNo & 16) text35(118 - text35Width("A: NEXT  B: BACK"), 114, T(MS_A_NEXT_B_BACK), C_SILVER);
 #endif
 }
@@ -1901,6 +1873,23 @@ static void drawIntro() {
 #ifndef SL_SLIM
     panel(30, 68);
     char s[28];
+    if (timer <= 100) {                                                    // who's who
+        panel(18, 106);
+        textCS(21, T(MS_WHO), C_GOLD);
+        bool has[7] = { true, true, true, true, false, false, false };    // UFO, stinger, mine come anywhere
+        for (const auto &e : en) if (e.kind) has[e.kind] = true;
+        int y = 32;
+        auto row = [&](uint8_t msg, uint8_t col) { text35(32, y + 3, T(msg), col); y += 13; };
+        blitBC(S_MAN_WAVE1, 17, y + 11, false); row(MS_R_COLONIST, C_GREEN);
+        blit(*SAUCER[(frameNo >> 2) & 3], 6, y + 2, false); row(MS_R_UFO, C_RED);
+        blit(C_SNATCH0, 10, y, false); row(MS_R_STINGER, C_RED);
+        blit(C_MINE0, 13, y + 1, false); row(MS_R_MINE, C_GOLD);
+        if (has[E_TURRET]) { blit(C_TURRET, 11, y + 3, false); row(MS_R_TURRET, C_RED); }
+        if (has[E_WORM]) { R(11, y + 4, 13, 6, C_GND); R(13, y + 2, 9, 3, C_INK); for (int k = 14; k < 22; k += 2) pset(k, y + 2, C_WHITE); row(MS_R_WORM, C_RED); }
+        if (has[E_MOTHER]) { blit(C_MOTHERSHIP, -7, y, false); row(MS_R_MOTHER, C_RED); }
+        if (PLR.fly) { blitBC(PK.crit[0][(frameNo >> 3) & 1], 17, y + 9, false); row(MS_R_WILD, C_SILVER); }
+        return;
+    }
     fmt(s, T(MS_STAGE_N), stage + 1);
     textC(34, s, C_SILVER);
     textC(44, PLR.name, C_GOLD);
@@ -1916,11 +1905,11 @@ static void drawIntro() {
 static void drawPause() {
 #ifndef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
     drawWorld();
-    R(24, 40, 80, 50, C_INK);
-    R(24, 40, 80, 1, C_GOLD); R(24, 89, 80, 1, C_GOLD);
+    R(16, 40, 96, 54, C_INK);
+    R(16, 40, 96, 1, C_GOLD); R(16, 93, 96, 1, C_GOLD);
     textC(44, T(MS_PAUSED), C_GOLD);
-    for (int i = 0; i < 3; i++) text35(40, 56 + i * 10, T((uint8_t)(MS_RESUME + i)), pauseSel == i ? C_WHITE : C_STEEL);
-    text35(32, 56 + pauseSel * 10, T(MS_X52), C_GOLD);
+    static const uint8_t PM[4] = { MS_RESUME, MS_DIFF, MS_SAVE_GAME, MS_QUIT };
+    menuList(PM, 4, pauseSel, 30, 54);
     if (pauseNote) textCS(96, T(pauseNote), C_GOLD);
 #endif
 }
@@ -1964,7 +1953,6 @@ static void draw() {
             textC(50, fmt(s, T(MS_SCORE), score), C_WHITE);
             textC(60, fmt(s, T(MS_BEST), hiScore), C_GOLD);
             textC(70, fmt(s, T(MS_COLONISTS_HOME), gSaved), C_GREEN);
-            textC(80, fmt(s, T(MS_REACHED_STAGE), stage + 1), C_SILVER);
             if (newHi && (frameNo & 8)) textCS(91, T(MS_NEW_HIGH_SCORE), C_GOLD);
             if (overT > 90 && (frameNo & 16)) textCS(110, T(MS_PRESS_A), C_WHITE);
         }
@@ -2052,7 +2040,7 @@ static void update() {
             planet = (planet + 1) & 7; stage = planet; loadReq = true; cam = 200;
         }
         updateWeather();
-        uint8_t it[4];
+        uint8_t it[5];
         const uint8_t n = menuItems(it);
         if (edge & 1) { titleSel = (uint8_t)((titleSel + n - 1) % n); sfx(S_GEAR); }
         if (edge & 2) { titleSel = (uint8_t)((titleSel + 1) % n); sfx(S_GEAR); }
@@ -2064,6 +2052,7 @@ static void update() {
                 sfx(S_START); newStage();
             } else if (pick == MS_HOW_TO_PLAY) { state = HELP; helpPage = 0; sfx(S_BOARD); }
             else if (pick == MS_OPTIONS) { state = OPTIONS; optSel = 0; sfx(S_BOARD); }
+            else if (pick == MS_DIFF) { diff = (uint8_t)((diff + 1) % 3); sfx(S_GEAR); sv.diff = diff; saveFlag = hasSave; saveDue = true; }
             else newGame();
         }
         break;
@@ -2097,18 +2086,20 @@ static void update() {
     }
 #endif
     case PAUSED:
-        if (edge & 1) pauseSel = (uint8_t)((pauseSel + 2) % 3);
-        if (edge & 2) pauseSel = (uint8_t)((pauseSel + 1) % 3);
-        if (edge & 12) {
+        if (edge & 1) pauseSel = (uint8_t)((pauseSel + 3) % 4);
+        if (edge & 2) pauseSel = (uint8_t)((pauseSel + 1) % 4);
+        if ((edge & 12) || (pauseSel == 1 && (edge & 48))) {
             if (pauseSel == 0) state = PLAY;
-            else if (pauseSel == 1) { saveProgress(true); pauseNote = save::available() ? MS_GAME_SAVED : MS_SAVING_IS_OFF; }
+            else if (pauseSel == 1) { diff = (uint8_t)((diff + ((edge & 16) ? 2 : 1)) % 3); if (shield > shMax()) shield = shMax(); sfx(S_GEAR); }
+            else if (pauseSel == 2) { saveProgress(true); pauseNote = save::available() ? MS_GAME_SAVED : MS_SAVING_IS_OFF; }
             else toTitle();
         }
         break;
     case INTRO:
         updateWeather(); updateCritters();
         updateCamera();
-        if (--timer <= 0 || ((edge & 4) && timer < 80)) { state = PLAY; say((stage & 3) == 3 ? MS_MOTHER : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
+        if ((edge & 4) && timer > 100) timer = 100;                       // A: on to who's who, then to play
+        else if (--timer <= 0 || ((edge & 4) && timer < 95)) { state = PLAY; say((stage & 3) == 3 ? MS_MOTHER : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
         break;
     case PLAY:
         {
@@ -2123,7 +2114,6 @@ static void update() {
         updateShots();
         updateWeather();
         updateCritters();
-        updateSigns();
         updateCamera();
         if ((nSaved + nLost >= nMen || nLost > nMen - quota) && seats == 0) {
             if (++endT > 50) {
@@ -2184,7 +2174,7 @@ void setup() {
         hiScore = dsv.hi;
         if (flag == 1) hasSave = true;
         sv = dsv;
-        musicV = dsv.musicV <= 4 ? dsv.musicV : 4; fxV = dsv.fxV <= 4 ? dsv.fxV : 4;
+        musicV = dsv.musicV <= 4 ? dsv.musicV : 4; fxV = dsv.fxV <= 4 ? dsv.fxV : 4; diff = dsv.diff <= 2 ? dsv.diff : 1;
     }
     rng = 0x9E3779B9u ^ (millis() << 1);
     for (int i = 0; i < WXN; i++) { wxX[i] = (uint8_t)rnd(160); wxY[i] = (uint8_t)(TOP + rnd(112)); }

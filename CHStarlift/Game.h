@@ -26,4 +26,4 @@ struct Enemy { int16_t x, y; int8_t vx, vy; uint8_t kind, hp, st, t, target, hit
 struct Shot { int16_t x, y; int8_t dir; uint8_t life, kind; };                         // px; kind 0 the laser, 1 the rotary cannon
 struct EShot { int16_t x, y; int8_t vx, vy; uint8_t life, kind; };                     // 1/16 px
 struct Part { int16_t x, y; int8_t vx, vy; uint8_t life, col; };                       // 1/16 px
-struct SaveData { int32_t hi, score; uint8_t stage, lives, musicV, fxV; };   // volumes 0-4
+struct SaveData { int32_t hi, score; uint8_t stage, lives, musicV, fxV, diff; };   // volumes 0-4; difficulty 0 easy, 1 normal, 2 hard
