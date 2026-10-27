@@ -1,0 +1,7 @@
+# trailer: the autopilot plays (-D SL_BOT -D SL_START=n), 600 frames recorded
+wait 60
+tap A
+wait 160
+rec start 1
+wait 600
+rec stop bot
