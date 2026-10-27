@@ -30,8 +30,9 @@ def padded(b):
 WH, GR, AC, SI, GO, RE = 1, 4, 11, 12, 14, 15
 HELP = [
     (0, 9, 24, WH, "LEFT/RIGHT  TILT"), (0, 9, 32, SI, "A           MAIN ENGINE"), (0, 9, 40, WH, "B           CANNON + LASER"),
-    (0, 9, 48, SI, "DOWN TWICE  LANDING GEAR"), (0, 9, 56, WH, "START       PAUSE MENU"), (0, 9, 64, SI, "HOLD START  CHGAME MENU"),
-    (0, 9, 80, AC, "NEWTON RULES:"), (0, 9, 88, AC, "NO BRAKES IN SPACE!"),
+    (0, 9, 48, SI, "HOLD UP     CHARGE SHOT"),
+    (0, 9, 56, WH, "DOWN TWICE  LANDING GEAR"), (0, 9, 64, SI, "START       PAUSE MENU"), (0, 9, 72, WH, "HOLD START  CHGAME MENU"),
+    (0, 9, 86, AC, "NEWTON RULES:"), (0, 9, 94, AC, "NO BRAKES IN SPACE!"),
     (1, 8, 24, WH, "COLONISTS WAIT ON FLAT GROUND."), (1, 8, 32, GO, "LAND BESIDE THEM, NOT ON THEM!"),
     (1, 8, 40, WH, "THEY RUN ABOARD: 8 SEATS."), (1, 8, 48, WH, "FLY THEM TO THE BASE PAD AT"), (1, 8, 56, WH, "THE FAR END: IT REFUELS AND"),
     (1, 8, 64, WH, "REPAIRS THE LANDER."), (1, 8, 72, GO, "LAND: GEAR DOWN, LEVEL, SLOW."), (1, 8, 80, WH, "LEDGE CAMPS PAY DOUBLE,"),
@@ -39,7 +40,7 @@ HELP = [
     (2, 8, 22, WH, "UFOS BEAM COLONISTS UP AND"), (2, 8, 30, WH, "TAKE 5 TO THEIR COLLECTOR."), (2, 8, 38, GR, "SHOOT ONE: THEY JET DOWN."),
     (2, 8, 50, WH, "STINGERS SPIT PLASMA, MINES"), (2, 8, 58, WH, "DRIFT, TURRETS FIRE FLAK."),
     (2, 8, 70, GO, "MOTHERSHIPS: ONLY LASERS HURT"), (2, 8, 78, GO, "THEM. SHOOT ONE OPEN TO FREE"), (2, 8, 86, GO, "EVERYONE IT TOOK."),
-    (2, 8, 98, RE, "3 HITS AND THE LANDER IS LOST."),
+    (2, 8, 98, RE, "HULL: EASY 8, NORMAL 5, HARD 3."),
 ]
 
 # ---- the eight worlds: everything that makes each one itself (Game.h's struct Planet has the same layout, byte for byte)

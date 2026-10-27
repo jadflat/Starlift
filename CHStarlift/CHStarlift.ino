@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.9"
+#define SL_VERSION "0.10"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -143,8 +143,8 @@ static bool thrusting;
 static uint8_t banner, bannerT;                            // a message (MS_...) shown for bannerT frames
 static int8_t bannerNum = -1;                              // a number after it (-1: none)
 static uint8_t tripN, killT, kills, flashT, chainMask, ledges;   // chainMask: the camps visited this trip; ledges: the camps on high ledges (double points)
-static uint8_t tripNx, bumpT, charge;                          // charge: frames B has been held (CHARGED: ready)
-enum { CHARGED = 40 };                                   // bumpT: frames until a bump can clang again               // colonists home this landing; the kill chain; the screen flash
+static uint8_t tripNx, bumpT, charge;                          // charge: frames UP has been held (CHARGED: ready)
+enum { CHARGED = 15 };                                   // bumpT: frames until a bump can clang again               // colonists home this landing; the kill chain; the screen flash
 #ifndef SL_DIFF
 #define SL_DIFF 1
 #endif
@@ -555,7 +555,7 @@ static void touchDown() {
         if (m.st == M_IDLE && absi(m.x - x) <= 9) { m.st = M_LOST; nLost++; sfx(S_SQUASH); say(MS_SQUASHED, 50); part(m.x, m.y - 4, 0, -12, 20, C_WHITE); }
 }
 
-static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
+static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, bool up) {
     if (invT) invT--;
     if (fireCd) fireCd--;
     if (!diff && (frameNo % 600) == 0 && shield < shMax()) shield++;     // easy: self-repair
@@ -571,13 +571,21 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     if (gear == 2 && groundAt(LX()) - LY() > 20) { gear = 0; sfx(S_GEAR); }   // clear of the ground after take-off: the gear folds up by itself
     if (gearEdge && lst == 0) { gear = !gear; sfx(S_GEAR); say(gear ? MS_GEAR_DOWN : MS_GEAR_UP_22, 30); }
     if (gunCd) gunCd--;
-    if (fire) {                                                      // holding B charges the plasma ball
+    if (up) {                                                        // holding UP charges the plasma (quickly)
         if (charge < CHARGED) {
             if (++charge == CHARGED) sfx(S_FUEL);
-            else if (charge > 8) { const int dx = rnd(17) - 8, dy = rnd(17) - 8; part(LX() + facing * 10 + dx, LY() + dy, -dx * 3, -dy * 3, 5, (charge & 2) ? C_WHITE : C_ACC); }
+            else if (charge > 2) { const int dx = rnd(17) - 8, dy = rnd(17) - 8; part(LX() + facing * 10 + dx, LY() + dy, -dx * 3, -dy * 3, 5, (charge & 2) ? C_WHITE : C_ACC); }
         }
     } else {
-        if (charge == CHARGED) for (auto &s : shots) if (!s.life) { s = { (int16_t)(LX() + facing * 10), (int16_t)LY(), facing, 40, 2 }; sfx(S_BLAST); shake = 4; break; }
+        if (charge == CHARGED) {                                     // let go: three balls, forwards, backwards and down
+            int n = 0;
+            for (auto &s : shots) if (!s.life && n < 3) {
+                const int8_t d = (int8_t)(n == 0 ? facing : n == 1 ? -facing : 0);
+                s = { (int16_t)(LX() + d * 10), (int16_t)(LY() + (d ? 0 : 10)), d, 40, (uint8_t)(d ? 2 : 3) };   // kind 3: falls
+                n++;
+            }
+            sfx(S_BLAST); shake = 4;
+        }
         charge = 0;
     }
     if (fire) {                                                      // B: the rotary cannon chatters, the laser fires with it
@@ -999,14 +1007,14 @@ static void updateShots() {
         if (!s.life) continue;
         s.life--;
         for (int step = 0; step < 7 && s.life; step++) {
-            s.x = (int16_t)(s.x + s.dir);
+            if (s.kind == 3) s.y++; else s.x = (int16_t)(s.x + s.dir);
             if (s.y >= groundAt(s.x) && s.kind != 2) { part(s.x, s.y, -s.dir * 8, -10, 8, C_GOLD); s.life = 0; break; }
             for (auto &e : en) {
                 if (!e.kind) continue;
                 const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : e.kind == E_MOTHER ? 18 : 6;
                 if (e.kind == E_UFO && ey < TOP) continue;
-                if (absi(s.x - ex) <= hw && absi(s.y - ey) <= (s.kind == 2 ? 8 : 5)) {
-                    if (s.kind == 2) {
+                if (absi(s.x - ex) <= hw && absi(s.y - ey) <= (s.kind >= 2 ? 8 : 5)) {
+                    if (s.kind >= 2) {
                         if (e.hit || (e.kind == E_WORM && e.st == 0)) continue;
                         e.hit = 30; part(s.x, s.y, -s.dir * 10, -8, 10, C_WHITE);
                         if (e.hp <= 4) killEn(e); else { e.hp -= 4; sfx(S_HIT); }
@@ -1738,9 +1746,9 @@ static void drawShots() {
     for (const auto &s : shots) {
         if (!s.life) continue;
         const int x = s.x - cam;
-        if (s.kind == 2) {                                                 // a plasma ball: a flickering halo round a white-hot core
+        if (s.kind >= 2) {                                                 // a plasma ball: a flickering halo round a white-hot core
             gfx_fillCircle(x, s.y, 4 + (frameNo & 1), (frameNo & 2) ? C_ACC : C_GOLD); gfx_fillCircle(x, s.y, 2, C_WHITE);
-            if (frameNo & 1) part(s.x - s.dir * 4, s.y + rnd(5) - 2, -s.dir * 6, 0, 6, C_GOLD);
+            if (frameNo & 1) part(s.x - s.dir * 4 + rnd(5) - 2, s.y - (s.dir ? 0 : 4), -s.dir * 6, s.dir ? 0 : -6, 6, C_GOLD);
             continue;
         }
         if (s.kind) { pset(x, s.y, C_WHITE); pset(x - s.dir, s.y, C_GOLD); pset(x - s.dir * 2, s.y, C_GOLD); pset(x - s.dir * 4, s.y, C_RED); continue; }
@@ -2171,7 +2179,7 @@ static void update() {
             static int lastDown = -99;                                  // the gear: DOWN tapped twice
             bool gearTap = false;
             if (edge & 2) { gearTap = frameNo - lastDown < 10; lastDown = gearTap ? -99 : frameNo; }
-            updateLander(l, r, a, gearTap, b);
+            updateLander(l, r, a, gearTap, b, u);
         }
         if (state != PLAY) break;
         updateMen();

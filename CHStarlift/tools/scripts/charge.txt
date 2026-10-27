@@ -1,24 +1,20 @@
-# The charge shot on the pad: hold B (the guns fire, sparks gather, then the nose glows), let go (a plasma ball)
+# The charge shot on the pad: hold UP (sparks gather, the nose glows), let go (three plasma balls: forwards, back, down)
 wait 40
 tap A
 wait 260
 tap A
-wait 30
-hold RIGHT
-wait 4
-release
-wait 4
-hold B
-wait 20
+wait 40
+hold UP
+wait 8
 snap c0
-wait 14
-snap c1
 wait 10
-snap c2
+snap c1
 release
+wait 1
+snap c2
 wait 2
 snap c3
-wait 5
+wait 3
 snap c4
-wait 8
+wait 4
 snap c5

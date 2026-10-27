@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10 (2026-10-27)
+
+- The charge shot moves to UP (B is the guns alone again) and charges in about half a second.
+- Let go and three plasma balls fly: forwards, backwards and straight down.
+- The help pages list HOLD UP for the charge shot and the hull for each difficulty.
+
 ## 0.9 (2026-10-27)
 
 - Heavier: gravity 2.75 times each world's (was 2.5).
