@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4 (2026-10-27)
+
+- Heavier: two and a half times the worlds' gravity, a faster fall, a stronger engine to match.
+
 ## 0.3 (2026-10-27)
 
 - Stronger sideways thrust; enemies arrive further apart (time for a rescue); slower early UFOs.

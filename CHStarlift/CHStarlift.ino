@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.3"
+#define SL_VERSION "0.4"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -620,10 +620,10 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
     // Newton: gravity, the engine along the hull, a little drag in an atmosphere, the wind
     const Planet &p = PLR;
     static uint8_t gacc;                                             // gravity in 1/1024 px a frame squared: carry the quarters
-    gacc = (uint8_t)(gacc + p.grav * 2 + (sector ? p.grav / 4 : 0));         // a heavy lander: twice the worlds' gravity
+    gacc = (uint8_t)(gacc + p.grav * 5 / 2 + (sector ? p.grav / 4 : 0));     // a heavy lander: two and a half times the worlds' gravity
     lvy += gacc >> 2; gacc &= 3;
     if (thrusting) {
-        int t = (120 + engineUp * 6) * 32 / (32 + seats) * thrLvl / 6;                  // passengers are heavy; the engine takes a moment to spool up
+        int t = (142 + engineUp * 7) * 32 / (32 + seats) * thrLvl / 6;                  // passengers are heavy; the engine takes a moment to spool up
         if (LY() < TOP) t = t * (LY() + 200) / (TOP + 200);                          // above the screen the air thins and the engine fades
         lvx += (int16_t)((t * 3 * sinA(ang)) >> 11);                          // the push sideways half as strong again: tilting carries you across
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
@@ -639,7 +639,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire) {
         lvx += (int16_t)((windV - lvx) >> (8 - p.air + (gear ? 0 : 1)));
         lvy -= lvy >> 8;
     }
-    lvx = (int16_t)clampi(lvx, -760, 760); lvy = (int16_t)clampi(lvy, -700, 960);
+    lvx = (int16_t)clampi(lvx, -760, 760); lvy = (int16_t)clampi(lvy, -700, 1150);
     lx += lvx; ly += lvy;
     if (LY() < -200) { ly = -200 << 8; if (lvy < 0) lvy = 0; }          // no ceiling: up and out of the screen, until the air runs out
     if (lx < (10 << 8)) { lx = 10 << 8; lvx = 0; }
