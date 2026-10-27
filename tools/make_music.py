@@ -205,18 +205,18 @@ add('COSMOS', 88, 10, [THEREMIN, SOFT_BASS, BELL_ECHO], lead_stream(57, 'mixolyd
     bass_stream(57, 'pulse', sh), 4, drums('soft'), shift=19)
 
 
-# ---- the title: STARRISE. A pleasant, singing tune in C major over C, Am, F, G: a round lead with a gentle vibrato,
-# a warm pulsing bass, the vibes echoing an octave up, light drums; still loud enough to hear across a room
-LEAD_SING = (1, 40, 1, 22, 116, 0, 100, 16, 6, 3, 5)
-BASS_WARM = (1, 34, 2, 8, 108, 2, 60, 16, 0, 0, 12)
-VIBES_ECHO = (4, 76, 5, 0, 66, 3, 0, 16, 2, 0, 10)
+# ---- the title: STARRISE. A pleasant tune in C major over C, Am, F, G in classic FM colours: an electric piano lead,
+# a punchy FM bass, FM bells echoing an octave up, the index sweeping open and shut; light drums, loud enough for a room
+LEAD_EPIANO = (1, 100, 3, 26, 114, 1, 72, 16, 3, 0, 6)     # an FM electric piano: a bright, bell-edged strike that mellows
+BASS_FM = (1, 84, 6, 14, 110, 3, 52, 16, 0, 0, 12)        # a punchy FM bass
+BELL_FM = (3, 96, 3, 10, 58, 2, 10, 16, 0, 0, 8)          # FM bells (3:1) an octave up
 P = {'A': [4, H, H, 2, 0, H, 2, H, 4, H, 7, H, 4, H, H, H],
      'B': [5, H, 4, H, 2, H, 4, H, 2, H, H, H, N, N, N, N],
      'C': [7, H, H, 9, 7, H, 4, H, 5, H, 4, H, 2, H, H, H],
      'D': [4, H, 2, H, 0, H, H, H, H, H, H, H, N, N, N, N]}
 order = list('ABAC' + 'ABAD' + 'CCAB' + 'ACAD')
 sh = [0, 0, -3, -3, 5, 5, 7, 7]
-add('STARRISE', 100, 6, [LEAD_SING, BASS_WARM, VIBES_ECHO], lead_stream(72, 'major', P, order, [0] * 8),
+add('STARRISE', 100, 18, [LEAD_EPIANO, BASS_FM, BELL_FM], lead_stream(72, 'major', P, order, [0] * 8),
     bass_stream(60, 'pulse', sh), 4, drums('soft'), shift=12)
 
 # 0 the title; 1..8 the planets in order (Moon, Ares, Cryo, Verda, Vulcan, Titan, Prism, Zorg)
