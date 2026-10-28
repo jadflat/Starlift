@@ -56,6 +56,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Built on CHGame, Copyright 2026 Kevin Bates (bateske), Apache-2.0: the framework is vendored in `chgame/` (see `chgame/NOTICE` and `chgame/LICENSE`).
 
-## The pixel-art skill
+## Fonts (chgame/, CHGfx)
 
-The sprites were rendered with the author's own CHGame-tuned "pixel-art-gen" Claude skill from grids drawn for this game.
+- The game's small 3 x 5 text font is `CHGfx_Tiny3x5`: the glyphs are from the "Blackjack" font for the Arduboy by Press Play
+  On Tape, Apache-2.0 (with additions in CHGfx). The licence text is `chgame/platform/board/arduino/CHGame/libraries/CHGfx/LICENSE.Apache-2.0`.
+- CHGfx's other fonts (the 5 x 7 font from the Adafruit GFX Library, BSD; DejaVu/Bitstream Vera) are not used by STARLIFT;
+  their notices are in the same CHGfx `LICENSE` file.
+
+## The pixel art
+
+The sprites were drawn as grids for this game and rendered with the pixel-art-gen Claude skill.

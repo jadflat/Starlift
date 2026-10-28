@@ -22,7 +22,8 @@ T = 15
 KEY = {'.': T, 'k': 0, 'w': 1, 'G': 2, 'g': 3, 'l': 4, 's': 5, 'r': 6, 'm': 7, 'y': 8, 'b': 9, 'u': 10, 'n': 11, 'o': 12, 'c': 13}
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = os.path.join(ROOT, 'out', 'sprites')
-RENDER = os.path.join(os.path.expanduser('~'), '.claude', 'skills', 'pixel-art-gen', 'scripts', 'render_pixel_art.py')
+# the grid-to-PNG renderer of the pixel-art-gen skill; PIXEL_ART_RENDER overrides its place
+RENDER = os.environ.get('PIXEL_ART_RENDER') or os.path.join(os.path.expanduser('~'), '.claude', 'skills', 'pixel-art-gen', 'scripts', 'render_pixel_art.py')
 
 
 def grid(rows):

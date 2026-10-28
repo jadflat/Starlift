@@ -18,7 +18,7 @@ CLIPS = os.path.join(ROOT, 'CHStarlift', 'out', 'trailer')
 FR = os.path.join(CLIPS, 'frames')
 S = 1024
 GOLD, RED, WHITE, GREEN = (255, 204, 34), (238, 17, 34), (255, 255, 255), (123, 226, 106)
-FONT = 'C:/Windows/Fonts/impact.ttf'
+FONT = os.environ.get('TRAILER_FONT', 'impact.ttf')  # any bold TrueType font; Impact (Windows) by default
 
 
 def clip(name, a, b, box=None):

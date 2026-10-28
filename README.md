@@ -105,7 +105,7 @@ stage n, `SL_STORM` the worst weather, `SL_TRACE` a log.
 ## Credits
 
 Game, code, art and music by Jadflat, made with Claude (Anthropic). The pixel art was drawn as grids and rendered with
-the author's CHGame-tuned "pixel-art-gen" Claude skill.
+the pixel-art-gen Claude skill.
 
 Built on CHGame, Copyright 2026 Kevin Bates (bateske): the framework is vendored in `chgame/` (see
 `chgame/VENDORED.md`, `chgame/NOTICE` and `chgame/LICENSE`). Each folder there carries its own licence, mostly Apache-2.0 and MIT. The sound output's timer setup follows chgame-soundtracks (BSD 3-Clause): see
