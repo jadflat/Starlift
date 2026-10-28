@@ -80,8 +80,8 @@ card's root, and `Starlift.CHG` to `GAMES\GAMES`. Without the file the game asks
 ## Saving
 
 START opens the pause menu: SAVE GAME keeps the stage, score and landers; the title offers CONTINUE. The high score,
-the difficulty and the music and effects volumes (OPTIONS) are kept too. Since 0.14 the game uses one save page (it
-needed the room): a power cut in the middle of a save loses that save.
+the difficulty and the music and effects volumes (OPTIONS) are kept too. The game keeps a single save page: a power
+cut in the middle of a save loses that save.
 
 ## Building
 
@@ -90,8 +90,7 @@ needed the room): a power cut in the middle of a save loses that save.
     ./cl run CHStarlift/tools/scripts/look.txt out/look --card out/card/STARLIFT.DAT
 
 The simulator needs the card file (`--card`). Test switches (`-D`): `SL_BOT` an autopilot, `SL_START=n` start at
-stage n, `SL_STORM` the worst weather, `SL_TRACE` a log. A board perf run needs them in `CHStarlift/tools/game.py`
-(`-D` does not reach the board build) and `SL_SLIM` so the debug image fits.
+stage n, `SL_STORM` the worst weather, `SL_TRACE` a log.
 
 ## Developer notes
 
@@ -108,10 +107,10 @@ stage n, `SL_STORM` the worst weather, `SL_TRACE` a log. A board perf run needs 
 Game, code, art and music by Jadflat, made with Claude (Anthropic). The pixel art was drawn as grids and rendered with
 the author's CHGame-tuned "pixel-art-gen" Claude skill.
 
-Built on CHGame, Copyright 2026 Kevin Bates (bateske), Apache-2.0: the framework is vendored in `chgame/` (see
-`chgame/NOTICE` and `chgame/LICENSE`). The sound output's timer setup follows chgame-soundtracks (BSD 3-Clause): see
+Built on CHGame, Copyright 2026 Kevin Bates (bateske): the framework is vendored in `chgame/` (see
+`chgame/VENDORED.md`, `chgame/NOTICE` and `chgame/LICENSE`). Each folder there carries its own licence, mostly Apache-2.0 and MIT. The sound output's timer setup follows chgame-soundtracks (BSD 3-Clause): see
 [THIRD-PARTY.md](THIRD-PARTY.md).
 
 ## Licence
 
-The game's own code, art and music: MIT (see [LICENSE](LICENSE)). `chgame/`: Apache-2.0.
+The game's own code, art and music: MIT (see [LICENSE](LICENSE)). `chgame/`: Kevin Bates's, under the licences in its folders.
