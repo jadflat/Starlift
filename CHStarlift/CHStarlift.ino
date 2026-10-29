@@ -20,7 +20,7 @@
 #include <chgame/Draw.h>
 #include <chgame/RamFunc.h>
 
-#define SL_VERSION "0.24"
+#define SL_VERSION "0.25"
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -554,8 +554,8 @@ static void hullPt(int dx, int dy, int &x, int &y) {
 static void touchDown() {
     const int x = LX();
     const int gl = groundAt(x - 7), gr = groundAt(x + 7);
-    const bool level = absi(gl - gr) <= 3, upright = absi(ang) <= 2, soft = lvy <= 340 - diff * 40 && absi(lvx) <= 220 - diff * 30;
-    if (gear && level && upright && !soft && shield > 1 && lvy <= 520 - diff * 40 && absi(lvx) <= 320 - diff * 30) {
+    const bool level = absi(gl - gr) <= 4, upright = absi(ang) <= 3, soft = lvy <= 420 - diff * 40 && absi(lvx) <= 270 - diff * 30;
+    if (gear && level && upright && !soft && shield > 1 && lvy <= 620 - diff * 40 && absi(lvx) <= 380 - diff * 30) {
         shield--; sfx(S_HIT); shake = 6;                                 // a heavy bump: it holds
     } else if (!gear || !level || !upright || !soft) {
         if (!gear) say(MS_GEAR_UP, 60);
@@ -687,7 +687,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
     lvy += gacc >> 2; gacc &= 3;
     if (thrusting) {
         int t = (104 + p.grav * 5 / 4 + engineUp * 7) * 48 / (48 + seats) * thrLvl / 6;   // the engine suits the world (a full load still climbs on the heaviest); passengers are heavy; it spools up
-        if (LY() < TOP) t = LY() > -24 ? t * (LY() + 24) / (TOP + 24) : 0;            // above the screen the air thins fast: no hanging up there
+        if (LY() < TOP) t = LY() > -2 ? t * (LY() + 2) / (TOP + 2) : 0;               // near the top the air thins fast: no hanging up there
         lvx += (int16_t)((t * 5 * sinA(ang)) >> 12);                          // the push sideways a quarter as strong again
         lvy -= (int16_t)((t * cosA(ang)) >> 10);
         if (thr && (diff || (frameNo & 1))) fuel--;                         // (easy: half the fuel)
@@ -704,7 +704,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
     }
     lvx = (int16_t)clampi(lvx, -760, 760); lvy = (int16_t)clampi(lvy, -700, 1150);
     lx += lvx; ly += lvy;
-    if (LY() < -60) { ly = -60 << 8; if (lvy < 0) lvy = 0; }            // no ceiling: up and out of the screen, until the air runs out
+    if (LY() < -2) { ly = -2 << 8; if (lvy < 0) lvy = 0; }              // the ceiling: the bottom third of the lander stays on screen
     if (lx < (10 << 8)) { lx = 10 << 8; lvx = 0; }
     if (lx > ((W - 10) << 8)) { lx = (W - 10) << 8; lvx = 0; }
     // the ground: the feet (or, gear up, the descent stage) and the hull's other corners
