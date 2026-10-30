@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.30 (2026-10-30)
+
+- The sandworm rope is back in: hover over the worm and it is hauled out on the rope (a tug of war while it is still in
+  the sand), swings under the lander, and is dropped into the collector and chewed up for 2000 points and a full tank. It
+  can also spit out a colonist it has swallowed.
+- Trimmed to make room, with the same save page: the mothership boss is now a single big saucer that follows the lander
+  and fires (no stage variants, no saucers sent out); the moon's flag is always the stars and stripes; the chewed worm no
+  longer throws gore at the screen and its mouth stays closed when it spits; its spat colonists always fly straight up.
+- Smaller code with the same pictures: ten compiler tweaks, a smaller memcpy, and several shared routines. The image is
+  50,564 B of the 50,688 B one save page, with saving kept.
+- The board frame times for 0.30 have not been measured yet.
+
 ## 0.29 (2026-10-30)
 
 - Squeezed to fit one save page: cow head-pats and the unused red-topped saucer code are gone; the windsock is a simple
