@@ -50,10 +50,11 @@ Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
   slower as it fills, then flies them to the aliens' collector at the far end of the stage. Shoot it down and its
   captives bail out on jet packs, and you can catch them in mid-air.
 - **Stingers** spit plasma, **mines** drift towards you, **turrets** fire flak.
-- **Bosses** guard every fourth stage, over the aliens' collector: the Mothership, the Hive, the Prism warship and the
-  Dreadnought, each with its own ways (and music). Shoot it open to free everyone it took.
+- **Bosses** guard every fourth stage, over the aliens' collector: a big armoured saucer that follows you and fires
+  (cannon rounds do nothing to it). Shoot it open to free everyone it took.
 - **Sandworms** roam under the desert's sand. The ground heaves above them: get the colonists out before one rises, or
-  shoot it as it surfaces to drive it back down.
+  shoot it as it surfaces to drive it back down, or hover over it and haul it out on the rope: win the tug of war and
+  drop it into the collector.
 
 ## The worlds
 
