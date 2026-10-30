@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29 (2026-10-30)
+
+- Squeezed to fit one save page: cow head-pats and the unused red-topped saucer code are gone; the windsock is a simple
+  red and white pennant; gore is a plainer splat; clouds, snow, dust and the aurora are slightly simpler; the sky no
+  longer twinkles; ad boards no longer flicker.
+- The moon's flag is different each round (the stars and stripes, a southern cross, a rising sun, three bands).
+- The options screen has one VOLUME setting (music and effects together).
+- Board frame times were measured on stages 1 to 8: averages 21 to 31 ms, a few worst frames of 34 to 40 ms.
+
 ## 0.24 (2026-10-28)
 
 - A new title: tall slanted chrome letters (white and silver over a horizon line, gold to red below) with a steel edge,
