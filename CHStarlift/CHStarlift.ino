@@ -40,9 +40,9 @@
 #include <chgame/RamFunc.h>
 
 #ifdef SL_STAGESEL
-#define SL_VERSION "0.30a"                                        // the local test build
+#define SL_VERSION "0.30j"                                        // jadflat's local build: stage select
 #else
-#define SL_VERSION "0.30"
+#define SL_VERSION "0.38"
 #endif
 #ifdef SL_STAGESEL
 #define SL_NOSAVE                                                  // the local test build does not load or save
@@ -2642,7 +2642,11 @@ void loop() {
         if (v > pk) pk = v;
         if (++pkN >= 30) { pct = pk; pk = 0; pkN = 0; }
         const uint8_t sp = pct > 100 ? (uint8_t)(10000 / pct) : 100;
+#ifdef SL_SPEED                                                     // the readout is off unless the build asks for it (-DSL_SPEED)
         if (state == PLAY) { char b[8]; text35s(104, 2, fmt(b, "", sp, "%"), sp < 100 ? C_RED : C_WHITE, C_INK); }
+#else
+        (void)sp;
+#endif
     }
 #endif
     dbg::markRenderEnd();

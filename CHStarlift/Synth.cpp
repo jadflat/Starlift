@@ -20,7 +20,7 @@
 namespace {
 
 #ifndef SYN_GAIN
-#define SYN_GAIN 17                                       // 1.06 x: the theremin holds its notes, so the mix is denser than plucked songs
+#define SYN_GAIN 12                                       // 1.06 x: the theremin holds its notes, so the mix is denser than plucked songs
 #endif
 constexpr uint16_t ENV_DIV = SYN_RATE / 122;            // samples between envelope ticks (about 8 ms)
 
@@ -115,7 +115,9 @@ void sfxStep() {
     sf.amp = sf.amp0;
 }
 
+uint16_t holdT = 375;                                    // ~3 s after power-up before the first song starts
 void envTick() {
+    if (holdT) holdT--;
     if (fadeDir < 0) {
         if (fade > 4) fade -= 4;
         else {
@@ -157,6 +159,9 @@ void envTick() {
         if (sf.kind == 2) sf.amp = (uint8_t)(sf.amp0 * sf.ticks / sf.tot);   // a burst dies away
         if (--sf.ticks == 0) { sf.i++; sfxStep(); }
     }
+#if SYN_DEVICE
+    TIM1->CCER = (cur || sf.n || dr.vol || engV || v[0].vol || v[1].vol || v[2].vol) ? 0x10 : 0;   // off only when no song and no sound: toggling it between notes whined (CHLockon keeps it on through a song)
+#endif
 }
 
 }  // namespace
@@ -243,7 +248,7 @@ void music(int song) {
 void engine(uint8_t level) { engT = level; }
 void volume(uint8_t music, uint8_t effects) { musV = music; fxV = effects; }
 
-int wanted() { return needId; }
+int wanted() { return holdT ? -1 : needId; }
 uint8_t *buffer() { return songBuf; }
 void loaded() {
     SYN_LOCK();
@@ -271,7 +276,7 @@ extern "C" volatile uint32_t CFGHR_tmpB;
 extern "C" void TIM3_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 extern "C" void TIM3_IRQHandler(void) {
     TIM3->INTFR = ~1u;
-    TIM1->CH2CVR = synth::sample();
+    TIM1->CH2CVR = (uint16_t)(synth::sample() * 125u >> 7);   // 0-255 onto the 250-tick carrier (0-249)
 }
 
 void synth::begin() {
@@ -281,10 +286,10 @@ void synth::begin() {
     CFGHR_tmpB = (CFGHR_tmpB & ~(15u << 8)) | (11u << 8);            // alternate-function push-pull
     GPIOB->CFGHR = CFGHR_tmpB;
     TIM1->CTLR1 = 0; TIM1->DMAINTENR = 0; TIM1->CCER = 0;
-    TIM1->PSC = 0; TIM1->ATRLR = 255; TIM1->CNT = 0;
-    TIM1->CHCTLR1 = 0x6800; TIM1->CH2CVR = 128;
-    TIM1->RPTCR = 0; TIM1->BDTR = 0x8000; TIM1->CCER = 0x10;
-    TIM1->SWEVGR = 1; TIM1->CTLR1 = 0x81;                            // 187.5 kHz carrier
+    TIM1->PSC = 0; TIM1->ATRLR = 249; TIM1->CNT = 0;   // 250 ticks: 192 kHz, exactly 4 a 48 kHz audio sample (256 aliased to a 4.5 kHz whine in the emulator) and 24 a synth sample
+    TIM1->CHCTLR1 = 0x6800; TIM1->CH2CVR = 125;
+    TIM1->RPTCR = 0; TIM1->BDTR = 0x8000; TIM1->CCER = 0;   // carrier off until a sound starts
+    TIM1->SWEVGR = 1; TIM1->CTLR1 = 0x81;                            // 192 kHz carrier
     TIM3->CTLR1 = 0; TIM3->DMAINTENR = 0;
     TIM3->PSC = 0; TIM3->ATRLR = 48000000u / SYN_RATE - 1; TIM3->CNT = 0;
     TIM3->SWEVGR = 1; TIM3->INTFR = 0; TIM3->DMAINTENR = 1;

@@ -232,7 +232,10 @@ P = {'A': [4, H, H, H, H, H, 2, H, 0, H, H, H, 2, H, 4, H],
      'K': [6, H, H, H, 4, H, 1, H, 4, H, H, H, H, H, N, N]}
 order = list('ABCD' + 'EFGK' + 'EBCD' + 'AFGK')
 sh = [0, -3, 5, 7, 0, -3, 5, 7]
-add('MOONGLOW', 84, 6, [LEAD_MELLOW, SOFT_BASS, BELL_ECHO], lead_stream(67, 'major', P, order, [0] * 8),
+TITLE_LEAD = (1, 40, 2, 8, 70, 1, 44, 16, 4, 0, 8)         # MOONGLOW only: quieter than LEAD_MELLOW, the title is heard alone
+TITLE_BASS = (1, 30, 2, 6, 70, 2, 36, 16, 0, 0, 12)
+TITLE_ECHO = (3, 70, 2, 10, 30, 1, 8, 16, 0, 0, 5)
+add('MOONGLOW', 84, 6, [TITLE_LEAD, TITLE_BASS, TITLE_ECHO], lead_stream(67, 'major', P, order, [0] * 8),
     bass_stream(55, 'long', sh), 6, drums('air'), shift=12)
 
 # ---- the bosses (0.19): SHOWDOWN. E phrygian, 132 bpm: the theremin wails over a driving bass, four on the floor

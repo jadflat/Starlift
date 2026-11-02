@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 
-static const uint32_t CARD_HASH = 0xAB2B7BBEu;
+static const uint32_t CARD_HASH = 0x6EB055FFu;
 static const uint32_t CARD_PIC = 512, CARD_SONG = 59392, CARD_TXT = 61952;
 // the how-to-play lines: page, x, y, colour, then the text (ending in 0)
 static const uint32_t CARD_PACK = 66560;   // each stage's pack index (stage & 15): 92 bytes

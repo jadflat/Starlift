@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.38 (2026-11-02)
+
+- The title song MOONGLOW has its own quieter instruments. Ships with a new STARLIFT.DAT (the song data changed): copy
+  both files together.
+
+## 0.37 (2026-11-02)
+
+- Synth gain 17 -> 12: the music is quieter and the piezo whine is much reduced.
+
+## 0.36 (2026-11-02)
+
+- PWM carrier period 250 ticks (192 kHz, exactly four periods per 48 kHz sample): removes a 4.5 kHz beat in emulators.
+
+## 0.31 - 0.34 (2026-11-01)
+
+- Start-up and idle whine fixes: the PWM carrier is gated off while silent, and 3 s of silence before the first song.
+
 ## 0.30 (2026-10-30)
 
 - The sandworm rope is back in: hover over the worm and it is hauled out on the rope (a tug of war while it is still in
