@@ -1,0 +1,20 @@
+# Firing hovers: climb, then hold B 60 frames (height kept), let go: ~18 frames more, then it falls
+wait 40
+tap A
+wait 260
+tap A
+wait 40
+hold A
+wait 22
+release
+hold B
+snap h0
+wait 30
+snap h1
+wait 30
+snap h2
+release
+wait 15
+snap h3
+wait 30
+snap h4

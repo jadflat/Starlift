@@ -42,7 +42,7 @@
 #ifdef SL_STAGESEL
 #define SL_VERSION "0.30j"                                        // jadflat's local build: stage select
 #else
-#define SL_VERSION "0.38"
+#define SL_VERSION "0.39"
 #endif
 #ifdef SL_STAGESEL
 #define SL_NOSAVE                                                  // the local test build does not load or save
@@ -184,7 +184,7 @@ static int32_t lx, ly;
 static int16_t lvx, lvy;
 static int8_t ang, facing = 1;
 static uint16_t fuel;
-static uint8_t seats, shield, lst, gear, rotT, deadT, fireCd, gunCd, onPad, unloadT, invT, dryT, thrLvl;   // thrLvl: the engine spooling, 0-6   // lst: 0 flying, 1 landed, 2 wrecked
+static uint8_t seats, shield, lst, gear, rotT, deadT, fireCd, gunCd, hovT, onPad, unloadT, invT, dryT, thrLvl;   // thrLvl: the engine spooling, 0-6   // lst: 0 flying, 1 landed, 2 wrecked
 static bool thrusting;
 
 static uint8_t banner, bannerT, bannerNew;   // bannerNew: its text is to be read from the card (once, not every frame)
@@ -673,6 +673,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
         charge = 0;
     }
     if (fire) {                                                      // B: the rotary cannon chatters, the laser fires with it
+        hovT = 18;                                                   // firing: the lander hovers, and for a moment after
         if (!gunCd && newShot(LX() + facing * 8, LY() + 2 + ((frameNo >> 1) & 1) - (frameNo & 1), facing, 9, 1)) { gunCd = 3; sfx(S_GUN); }
         if (!fireCd && newShot(LX() + facing * 9, LY() - 1, facing, 26, 0)) { fireCd = 7; sfx(S_LASER); }
     }
@@ -738,7 +739,8 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
     const Planet &p = PLR;
     static uint8_t gacc;                                             // gravity in 1/1024 px a frame squared: carry the quarters
     gacc = (uint8_t)(gacc + p.grav * 12 / 5 + (sector ? p.grav / 4 : 0));    // a heavy lander: two and three quarter times the worlds' gravity
-    lvy += gacc >> 2; gacc &= 3;
+    lvy += (hovT && !thrusting) ? (hovT--, -(lvy >> 2)) : gacc >> 2;   // hovering holds its height: gravity off, the fall damped out
+    gacc &= 3;
     if (thrusting) {
         int t = (104 + p.grav * 5 / 4 + engineUp * 7) * 48 / (48 + seats) * thrLvl / 6;   // the engine suits the world (a full load still climbs on the heaviest); passengers are heavy; it spools up
         if (LY() < TOP) t = LY() > -2 ? t * (LY() + 2) / (TOP + 2) : 0;               // near the top the air thins fast: no hanging up there
