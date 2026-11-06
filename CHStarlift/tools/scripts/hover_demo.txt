@@ -1,0 +1,26 @@
+# Demo clip: climb, fire (hover), let go (brief hover, then fall), thrust, fire again
+wait 40
+tap A
+wait 200
+tap A
+wait 30
+rec start 1
+hold A
+wait 25
+release
+wait 10
+hold B
+wait 75
+release
+wait 45
+hold A
+wait 22
+release
+hold RIGHT
+wait 4
+release
+hold B
+wait 60
+release
+wait 50
+rec stop hover
