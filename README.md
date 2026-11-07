@@ -60,16 +60,18 @@ Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
 
 Sixteen stages over eight worlds, each with its own sky, scenery, weather, wildlife and takeaway:
 
-| World | |
-|---|---|
-| The Moon | The Earth overhead, the flag and the old descent stage, footprints in the dust. Burgers. |
-| Sabulon | A deep desert of dunes and buried temples, sandstorms and sandworms. Noodles. |
-| Cryo | A polar outpost under the aurora, domes and masts, snow blown by the wind. Ice cream. |
-| Verda | A lost temple in the jungle under a banded gas giant, rain and lightning. Pizza. |
-| Vulcan | Alien pylons among volcanoes, a red sun, ash and embers. Hot dogs. |
-| Titan | A ring station under a ringed planet, methane drizzle. Fish and chips. |
-| Prism | A crystal sanctum under twin suns, glinting air. Sushi. |
-| Zorg | An alien city under two moons, acid rain. Glorp pies. |
+![The eight worlds of STARLIFT](CHStarlift/docs/screens/worlds.png)
+
+| World | | Stage |
+|---|---|---|
+| The Moon | The Earth overhead, the flag and the old descent stage, footprints in the dust. Burgers. | <a href="CHStarlift/docs/screens/stage1.png"><img src="CHStarlift/docs/screens/stage1.png" width="128" alt="The Moon"></a> |
+| Sabulon | A deep desert of dunes and buried temples, sandstorms and sandworms. Noodles. | <a href="CHStarlift/docs/screens/stage2.png"><img src="CHStarlift/docs/screens/stage2.png" width="128" alt="Sabulon"></a> |
+| Cryo | A polar outpost under the aurora, domes and masts, snow blown by the wind. Ice cream. | <a href="CHStarlift/docs/screens/stage3.png"><img src="CHStarlift/docs/screens/stage3.png" width="128" alt="Cryo"></a> |
+| Verda | A lost temple in the jungle under a banded gas giant, rain and lightning. Pizza. | <a href="CHStarlift/docs/screens/stage4.png"><img src="CHStarlift/docs/screens/stage4.png" width="128" alt="Verda"></a> |
+| Vulcan | Alien pylons among volcanoes, a red sun, ash and embers. Hot dogs. | <a href="CHStarlift/docs/screens/stage5.png"><img src="CHStarlift/docs/screens/stage5.png" width="128" alt="Vulcan"></a> |
+| Titan | A ring station under a ringed planet, methane drizzle. Fish and chips. | <a href="CHStarlift/docs/screens/stage6.png"><img src="CHStarlift/docs/screens/stage6.png" width="128" alt="Titan"></a> |
+| Prism | A crystal sanctum under twin suns, glinting air. Sushi. | <a href="CHStarlift/docs/screens/stage7.png"><img src="CHStarlift/docs/screens/stage7.png" width="128" alt="Prism"></a> |
+| Zorg | An alien city under two moons, acid rain. Glorp pies. | <a href="CHStarlift/docs/screens/stage8.png"><img src="CHStarlift/docs/screens/stage8.png" width="128" alt="Zorg"></a> |
 
 The weather changes from game to game: a stage may be clear, or a storm.
 
@@ -79,6 +81,8 @@ STARLIFT keeps its music, its big pictures, its worlds and its words in **STARLI
 card's root, and `Starlift.CHG` to `GAMES\GAMES`. Without the file the game asks for the card.
 
 ## Saving
+
+You start each game with 5 continues: on GAME OVER, A spends one to carry on in the same world with 3 landers (the panel shows how many remain), B quits.
 
 START opens the pause menu: SAVE GAME keeps the stage, score and landers; the title offers CONTINUE. The high score,
 the difficulty and the music and effects volumes (OPTIONS) are kept too. The game keeps a single save page: a power

@@ -42,7 +42,7 @@
 #ifdef SL_STAGESEL
 #define SL_VERSION "0.30j"                                        // jadflat's local build: stage select
 #else
-#define SL_VERSION "0.40"
+#define SL_VERSION "0.41"
 #endif
 #ifdef SL_STAGESEL
 #define SL_NOSAVE                                                  // the local test build does not load or save
@@ -206,6 +206,7 @@ static uint8_t diff = SL_DIFF;                                   // 0 easy, 1 no
 static uint8_t selStage;
 #endif
 static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
+static uint8_t credits = 5;                                   // continues left this game
 static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
 static bool newHi;
 static uint8_t pauseNote;                                  // a message (MS_...), 0 = none
@@ -213,8 +214,8 @@ static uint8_t pauseNote;                                  // a message (MS_...)
 static uint32_t rnd32() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
 static NOINL int rnd(int n) { return (int)(rnd32() % (uint32_t)n); }
 static NOINL uint32_t hash(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
-static inline int absi(int v) { return v < 0 ? -v : v; }
-static inline int sgn(int v) { return (v > 0) - (v < 0); }
+static NOINL int absi(int v) { return v < 0 ? -v : v; }
+static NOINL int sgn(int v) { return (v > 0) - (v < 0); }
 static NOINL int clampi(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
 static NOINL int isin(int a) { a &= 255; int b = a & 127, v = (b * (128 - b)) >> 5; return a < 128 ? v : -v; }   // a parabola sine, -128..128
 static int isqrtTab(int v) { if (v <= 0) return 0; int r = 0; while ((r + 1) * (r + 1) <= v) r++; return r; }   // small values only
@@ -228,7 +229,7 @@ static NOINL int groundAt(int x) {
 }
 static const int16_t SIN7[7] = { 0, 66, 128, 181, 222, 247, 256 };       // sin of 0, 15 .. 90 degrees, x 256
 static inline int sinA(int a) { return a < 0 ? -SIN7[-a] : SIN7[a]; }
-static inline int cosA(int a) { return SIN7[6 - absi(a)]; }
+static NOINL int cosA(int a) { return SIN7[6 - absi(a)]; }
 
 // ---- drawing primitives -------------------------------------------------------------------------------------------
 RAMFUNC(psetR) static void psetR(int x, int y, uint8_t c) {                         // in RAM: every single pixel goes through it
@@ -2348,7 +2349,10 @@ static void draw() {
             tN(60, MS_BEST, hiScore, C_GOLD);
             tN(70, MS_COLONISTS_HOME, gSaved, C_GREEN);
             if (newHi && (frameNo & 8)) tCS(91, MS_NEW_HIGH_SCORE, C_GOLD);
-            if (overT > 90 && (frameNo & 16)) tCS(110, MS_PRESS_A, C_WHITE);
+            if (overT > 90) {                                                // credits: A continues this world, B quits
+                if (credits) tN(80, MS_CONTINUES_LEFT, credits, C_GOLD);
+                else if (frameNo & 16) tCS(80, MS_PRESS_A, C_WHITE);
+            }
         }
         break;
     }
@@ -2361,7 +2365,7 @@ static void draw() {
 
 // ---- update ------------------------------------------------------------------------------------------------------------
 static void toTitle() {
-    state = TITLE; titleSel = 0; stage = 0; planet = 0;
+    state = TITLE; titleSel = 0; stage = 0; planet = 0; credits = 5;
     loadReq = true;
     cam = 200; synth::music(0); synth::engine(0);
 }
@@ -2563,9 +2567,15 @@ static void update() {
     case OVER:
         updateShots(); updateWeather();
         if (overT < 2000) overT++;
-        if (overT > 90 && (edge & 4)) toTitle();
+        if (overT > 90) {
+            if (credits && (edge & 4)) { credits--; lives = 3; newStage(); saveProgress(true); }
+            else if (edge & (credits ? 8 : 4)) toTitle();
+        }
         break;
     }
+#ifdef SL_TESTOVER
+    if (frameNo % 200 == 0 && state == PLAY) { lives = 0; gameOver(); }
+#endif
 #ifdef SL_TRACE
     if (frameNo % 30 == 0) for (auto &e : en) if (e.kind == E_WORM) fprintf(stderr, "worm f%d x%d st%d t%d lander%d,%d lost%d\n", frameNo, e.x >> 4, e.st, e.t, LX(), lst, nLost);
 #endif

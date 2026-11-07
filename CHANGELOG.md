@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.41 (2026-11-07)
+
+- Continues: you start each game with 5. On the game over screen A spends one to carry on in the same world with 3 landers; B quits to the title. The panel shows CONTINUES REMAINING and the count. Ships with a new STARLIFT.DAT (new text): copy both files together.
+
 ## 0.38 (2026-11-02)
 
 - The title song MOONGLOW has its own quieter instruments. Ships with a new STARLIFT.DAT (the song data changed): copy
