@@ -42,7 +42,7 @@
 #ifdef SL_STAGESEL
 #define SL_VERSION "0.30j"                                        // jadflat's local build: stage select
 #else
-#define SL_VERSION "0.41"
+#define SL_VERSION "0.43"
 #endif
 #ifdef SL_STAGESEL
 #define SL_NOSAVE                                                  // the local test build does not load or save
@@ -2096,20 +2096,26 @@ static void drawShots() {
 
 static void drawHud() {
     R(0, 0, 128, TOP, C_INK);
+    char q[8], s[12];
+    fmt(q, "", nSaved, "/", quota);
+    fmt(s, "", score);
+    const int qw = text35Width(q), sw = text35Width(s), hw = shMax() * 3 - 1;
+    const int gap = (126 - 28 - qw - 31 - hw - sw) / 4;            // the five blocks spread with equal gaps between them
+    int x = 1 + 28 + gap;
     // fuel
     text35(1, 0, "F", C_SILVER);
-    R(7, 2, 26, 4, C_STEEL);
-    const int fw = fuel * 24 / FUEL_MAX;
+    R(7, 2, 22, 4, C_STEEL);
+    const int fw = fuel * 20 / FUEL_MAX;
     R(8, 3, fw, 2, (fuel < FUEL_MAX / 3 && (frameNo & 8)) ? C_RED : C_GOLD);
+    // colonists saved / quota
+    text35(x, 1, q, nSaved >= quota ? C_GREEN : C_GOLD);
+    x += qw + gap;
     // the seats: a white figure for each colonist aboard
-    char q[8];
-    text35(35, 1, fmt(q, "", nSaved, "/", quota), nSaved >= quota ? C_GREEN : C_GOLD);
-    for (int i = 0; i < SEATS; i++) { const uint8_t c = i < seats ? C_WHITE : C_STEEL; R(57 + i * 4, 2, 3, 4, c); pset(58 + i * 4, 3, i < seats ? C_GOLD : C_INK); }
-    // shield and lives
-    for (int i = 0; i < shMax(); i++) R(80 + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
-    char s[12];
-    fmt(s, "", score);
-    text35(127 - text35Width(s), 1, s, C_WHITE);
+    for (int i = 0; i < SEATS; i++) { const uint8_t c = i < seats ? C_WHITE : C_STEEL; R(x + i * 4, 2, 3, 4, c); pset(x + 1 + i * 4, 3, i < seats ? C_GOLD : C_INK); }
+    x += 31 + gap;
+    // shield
+    for (int i = 0; i < shMax(); i++) R(x + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
+    text35(127 - sw, 1, s, C_WHITE);
     // the scanner: the whole stage, 16 px to a dot
     R(3, 8, 122, 1, C_STEEL);
     for (int i = 0; i < 120; i++) { const int m = hgt[i * 4] < hgt[i * 4 + 2] ? hgt[i * 4] : hgt[i * 4 + 2]; pset(4 + i, 9 + ((m - TOP) * 7 >> 7), C_GNDD); }   // the ground line
@@ -2118,7 +2124,7 @@ static void drawHud() {
     R(4 + (basePadX + 20) / 16 - 1, 13, 3, 2, C_ACC);
     for (int i = 0; i < nMen; i++) {
         const Man &m = men[i];
-        if (m.st == M_IDLE || m.st == M_RUN || m.st == M_WALK || m.st == M_JET || m.st == M_BEAM) R(4 + m.x / 16, 7 + ((m.st == M_JET ? m.y >> 2 : m.y) - TOP) * 7 >> 7, 1, 2, m.st == M_BEAM ? C_GREEN : C_WHITE);   // where they are, just above the ground line
+        if (m.st == M_IDLE || m.st == M_RUN || m.st == M_WALK || m.st == M_JET || m.st == M_BEAM) R(4 + m.x / 16, 7 + (((m.st == M_JET ? m.y >> 2 : m.y) - TOP) * 7 >> 7), 1, 2, m.st == M_BEAM ? C_GREEN : C_WHITE);   // where they are, just above the ground line
     }
     for (const auto &it : items) if (it.st == 1 && (frameNo & 8)) pset(4 + it.x / 16, 13, C_GOLD);
     for (const auto &e : en) if (e.kind) pset(4 + (e.x >> 4) / 16, 9 + ((e.y >> 4) - TOP) * 6 / 112, e.kind == E_UFO ? C_GREEN : C_RED);

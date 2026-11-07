@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.43 (2026-11-07)
+
+- Fixed: colonist dots on the radar were drawn over the seat indicators (operator precedence in the radar height).
+
+## 0.42 (2026-11-07)
+
+- HUD: fuel, colonists, seats, shield and score now sit with equal gaps (the seats no longer run into the shield pips).
+
 ## 0.41 (2026-11-07)
 
 - Continues: you start each game with 5. On the game over screen A spends one to carry on in the same world with 3 landers; B quits to the title. The panel shows CONTINUES REMAINING and the count. Ships with a new STARLIFT.DAT (new text): copy both files together.
