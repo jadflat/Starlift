@@ -14,13 +14,13 @@ namespace card {
 
 enum { SLOTS = 6, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
-static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
+__attribute__((section(".sdata.card_tag"))) static uint16_t tag[ALL] = { 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff };
 static uint8_t age[ALL], tick;                    // the least recently used slot is the one to replace
 static uint8_t used[ALL], frameNo;               // the frame each slot was last used in
 static uint8_t misses;                            // blocks read from the card this frame
 bool lowPri;                                      // scenery: it may wait a frame rather than read more than two blocks
 static uint8_t *slotBuf(uint8_t i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
-static fat::Run runs[4];
+__attribute__((section(".sbss.card_runs"))) static fat::Run runs[4];
 static uint8_t nRuns;
 static bool open_;
 

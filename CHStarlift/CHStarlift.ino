@@ -185,7 +185,7 @@ static int frameNo, timer, cam, shake, lightT, endT, warnT, spawnT;
 static int windV;                                         // the wind's push on the lander, 1/256 px a frame
 static uint32_t rng = 1;
 static uint8_t wxLvl;
-static int topsAt[4] = { -9999, -9999, -9999, -9999 };       // the layer x of column 0 when the tops were made (-9999: none)
+__attribute__((section(".sdata.topsAt"))) static int topsAt[4] = { -9999, -9999, -9999, -9999 };       // the layer x of column 0 when the tops were made (-9999: none)
                                      // this stage's weather, rolled when it is built: 0 clear .. 3 a storm
 static bool loadReq;                                      // the stage's world is to be read from the card and the stage built
 

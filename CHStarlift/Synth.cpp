@@ -25,11 +25,11 @@ namespace {
 constexpr uint16_t ENV_DIV = SYN_RATE / 122;            // samples between envelope ticks (about 8 ms)
 
 struct Voice { uint16_t ph, mph, inc, minc, tinc, binc; uint8_t idx, eff, vol; bool gate; };   // tinc: the note; binc: the glide toward it
-Voice v[3];
+__attribute__((section(".sbss.syn_v"))) Voice v[3];   // (.sbss: inside the gp window, so short addresses)
 uint8_t lfo;                                             // the vibrato's phase (about 5 Hz)
 
 struct Drum { uint16_t ph, inc, lfsr; uint8_t vol, kind, decay; };      // kind 0 kick, 1 snare, 2 hat
-Drum dr = { 0, 0, 0xACE1, 0, 0, 0 };
+__attribute__((section(".sdata.syn_dr"))) Drum dr = { 0, 0, 0xACE1, 0, 0, 0 };
 
 uint8_t musV = 4, fxV = 4;                               // the volumes, 0-4
 uint8_t engT, engV;                                      // the engine's target and its level now
@@ -37,9 +37,9 @@ uint16_t engLfsr = 0x1D3B;
 int16_t engLp;
 
 struct Sfx { const audio::Step *st; uint8_t n, i, ticks, tot, prio, amp, amp0, kind, wph; bool soft; uint16_t inc, ph, base; int16_t dinc; int8_t nz; };
-Sfx sf = {};                                             // kind 0 square, 1 wobble, 2 noise
+__attribute__((section(".sbss.syn_sf"))) Sfx sf = {};                                             // kind 0 square, 1 wobble, 2 noise
 
-alignas(4) uint8_t songBuf[SONG_MAX];                  // the song playing, loaded from the card (Music.h has the layout)
+alignas(4) __attribute__((section(".sbss.syn_song"))) uint8_t songBuf[SONG_MAX];                  // the song playing, loaded from the card (Music.h has the layout)
 const uint8_t *cur = nullptr;
 const Inst *ins = (const Inst *)songBuf;
 volatile int8_t needId = -1;                             // a song the game should load into songBuf (the card is its to read)
