@@ -15,8 +15,7 @@ namespace card {
 enum { SLOTS = 6, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
 __attribute__((section(".sbss.card_tag"))) static uint16_t tag[ALL];   // (open() empties them; nothing looks before that)
-static uint8_t used[ALL], frameNo;
-static bool pri[ALL];               // the frame each slot was last used in (the oldest is the one to replace)
+static uint8_t used[ALL], frameNo;               // the frame each slot was last used in (the oldest is the one to replace)
 static uint8_t misses;                            // blocks read from the card this frame
 bool lowPri;                                      // scenery: it may wait a frame rather than read more than two blocks
 static uint8_t *slotBuf(int i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
@@ -53,7 +52,7 @@ static uint8_t findDat(uint8_t *b) {
     const uint32_t rootSecs = (rd16(b + 17) + 15) >> 4, rootLba = fatLba + b[16] * fsz;
     dataLba = rootLba + rootSecs;
     uint32_t dir = rd32(b + 44), sec = 0;
-    for (;;) {
+    for (uint32_t guard = 4096; guard--;) {
         uint32_t lba;
         if (!f32) { if (sec == rootSecs) return 0; lba = rootLba + sec; }
         else { if (sec >> shift) { if ((dir = nextC(dir, b)) < 2) return 0; sec = 0; } lba = clus(dir) + sec; }
@@ -100,23 +99,20 @@ const uint8_t *at(uint32_t off) {
     if ((frameNo & 63) == 7) fprintf(stderr, "use f%u b%u lp%d\n", (unsigned)frameNo, (unsigned)blk, (int)lowPri);
 #endif
     for (int i = 0; i < ALL; i++) if (tag[i] == blk) { used[i] = frameNo; return slotBuf(i) + (off & 511); }
-    // the slot to replace: the least recently used of those not used this frame (a frame block may also take a scenery one) (a frame that needs more blocks than there
+    // the slot to replace: the least recently used of those not used this frame (a frame that needs more blocks than there
     // are slots reads the extra ones through the scratch slot, so the others stay put and only the extra ones miss)
     int v = SLOTS;
-    uint8_t best = 0;
-    for (int i = 0; i < SLOTS; i++) {
-        uint8_t a = frameNo - used[i];
-        if (!a && pri[i] && misses > 5) a = 1;         // (the age 0 of a scenery block is as good as 1 to a frame block)
-        if (a > best) { best = a; v = i; }
-    }
+    for (int i = 0; i < SLOTS; i++)
+        if (used[i] != frameNo && (v == SLOTS || (uint8_t)(frameNo - used[i]) > (uint8_t)(frameNo - used[v]))) v = i;
     if (lowPri && misses >= 2) return nullptr;    // the scenery can show up a frame later; a frame cannot be late
     misses++;
 #ifdef SL_TRACE
     fprintf(stderr, "miss f%u b%u lp%d\n", (unsigned)frameNo, (unsigned)blk, (int)lowPri);
 #endif
+    tag[v] = 0xffff;
     if (!readBlk(blk, slotBuf(v))) { open_ = false; return nullptr; }
     tag[v] = blk;
-    used[v] = frameNo; pri[v] = lowPri;
+    used[v] = frameNo;
     return slotBuf(v) + (off & 511);
 }
 
