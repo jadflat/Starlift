@@ -1631,8 +1631,8 @@ static void drawPad(int px, bool base) {
 static void windsock(int x, int gy) {
     if (x < -12 || x > 136) return;
     R(x, gy - 12, 1, 12, C_STEEL);
-    const int dir = windV < 0 ? -1 : 1;                                // (a fixed flag: red and white, blowing the way the wind does)
-    hl(dir < 0 ? x - 3 : x + 1, gy - 12, 3, C_RED); hl(dir < 0 ? x - 3 : x + 1, gy - 11, 3, C_WHITE);
+    const int fx = windV < 0 ? x - 3 : x + 1;                          // (a fixed flag: red and white, blowing the way the wind does)
+    hl(fx, gy - 12, 3, C_RED); hl(fx, gy - 11, 3, C_WHITE);
 }
 
 static void drawMoonTableau() {
@@ -2276,8 +2276,12 @@ static void drawWorld() {
         char *b = bannerTxt;
         if (bannerNew) { fmt(b, T(banner), bannerNum); bannerNew = 0; }
         int w = text35Width(b);
-        if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
-        else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
+        const bool big = w * 2 <= 120;                               // a call-out: big if it fits
+        if (big) w *= 2;
+        const int bx = (128 - w) / 2;
+        const uint8_t c = (frameNo & 4) ? C_WHITE : C_GOLD;
+        R(bx - 3, 19, w + 6, big ? 13 : 9, C_INK);
+        if (big) text35x2(bx, 21, b, c); else textC(20, b, c);
     }
     if (fqPic) { panel(82, 44); tC(85, (uint8_t)(MS_FQ0 + fq.kind), C_GOLD); blitBC(FETCH + fq.kind, 64, 110, false); tC(114, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out: a card of its own, ~2.5 s
 }
