@@ -128,7 +128,8 @@ def add(name, bpm, sweep, inst, lead, bass, delay, dr, shift=12):
 
 
 # Instruments: (ratio, idx0, idxDecay, idxFloor, amp, volDecay, volFloor, drive, vib, glide, release)
-THEREMIN = (1, 12, 1, 5, 64, 0, 58, 16, 12, 5, 3)          # near-sine, a deep waver, a slow glide
+THEREMIN = (1, 12, 1, 5, 64, 0, 58, 16, 12, 5, 3)
+THEREMIN_SANDS = THEREMIN                                  # Sabulon keeps the theremin (the user: it fits there)          # near-sine, a deep waver, a slow glide
 THEREMIN_HI = (1, 8, 1, 4, 52, 0, 46, 16, 14, 4, 3)
 VIBES = (4, 80, 5, 0, 74, 3, 0, 16, 2, 0, 10)               # a bright strike that fades to a pure tone
 BELL = (3, 96, 2, 12, 64, 1, 18, 16, 0, 0, 5)
@@ -164,7 +165,7 @@ P = {'A': [0, H, 1, H, 4, H, H, H, 5, H, 4, H, 1, H, 0, H],
      'D': [8, H, 7, H, 5, H, 4, H, 1, H, H, H, 0, H, H, H]}
 order = list('AABA' + 'AABC' + 'BBCD' + 'AACD')
 sh = [0, 0, 0, 0, 5, 5, 0, 0]
-add('SANDS', 100, 12, [THEREMIN, PLUCK_BASS, BELL_ECHO], lead_stream(64, 'doubleharm', P, order, sh),
+add('SANDS', 100, 12, [THEREMIN_SANDS, PLUCK_BASS, BELL_ECHO], lead_stream(64, 'doubleharm', P, order, sh),
     bass_stream(64, 'dub', sh), 3, drums('down'), shift=12)
 
 # ---- 3 bases: OUTPOST. A sequencer line echoed a fifth up, a pulsing bass, four on the floor
