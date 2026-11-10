@@ -111,3 +111,20 @@ def _maw():
 
 
 MAW = _maw()
+
+
+WORM_UP = ['..kwkwkwkwk.',                  # the sandworm fully risen, for the who's-who (drawn from the game's own)
+           '..kyyyyyyyk.',
+           '..kyyyyyyyk.',
+           '..kkkkkkkkk.',
+           '..ssnnnnnnn.',
+           '..kkkkkkkkk.',
+           '.ssnnnnnnn..',
+           '.kkkkkkkkk..',
+           '.ssnnnnnnn..',
+           'kkkkkkkkk...',
+           'ssnnnnnnn...',
+           'kkkkkkkkk...',
+           '.ssnnnnnnn..',
+           '.kkkkkkkkk..',
+           'oooooooooooo']

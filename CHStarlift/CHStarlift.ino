@@ -2353,7 +2353,7 @@ static void drawIntro() {
         struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };
         static const Row ROWS[6] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
             { &C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { &C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
-            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_GI_WORM, 6, 3, E_WORM, MS_R_WORM, C_RED } };
+            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_WORM_UP, 10, -2, E_WORM, MS_R_WORM, C_RED } };
         int n = 0, m = 0;
         for (int i = 0; i < 6; i++) { bool h = !ROWS[i].kind; for (const auto &e : en) h |= e.kind == ROWS[i].kind; if (h) { m |= 1 << i; n++; } }
         panel(18, 17 + n * 13);                                            // the card just as tall as its rows
@@ -2598,7 +2598,8 @@ static void update() {
             if (SL_DLV == 8 && tf == 40) { lx = (int32_t)(basePadX + 20) << 8; ly = (int32_t)70 << 8; }   // the cargo on the rope: over the base
             if (!once) {
                 once = true;
-                if (SL_DLV == 20) { placeLanderOnPad(ventX[0] - 30); shield = 99; }                   // beside a vent
+                if (SL_DLV == 21) { for (auto &e : en) if (e.kind == E_WORM) { e.st = 2; e.t = 0; e.x = (int16_t)((LX() + 26) * 16); break; } }   // a worm risen beside the lander (who's-who picture)
+                else if (SL_DLV == 20) { placeLanderOnPad(ventX[0] - 30); shield = 99; }                   // beside a vent
                 else if (SL_DLV >= 10) wpn = SL_DLV - 10;                                                 // a laser power-up from the start
                 else if (SL_DLV == 7) { fq = { (int16_t)LX(), 3, 1 }; fqN = 0; fuel = 300; shield = 1; }   // a fetch crate under the lander (landed on it)
                 else if (SL_DLV == 8) { fq = { (int16_t)LX(), 0, 2 }; fqN = 0; fuel = 300; shield = 1; lst = 0; ly = 30 << 8; lvy = -300; }   // rocket parts on the rope
