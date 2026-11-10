@@ -1626,7 +1626,8 @@ static void drawPad(int px, bool base) {
     }
 }
 
-static void windsock(int x, int gy) {
+static void windsock(int px, int off) {                              // beside the pad at px
+    const int x = px + off - cam, gy = groundAt(px);
     if (x < -12 || x > 136) return;
     R(x, gy - 12, 1, 12, C_STEEL);
     const int fx = windV < 0 ? x - 3 : x + 1;                          // (a fixed flag: red and white, blowing the way the wind does)
@@ -1753,7 +1754,7 @@ static void drawGroundThings() {
     drawCritters();
     drawPad(startPadX, false);
     drawPad(basePadX, true);
-    if (PLR.wind) { windsock(startPadX + (baseRight ? 46 : -6) - cam, groundAt(startPadX)); windsock(basePadX + (baseRight ? -6 : 46) - cam, groundAt(basePadX)); }
+    if (PLR.wind) { windsock(startPadX, baseRight ? 46 : -6); windsock(basePadX, baseRight ? -6 : 46); }
     int bx, gy;
     if (placeAt(buildX, 22, -49, 129, bx, gy)) {
         blitRm(P_BASE, bx, gy - PK.base.h + 1, !baseRight, RM(5, PLR.basec));                // the base in this world's colours
