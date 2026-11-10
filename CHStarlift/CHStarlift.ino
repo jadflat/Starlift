@@ -1039,14 +1039,14 @@ static void updateEnemies() {
     }
     bool idle = false;
     for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE) idle = true;
-    const int want = clampi((dE + stage) / 2, 1, 5 + dE);            // (one at a time on the first stage)
+    const int want = clampi((dE + stage) / 3, 1, 2 + dE);   // 0.48: calmer (was /2, cap 5+dE)            // (one at a time on the first stage)
     if (spawnT) spawnT--;
     else if (fliers < want) {
         const int side = rnd(2) ? 1 : -1;
         const int x = clampi(cam + 64 + side * (150 + rnd(110)), 20, W - 20);
         uint8_t k = (idle && ufos < 1 + stage / 3 && rnd(10) < 6) ? E_UFO : (rnd(3) && stage ? E_STINGER : E_MINE);   // (no stingers on the first stage)
         if (Enemy *e = spawnEn(k, x, 28 + rnd(30))) { if (k == E_UFO) { sfx(S_UFO); } e->vx = (int8_t)(-side * 8); }
-        spawnT = clampi(300 - stage * 12, 90, 300) * (9 - 2 * dE) / 7;                  // enemies come spaced out: time for a rescue between them
+        spawnT = clampi(300 - stage * 8, 160, 300) * (9 - 2 * dE) / 7;                  // enemies come spaced out: time for a rescue between them
     }
     for (int ei = 0; ei < ENS; ei++) {
         Enemy &e = en[ei];
