@@ -1404,15 +1404,8 @@ static void drawSky() {
         const int lv = (y - TOP) * 7 / 80;
         const uint8_t s0 = (C_SKY0 << 4) | C_SKY0, s1 = (C_SKY1 << 4) | C_SKY1, d01 = (C_SKY1 << 4) | C_SKY0, d10 = (C_SKY0 << 4) | C_SKY1;
         const uint8_t f1 = (C_FAR << 4) | C_SKY1, f2 = (C_SKY1 << 4) | C_FAR;
-        uint8_t v;
-        switch (lv) {
-        case 0: case 1: v = s0; break;
-        case 2: v = (y & 1) ? d01 : s0; break;
-        case 3: v = (y & 1) ? d01 : d10; break;
-        case 4: v = (y & 1) ? d01 : s1; break;
-        case 5: case 6: v = s1; break;
-        default: v = (y & 1) ? ((y & 2) ? f1 : s1) : s1; break;
-        }
+        static const uint8_t SKYV[7][2] = { { s0, s0 }, { s0, s0 }, { s0, d01 }, { d10, d01 }, { s1, d01 }, { s1, s1 }, { s1, s1 } };   // [band][odd row]
+        const uint8_t v = lv < 7 ? SKYV[lv][y & 1] : (y & 3) == 3 ? f1 : s1;
         memset(gfx_fb + y * GFX_FB_STRIDE, v, GFX_FB_STRIDE);
     }
 }
