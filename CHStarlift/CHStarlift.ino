@@ -338,7 +338,7 @@ static NOINL const char *T(uint8_t id) {
 }
 // all the text is the small 3 x 5 font (the call-outs at twice its size): one font in flash, not two
 static NOINL void textC(int y, const char *s, uint8_t c) { t35((128 - text35Width(s)) / 2, y + 1, s, c); }
-static NOINL void textSh(int x, int y, const char *s, uint8_t c) { text35s(x, y + 1, s, c, C_INK); }
+static NOINL void textSh(int x, int y, const char *s, uint8_t c) { t35(x + 1, y + 2, s, C_INK); t35(x, y + 1, s, c); }   // (what text35s() does, through the short call)
 static NOINL void textCS(int y, const char *s, uint8_t c) { textSh((128 - text35Width(s)) / 2, y, s, c); }
 static NOINL void tC(int y, uint8_t id, uint8_t c) { textC(y, T(id), c); }       // a message from the card, centred
 static NOINL void tCS(int y, uint8_t id, uint8_t c) { textCS(y, T(id), c); }
