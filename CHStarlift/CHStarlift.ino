@@ -1203,7 +1203,7 @@ static void updateEnemies() {
             if (nearL(ex, 120) && (frameNo % 60) == 0) for (int k = -8; k <= 8; k += 16) eshot(ex + k, ey + 6, X, Y, 20, 1);
             break;
         case E_TURRET:
-            if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, (hz & HZ_SNIPER) ? 44 : 26, 1);   // (stage 6 on: a sniper's fast shot)
+            if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, (hz & HZ_SNIPER) ? 34 : 26, 1);   // (stage 6 on: a sniper's fast shot)
             break;
         }
         if (!e.kind) continue;
@@ -1313,7 +1313,7 @@ static void updateShots() {
         s.x = (int16_t)(s.x + s.vx); s.y = (int16_t)(s.y + s.vy);
         const int x = s.x >> 4, y = s.y >> 4;
         if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
-        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (s.kind == 2 || ++chip >= 4) { chip = 0; damage(1); } else { sfx(S_CLANG); shake = 2; } }   // 0.46: bullets are weak (a pip every 4th), meteors hit hard
+        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (++chip >= 4) { chip = 0; damage(1); } else { sfx(S_CLANG); shake = 2; } }   // 0.46: shots and meteors are weak: a pip every 4th hit
         if (dlv == 3 && absi(x - scX) < 8 && absi(y - scY + 4) < 6) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
     }
     for (auto &q : pt) {
@@ -1667,23 +1667,23 @@ static void updateFetch() {
     if (fqPic) fqPic--;
     else if (fq.st == 1 && (frameNo % 1260) == 0) { fqPic = 100; sfx(S_WARN); }   // not fetched yet: the call-out again now and then
 #ifdef SLF_LEAK
-    if (leak && fuel && lst != 2 && !(frameNo & 3)) { fuel--; if (!(frameNo & 12)) part(LX(), LY() + 6, rnd(5) - 2, 8, 16, C_GOLD); }   // dripping
+    if (leak && fuel && lst != 2 && !(frameNo & 7)) { fuel--; if (!(frameNo & 12)) part(LX(), LY() + 6, rnd(5) - 2, 8, 16, C_GOLD); }   // dripping
 #endif
 #ifdef SLF_TUNNEL
     for (int k = 0; k < 2; k++) if (tunX[k] > 0 && lst == 0 && absi(tunX[k] - LX()) < 10) lvy = (int16_t)(lvy + (k ? 14 : -16));   // the first blows up, the second down
 #endif
 #ifdef SLF_EVAC
     if (evT) { if (--evT % 900 == 0) sfxSay(S_WARN, evT ? MS_EVAC : MS_MELTDOWN, 90, evT / 30); }   // every 30 s: the seconds left
-    else if ((hz & HZ_EVAC) && (frameNo % 90) == 0) { shake = 12; sfx(S_CRASH); if (lst == 0) damage(1); }   // the reactor gone: quakes
+    else if ((hz & HZ_EVAC) && (frameNo % 90) == 0) { shake = 10; sfx(S_CRASH); }   // the reactor gone: quakes (they shake, they don't hurt)
 #endif
 #ifdef SLF_MAG
     if ((hz & HZ_MAG) && !magT && (frameNo % 1100) == 600) { magT = 150; sfxSay(S_WARN, MS_MAG, 90); }
-    if (magT) { magT--; if (lst == 0 && !(frameNo & 3)) lvx = (int16_t)(lvx + rnd(41) - 20); }   // the controls drift
+    if (magT) { magT--; if (lst == 0 && !(frameNo & 3)) lvx = (int16_t)(lvx + rnd(21) - 10); }   // the controls drift
 #endif
-    if ((hz & HZ_METEORS) && (frameNo % (200 - stage * 15)) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP + 1, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
+    if ((hz & HZ_METEORS) && (frameNo % 240) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP + 1, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
     for (int k = 0; k < 3; k++) {                                       // the vents: rumble, then a column of fire (or steam) 60 px high
         const int vx = ventX[k];
-        if (vx > 0 && (frameNo + k * 53) % 160 >= 125 && absi(vx - LX()) < 6 && LY() > groundAt(vx) - 64) damage(1);
+        if (vx > 0 && (frameNo + k * 53) % 160 >= 125 && absi(vx - LX()) < 6 && LY() > groundAt(vx) - 64) lvy = (int16_t)(lvy - 40);   // the blast throws the lander up (no harm: variety, not difficulty)
     }
     if (!fq.st) {
         if (fqN && fqT && !--fqT) {
