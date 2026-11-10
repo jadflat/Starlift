@@ -119,6 +119,7 @@ static const SfxAt SOUNDS[S_COUNT] = {
     { 2, (uint8_t)(8 | synth::WOBBLE) },   // BLAST
     { 1, (uint8_t)(6 | synth::WOBBLE) }    // MOO
 };
+static NOINL void sfxShake(uint8_t id, int k);
 static NOINL void sfx(uint8_t id) { int at = 0; for (int i = 0; i < id; i++) at += SOUNDS[i].n; const SfxAt &f = SOUNDS[id]; const audio::Effect e = { SFX_STEPS + at, f.n, f.flags }; synth::sfx(e); }
 
 // ---- the planets ------------------------------------------------------------------------------------------------
@@ -185,6 +186,7 @@ struct Critter { int16_t x, y; int8_t vx; uint8_t kind, t; };   // background wi
 static Critter crit[CRITS];
 
 static int frameNo, timer, cam, shake, lightT, endT, warnT, spawnT;
+static NOINL void sfxShake(uint8_t id, int k) { shake = k; sfx(id); }
 static int windV;                                         // the wind's push on the lander, 1/256 px a frame
 static uint32_t rng = 1;
 static uint8_t wxLvl;
@@ -637,7 +639,7 @@ static void wreck() {
 }
 static void damage(int n) {
     if (invT || lst == 2) return;
-    sfx(S_HIT); shake = 6; invT = 80;
+    sfxShake(S_HIT, 6); invT = 80;
 #ifdef SLF_LEAK
     if ((hz & HZ_LEAK) && !leak && lst == 0 && rnd(2)) { leak = 1; say(MS_LEAK, 90); }     // a holed tank
 #endif
@@ -656,7 +658,7 @@ static void touchDown() {
     const int gl = groundAt(x - 7), gr = groundAt(x + 7);
     const bool level = absi(gl - gr) <= 4, upright = absi(ang) <= 3, soft = lvy <= 420 - dE * 40 && absi(lvx) <= 270 - dE * 30;
     if (gear && level && upright && !soft && shield > 1 && lvy <= 620 - dE * 40 && absi(lvx) <= 380 - dE * 30) {
-        shield--; sfx(S_HIT); shake = 6;                                 // a heavy bump: it holds
+        shield--; sfxShake(S_HIT, 6);                                 // a heavy bump: it holds
     } else if (!gear || !level || !upright || !soft) {
         if (!gear) say(MS_GEAR_UP, 60);
         else if (!level) say(MS_TOO_STEEP, 60);
@@ -707,7 +709,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
                 const int8_t d = (int8_t)(n == 0 ? facing : n == 1 ? -facing : 0);
                 newShot(LX() + d * 10, LY() + (d ? 0 : 10), d, 40, d ? 2 : 3);   // kind 3: falls
             }
-            sfx(S_BLAST); shake = 4;
+            sfxShake(S_BLAST, 4);
         }
         charge = 0;
     }
@@ -1146,12 +1148,12 @@ static void updateEnemies() {
                         shake = 3;
                         if (e.t == 90) say(MS_PULL, 120);                       // (in case it is not obvious)
                         if ((frameNo & 3) == 0) { lvx = (int16_t)(lvx + rnd(41) - 20); lvy = (int16_t)(lvy + 10); }   // it fights: yanks the lander about
-                        if (rnd(160) == 0 && e.cargo > 4) { e.cargo -= 3; shake = 10; sfx(S_CRASH); }   // and drags itself back in
+                        if (rnd(160) == 0 && e.cargo > 4) { e.cargo -= 3; sfxShake(S_CRASH, 10); }   // and drags itself back in
                         if ((e.t & 7) == 0) sfx((e.t & 16) ? S_WORM : S_CLANG);   // roaring and straining
                     } else {
                         e.y = (int16_t)(e.y + clampi((Y + 16) * 16 - e.y, -16, 64)); e.x = (int16_t)(e.x + (((X - lvx / 32) * 16 - e.x) >> 3));   // swinging under the lander: it trails behind, then swings back
                         lvy = (int16_t)(lvy + 3);                                 // heavy: the lander feels it
-                        if ((e.t & 31) == 0) { sfx(S_WORM); shake = 2; }      // it roars and thrashes all the way
+                        if ((e.t & 31) == 0) { sfxShake(S_WORM, 2); }      // it roars and thrashes all the way
                     }
                     if (absi(X - alienX - 20) < 18) { e.st = 5; e.t = 0; sfx(S_WORM); }   // over the collector: let go
                 } else if (e.st == 5) {
@@ -1168,8 +1170,8 @@ static void updateEnemies() {
             }
             if (lst == 0 && hoverT < 255 && absi(ex - X) < (e.st ? 24 : 16) && gx - (e.st ? 38 : 0) - Y < (e.st ? 70 : 56)) {   // (measured from its head when it is up)   // the lander hovering over it: beeps, then the rope pulls it out
                 const bool ready = hoverTick();
-                if (ready && e.st == 0 && rnd(2)) { e.st = 1; e.t = 0; hoverT = 0; say(MS_WORM, 40); shake = 10; sfx(S_WORM); break; }   // a coin toss: it bursts up at the lander instead
-                if (ready) { e.cargo = e.st ? 14 : 0; e.st = 4; e.t = 0; hoverT = 255; sfx(S_WORM); shake = 8; say(MS_HOLD_STEADY, 90); addScore(500, ex, gx - 20); break; }
+                if (ready && e.st == 0 && rnd(2)) { e.st = 1; e.t = 0; hoverT = 0; say(MS_WORM, 40); sfxShake(S_WORM, 10); break; }   // a coin toss: it bursts up at the lander instead
+                if (ready) { e.cargo = e.st ? 14 : 0; e.st = 4; e.t = 0; hoverT = 255; sfxShake(S_WORM, 8); say(MS_HOLD_STEADY, 90); addScore(500, ex, gx - 20); break; }
             }
 #endif
             if (e.st == 0) {                                                  // roaming under the sand
@@ -1179,7 +1181,7 @@ static void updateEnemies() {
                 if (lst == 1 && absi(X - ex) < 300) tx = X;                   // a lander on the sand draws it
                 e.vx = (int8_t)(sgn(tx - ex) * (6 + stage / 3));
                 e.y = (int16_t)(gx * 16);
-                if ((e.t & 31) == 0 && absi(ex - X) < 110) { sfx(S_WORM); shake = 3; }
+                if ((e.t & 31) == 0 && absi(ex - X) < 110) { sfxShake(S_WORM, 3); }
                 if (absi(tx - ex) < 3 && (ti >= 0 || lst == 1) && e.t > 120) { e.st = 1; e.t = 0; e.vx = 0; say(MS_WORM, 40); shake = 10; }   // it rests a while after a dive
             } else {
                 e.vx = 0;
@@ -1220,14 +1222,14 @@ static void updateEnemies() {
                 e.x = (int16_t)(e.x - lvx / 3);
                 if (!bumpT) {
                     if (rnd(5) == 0) for (auto &c : crit) if (!c.kind) { c = { (int16_t)nx, (int16_t)(ny + 4), (int8_t)(X < nx ? 1 : -1), 3, 0 }; say(MS_COW, 50); break; }
-                    sfx(S_CLANG); shake = 3; bumpT = 12;
+                    sfxShake(S_CLANG, 3); bumpT = 12;
 #ifdef SL_TRACE
                     fprintf(stderr, "clang f%u shield %d/%d lvx %d lvy %d\n", (unsigned)frameNo, shield, shMax(), lvx, lvy);
 #endif
                 }
                 continue;
             }
-            if (e.kind == E_MOTHER) { if (!bumpT) { damage(1); sfx(S_CLANG); shake = 4; bumpT = 30; } lvx = X >= nx ? 200 : -200; lvy = 220; continue; }   // a boss can't be rammed: the lander bounces off, hurt
+            if (e.kind == E_MOTHER) { if (!bumpT) { damage(1); sfxShake(S_CLANG, 4); bumpT = 30; } lvx = X >= nx ? 200 : -200; lvy = 220; continue; }   // a boss can't be rammed: the lander bounces off, hurt
             damage(e.kind == E_MINE ? 2 : 1);
             killEn(e);
         }
@@ -1313,7 +1315,7 @@ static void updateShots() {
         s.x = (int16_t)(s.x + s.vx); s.y = (int16_t)(s.y + s.vy);
         const int x = s.x >> 4, y = s.y >> 4;
         if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
-        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (++chip >= 3) { chip = 0; damage(1); } else { sfx(S_CLANG); shake = 2; } }   // 0.46: shots and meteors are weak: a pip every 3rd hit
+        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (++chip >= 3) { chip = 0; damage(1); } else { sfxShake(S_CLANG, 2); } }   // 0.46: shots and meteors are weak: a pip every 3rd hit
         if (dlv == 3 && absi(x - scX) < 8 && absi(y - scY + 4) < 6) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
     }
     for (auto &q : pt) {
@@ -1674,7 +1676,7 @@ static void updateFetch() {
 #endif
 #ifdef SLF_EVAC
     if (evT) { if (--evT % 900 == 0) sfxSay(S_WARN, evT ? MS_EVAC : MS_MELTDOWN, 90, evT / 30); }   // every 30 s: the seconds left
-    else if ((hz & HZ_EVAC) && (frameNo % 90) == 0) { shake = 10; sfx(S_CRASH); }   // the reactor gone: quakes (they shake, they don't hurt)
+    else if ((hz & HZ_EVAC) && (frameNo % 90) == 0) { sfxShake(S_CRASH, 10); }   // the reactor gone: quakes (they shake, they don't hurt)
 #endif
 #ifdef SLF_MAG
     if ((hz & HZ_MAG) && !magT && (frameNo % 1100) == 600) { magT = 150; sfxSay(S_WARN, MS_MAG, 90); }
