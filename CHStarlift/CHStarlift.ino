@@ -2348,26 +2348,27 @@ static void drawOptions() {
 static void drawIntro() {
     drawWorld();
 #ifndef SL_SLIM
-    panel(30, 68);
     char s[28];
     if (timer <= 100) {                                                    // who's who (0.46: back, from a table)
-        panel(18, 106);
-        tCS(21, MS_WHO, C_GOLD);
         struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };
         static const Row ROWS[6] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
             { &C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { &C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
             { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_MAW, 10, 3, E_WORM, MS_R_WORM, C_RED } };
+        int n = 0, m = 0;
+        for (int i = 0; i < 6; i++) { bool h = !ROWS[i].kind; for (const auto &e : en) h |= e.kind == ROWS[i].kind; if (h) { m |= 1 << i; n++; } }
+        panel(18, 17 + n * 13);                                            // the card just as tall as its rows
+        tCS(21, MS_WHO, C_GOLD);
         int y = 32;
-        for (const Row &r : ROWS) {
-            bool has = !r.kind;
-            for (const auto &e : en) has |= e.kind == r.kind;
-            if (!has) continue;
+        for (int i = 0; i < 6; i++) {
+            const Row &r = ROWS[i];
+            if (!(m >> i & 1)) continue;
             const bool ufo = r.sp == &SAUCER[0];
             blit(ufo ? SAUCER[(frameNo >> 2) & 3] : *r.sp, r.dx, y + r.dy, false, 255, ufo ? EMAP : MAP);
             tX(32, y + 3, r.msg, r.col); y += 13;
         }
         return;
     }
+    panel(30, 68);
     tN(34, MS_STAGE_N, stage + 1, C_SILVER);
     textC(44, PLR.name, C_GOLD);
     fmt(s, T(MS_SAVE), quota, T(MS_OF), nMen);
