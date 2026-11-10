@@ -168,6 +168,8 @@ void envTick() {
 
 namespace synth {
 
+static __attribute__((noinline)) uint16_t xs(uint16_t x) { x ^= x << 7; x ^= x >> 9; x ^= x << 8; return x; }   // the noise: a 16-bit xorshift, one copy
+
 uint8_t sample() {                                       // runs from flash: the RAM for a RAM function is not there
     if (++envCnt >= ENV_DIV) { envCnt = 0; envTick(); }
     if (cur && --stepCnt == 0) { stepCnt = stepLen; nextStep(); }
@@ -186,9 +188,7 @@ uint8_t sample() {                                       // runs from flash: the
     if (dr.vol) {
         dr.ph += dr.inc;
         if (dr.kind) {
-            uint16_t x = dr.lfsr;
-            x ^= x << 7; x ^= x >> 9; x ^= x << 8;
-            dr.lfsr = x;
+            const uint16_t x = dr.lfsr = xs(dr.lfsr);
             const int nz = (int)(x >> 8) - 128;
             mix += (nz * dr.vol) >> 7;
             if (dr.kind == 1) mix += (SIN((uint8_t)(dr.ph >> 8)) * dr.vol) >> 7;
@@ -200,9 +200,7 @@ uint8_t sample() {                                       // runs from flash: the
     mix = (mix * musV) >> 2;
     int fx = 0;
     if (engV) {                                                        // the engine: noise through a one-pole low-pass, a rumble
-        uint16_t x = engLfsr;
-        x ^= x << 7; x ^= x >> 9; x ^= x << 8;
-        engLfsr = x;
+        const uint16_t x = engLfsr = xs(engLfsr);
         engLp += (int16_t)((((int)(x >> 8) - 128) - engLp) >> 3);
         fx += (engLp * engV) >> 7;
     }
@@ -211,7 +209,7 @@ uint8_t sample() {                                       // runs from flash: the
         sf.ph += sf.inc;
         if (sf.kind == 1) fx += (SIN((uint8_t)(sf.ph >> 8)) * sf.amp) >> 7;
         else if (sf.kind == 2) {
-            if (sf.ph < was) { uint16_t x = dr.lfsr; x ^= x << 7; x ^= x >> 9; x ^= x << 8; dr.lfsr = x; sf.nz = (int8_t)(x >> 8); }   // a new level each cycle: pitched noise
+            if (sf.ph < was) { const uint16_t x = dr.lfsr = xs(dr.lfsr); sf.nz = (int8_t)(x >> 8); }   // a new level each cycle: pitched noise
             fx += (sf.nz * sf.amp) >> 7;
         } else fx += (sf.ph & 0x8000) ? sf.amp : -sf.amp;
     }
