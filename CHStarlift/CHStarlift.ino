@@ -185,26 +185,26 @@ static int frameNo, timer, cam, shake, lightT, endT, warnT, spawnT;
 static int windV;                                         // the wind's push on the lander, 1/256 px a frame
 static uint32_t rng = 1;
 static uint8_t wxLvl;
-__attribute__((section(".sdata.topsAt"))) static int topsAt[4] = { -9999, -9999, -9999, -9999 };       // the layer x of column 0 when the tops were made (-9999: none)
+__attribute__((section(".sbss.topsAt"))) static int topsAt[4];       // the layer x of column 0 when the tops were made (-9999: none; genStage() sets them)
                                      // this stage's weather, rolled when it is built: 0 clear .. 3 a storm
 static bool loadReq;                                      // the stage's world is to be read from the card and the stage built
 
 // the lander: position 1/256 px, velocity 1/256 px a frame
 static int32_t lx, ly;
 static int16_t lvx, lvy;
-static int8_t ang, facing = 1;
+static int8_t ang, facing;                               // (no initial values here: genStage() sets them, and .data is out of gp's reach, 4 B more an access)
 static uint16_t fuel;
 static uint8_t seats, shield, lst, gear, rotT, deadT, fireCd, gunCd, hovT, hovE, onPad, unloadT, invT, dryT, thrLvl;   // thrLvl: the engine spooling, 0-6   // lst: 0 flying, 1 landed, 2 wrecked
 static bool thrusting;
 
 static uint8_t banner, bannerT, bannerNew;   // bannerNew: its text is to be read from the card (once, not every frame)
 static char bannerTxt[28];                            // a message (MS_...) shown for bannerT frames
-static int8_t bannerNum = -1;                              // a number after it (-1: none)
+static int8_t bannerNum;                                   // a number after it (-1: none)
 static uint8_t tripN, killT, kills, flashT;
 static bool hov;                                                  // the lander hovering over a cow or a worm this frame
 static uint8_t dlv, dlvT, lidT, partyT, foodOn, feasts, cowsN, crashN, stars, hoverT, ropeL, spitT, tankT;   // hoverT: hovering over a cow; ropeL: the empty rope, winding up; crashN: landers lost this stage   // feasts: this stage's; cowsN: cows grazing at its end                // dlv: 0 none, 1 the bag falls, 2 the speeder fetches it, 3 brings it, 4 tosses it, 5 zooms off
 static int bagX, bagY, scX, scY;                                // px (the speeder's: its middle, the ground under it)
-static int8_t scDir = 1;
+static int8_t scDir;                                            // (1 from setup())
 static uint8_t tripNx, bumpT, charge;                          // charge: frames UP has been held (CHARGED: ready)
 enum { CHARGED = 15 };                                   // bumpT: frames until a bump can clang again               // colonists home this landing; the kill chain; the screen flash
 #ifndef SL_DIFF
@@ -2720,6 +2720,7 @@ void setup() {
     rng = 0x9E3779B9u ^ (millis() << 1);
     for (int i = 0; i < WXN; i++) { wxX[i] = (uint8_t)rnd(160); wxY[i] = (uint8_t)(TOP + rnd(112)); }
     synth::volume(musicV, fxV);
+    scDir = 1;
     toTitle();
 }
 
