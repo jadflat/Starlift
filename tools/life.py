@@ -164,6 +164,11 @@ DESCENT = ['..wyyyyyyyyyyr..',                              # the old descent st
 
 GANTRY = ['..r...',                                         # the launch gantry by the start pad (the game blinks its light)
           '..n...'] + ['nnnnnn', 'n.n..n', 'n..n.n', 'n.n..n', 'n..n.n'] * 6
+def _item(c, mid):
+    return ['wwwwwww', c * 6 + 'k', mid + 'k', c * 6 + 'k', c * 6 + 'k']
+ITEMS = [_item('y', 'yyyyyy'), _item('b', 'bbwbwb'.replace('bbwbwb', 'bbwbwb')), _item('r', 'rwwwwwr'[:6]), _item('u', 'uuuuuu')]
+ITEMS[1] = ['wwwwwww', 'bbbbbbk', 'bbwbwbk', 'bbbwbbk', 'bbbbbbk']
+ITEMS[2] = ['wwwwwww', 'rrrrrrk', 'rwwwwwk', 'rrrrrrk', 'rrrrrrk']
 PUMP = ['wwww', 'yyyy', 'yyyy', 'ykky', 'ykky', 'yyyy', 'yyyy', 'ynny', 'yyyy']   # the fuel pump by the base pad
 
 MOTHERSHIP = ['...............kkkkkkk...............',      # the boss: a mothership over the aliens' collector

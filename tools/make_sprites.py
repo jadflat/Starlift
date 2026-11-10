@@ -338,6 +338,8 @@ for k, f in enumerate(life.FOODS):
     CARD['FOOD%d' % k] = life.g(f)
 CARD['DESCENT'] = life.g(life.DESCENT)
 CARD['GANTRY'] = life.g(life.GANTRY)
+for k, f in enumerate(life.ITEMS):
+    CARD['ITEM%d' % k] = life.g(f)
 CARD['PUMP'] = life.g(life.PUMP)
 import bosses                                         # the four bosses (tools/bosses.py, redrawn in 0.20)
 CARD['MOTHERSHIP'] = life.g(bosses.MOTHERSHIP)

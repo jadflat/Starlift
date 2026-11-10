@@ -1617,11 +1617,9 @@ static void drawItems() {
         if (it.st != 1) continue;
         const int x = it.x - cam - 3, y = groundAt(it.x) - 5;
         if (x < -8 || x > 130) continue;
-        static const uint8_t BODY[4] = { C_GOLD, C_STEEL, C_RED, C_ACC };
-        R(x, y, 7, 5, BODY[it.kind]); rects(x, y, RX_ITEM, 2);
-        if (it.kind == IT_REPAIR) { pset(x + 2, y + 2, C_WHITE); pset(x + 3, y + 3, C_WHITE); pset(x + 4, y + 2, C_WHITE); }
-        else if (it.kind == IT_FUEL) R(x + 1, y + 2, 5, 1, C_WHITE);
-        else pset(x + 3, y + 2, (frameNo & 4) ? C_WHITE : C_GOLD);
+        static const CSpr *const IS[4] = { &C_ITEM0, &C_ITEM1, &C_ITEM2, &C_ITEM3 };
+        blit(*IS[it.kind], x, y, false);
+        if (it.kind != IT_REPAIR && it.kind != IT_FUEL) pset(x + 3, y + 2, (frameNo & 4) ? C_WHITE : C_GOLD);
         if ((frameNo & 16) && absi(it.x - LX()) < 60) pset(x + 3, y - 3, C_GOLD);   // a beacon when the lander is near
     }
 }
