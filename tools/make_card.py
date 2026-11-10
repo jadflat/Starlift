@@ -107,6 +107,8 @@ E_TURRET, E_WORM = 4, 5                                              # Game.h's 
 HZB = dict(LEAK=1, SNIPER=2, TUNNEL=4, MAG=8, VENTS=16, METEORS=32, EVAC=64)   # the .ino's HZ_ bits
 sys.path.insert(0, HERE)
 from who import WHO
+HAZARDS = [(), (), ('TUNNEL',), ('SNIPER', 'METEORS'), ('VENTS', 'TUNNEL', 'MAG'), ('METEORS', 'LEAK', 'SNIPER'), ('VENTS', 'MAG', 'TUNNEL'),
+           ('EVAC', 'METEORS', 'SNIPER', 'LEAK', 'VENTS')]   # each stage's
 WHO_B = b''.join(struct.pack('<BbbBBB', SPR_ID['C_' + sp], dx, dy, 0x80 | HZB[k] if isinstance(k, str) else k, MSG_ID['MS_' + m] if 'MS_' + m in MSG_ID else MSG_ID[m], C[c])
                  for sp, dx, dy, k, m, c in WHO)
 FALL = dict(RAIN=(5, C['SILVER'], C['STEEL']), DRIZZLE=(2, C['GNDL'], C['SKY1']), ACID=(4, C['GREEN'], C['GREEN']))   # rain: px a frame, two colours
@@ -134,7 +136,7 @@ for st, w in enumerate(WORLDS):
     r += struct.pack('%db' % len(RX), *RX)
     # the stage's numbers (a world is a stage, 0-7): camps, colonists (the game's MEN is 20), items, fetch quests, turrets, rough, ridges
     r += bytes([min(4 + st // 3, 8), 8 + st, (st + 2) // 3, 0 if st < 2 else 1 if st < 5 else 2, st // 2, 10 + st * 3, 26 + st * 3])
-    r += WHO_B
+    r += WHO_B + bytes([sum(HZB[h] for h in HAZARDS[st])])
     PLANET_LEN = len(r)
     plan += r
 

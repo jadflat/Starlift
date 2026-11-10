@@ -22,6 +22,7 @@ struct Planet {
     int8_t light[6][3]; uint8_t skyAt[2], fall[3], tube[3], collTop, door; int8_t rx[65];
     uint8_t zones, people, nItems, quests, turrets, rough, ridge;   // the stage's numbers (a world is a stage): camps, colonists, items, fetch quests, turrets, how rough and ridged the ground
     struct Row { uint8_t sp; int8_t dx, dy; uint8_t kind, msg, col; } who[13];   // the who's-who rows (the same on every world): a picture, where, the enemy that must be about or 0x80 + the stage's hazard bit, its line
+    uint8_t hz;                                         // the stage's hazards (the .ino's HZ_ bits)
 };
 enum State : uint8_t { TITLE, INTRO, PLAY, CLEAR, OVER, WIN, PAUSED, HELP, OPTIONS };
 enum ManSt : uint8_t { M_NONE, M_IDLE, M_RUN, M_ABOARD, M_BEAM, M_JET, M_WALK, M_SAVED, M_LOST, M_HELD, M_DROP };   // HELD: in a UFO; DROP: falling into its bucket; JET: jet-packing down

@@ -224,9 +224,7 @@ struct Fetch { int16_t x; uint8_t kind, st; };               // a fetch quest's 
 static Fetch fq;
 // each stage's hazards (0.46): a different mix from stage 3 on
 enum : uint8_t { HZ_LEAK = 1, HZ_SNIPER = 2, HZ_TUNNEL = 4, HZ_MAG = 8, HZ_VENTS = 16, HZ_METEORS = 32, HZ_EVAC = 64 };
-static const uint8_t HZ[8] = { 0, 0, HZ_TUNNEL, HZ_SNIPER | HZ_METEORS, HZ_VENTS | HZ_TUNNEL | HZ_MAG,
-                               HZ_METEORS | HZ_LEAK | HZ_SNIPER, HZ_VENTS | HZ_MAG | HZ_TUNNEL, HZ_EVAC | HZ_METEORS | HZ_SNIPER | HZ_LEAK | HZ_VENTS };
-static uint8_t hz;                                            // this stage's
+#define hz PLR.hz                                             // this stage's hazards: with its world, from the card (tools/make_card.py's HAZARDS)
 static uint8_t leak, magT, chip;                              // chip: bullet hits since the last pip lost
 static uint16_t evT;                                          // stage 8: frames to the reactor blowing                                    // leak: the tank holed; magT: a magnetic storm's frames left
 static int16_t tunX[2];                                       // wind tunnels (stage 4 on)
@@ -475,7 +473,7 @@ static void placeLanderOnPad(int padX) {
 }
 
 static void genStage() {
-    planet = stage & 7; hz = HZ[planet];
+    planet = stage & 7;
 
     baseRight = ((stage + sector) & 1) == 0;
     const uint32_t s = (uint32_t)stage * 977u + 13u;
