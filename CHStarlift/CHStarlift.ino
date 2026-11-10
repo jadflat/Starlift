@@ -1667,7 +1667,7 @@ static void updateFetch() {
     if (fqPic) fqPic--;
     else if (fq.st == 1 && (frameNo % 1260) == 0) { fqPic = 100; sfx(S_WARN); }   // not fetched yet: the call-out again now and then
 #ifdef SLF_LEAK
-    if (leak && fuel && lst != 2 && !(frameNo & 7)) { fuel--; if (!(frameNo & 12)) part(LX(), LY() + 6, rnd(5) - 2, 8, 16, C_GOLD); }   // dripping
+    if (leak && fuel && lst != 2 && !(frameNo & 7)) { fuel--; part(LX() + rnd(5) - 2, LY() + 6, rnd(5) - 2, 10, 20, C_GOLD); part(LX(), LY() + 8, 0, 14, 14, C_RED); }   // a stream of drops   // dripping
 #endif
 #ifdef SLF_TUNNEL
     for (int k = 0; k < 2; k++) if (tunX[k] > 0 && lst == 0 && absi(tunX[k] - LX()) < 10) lvy = (int16_t)(lvy + (k ? 14 : -16));   // the first blows up, the second down
