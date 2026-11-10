@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.44 (2026-11-10)
+
+- Easier to fly: the heavier worlds now pull halfway to the Moon's gravity (the Moon is unchanged; the engines are not).
+- Bosses have much less armour (13 and 17 laser hits) and can no longer be rammed: a bump costs a shield pip and bounces the lander off.
+- Eight stages: the game ends after the eighth world (ALL 8 WORLDS SAVED!); no second round.
+- Fetch quests from stage 3 (two from stage 6): a call-out with a picture of the cargo; lifted cargo (rocket parts, reactor
+  core, solar array) or cargo landed on (supply crate, water tank, seed pods), big and with flashing beacons. Delivered to
+  the base: a full tank and a mended hull.
+- To fit the flash: the who's-who page, the old supply and engine-part pick-ups, and the sandworm spitting out swallowed colonists are gone.
+
 ## 0.43 (2026-11-07)
 
 - Fixed: colonist dots on the radar were drawn over the seat indicators (operator precedence in the radar height).

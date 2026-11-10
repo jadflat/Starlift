@@ -29,8 +29,10 @@ Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
 - **Rescue.** Colonists wave as you fly over. Land beside them (not on them!) and they run aboard: eight seats. Fly them
   to the base pad at the far end of the stage: they walk into the base, and the pad refuels and repairs the lander.
   Each stage has a quota of colonists to bring home; miss it and the world must be tried again.
-- **Pick-ups.** Land beside a crate to load it: repair kits, fuel cells, colony supplies (deliver them to the base) and
-  now and then an engine part that makes the lander stronger for the rest of the game.
+- **Pick-ups.** Land beside a crate to load it: repair kits and fuel cells.
+- **Fetch quests** (stage 3 on). A call-out shows what the base needs: rocket parts, a reactor core, a solar array
+  (hover over them and lift them on the rope) or a supply crate, a water tank, seed pods (land on them). They are big and
+  carry flashing beacons. Bring them to the base for a full tank and a mended hull.
 - **The scanner** at the top shows the whole stage: colonists, enemies, items, the base. An arrow at the screen's edge
   points to the next job.
 
@@ -58,7 +60,7 @@ Trailers: [30 seconds](docs/trailer30.mp4), [15 seconds](docs/trailer.mp4).
 
 ## The worlds
 
-Sixteen stages over eight worlds, each with its own sky, scenery, weather, wildlife and takeaway:
+Eight stages, one on each world, each with its own sky, scenery, weather, wildlife and takeaway:
 
 ![The eight worlds of STARLIFT](CHStarlift/docs/screens/worlds.png)
 
