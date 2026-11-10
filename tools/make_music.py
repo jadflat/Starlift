@@ -128,8 +128,8 @@ def add(name, bpm, sweep, inst, lead, bass, delay, dr, shift=12):
 
 
 # Instruments: (ratio, idx0, idxDecay, idxFloor, amp, volDecay, volFloor, drive, vib, glide, release)
-THEREMIN = (1, 12, 1, 5, 88, 0, 80, 16, 12, 5, 3)          # near-sine, a deep waver, a slow glide
-THEREMIN_HI = (1, 8, 1, 4, 70, 0, 62, 16, 14, 4, 3)
+THEREMIN = (1, 12, 1, 5, 64, 0, 58, 16, 12, 5, 3)          # near-sine, a deep waver, a slow glide
+THEREMIN_HI = (1, 8, 1, 4, 52, 0, 46, 16, 14, 4, 3)
 VIBES = (4, 80, 5, 0, 74, 3, 0, 16, 2, 0, 10)               # a bright strike that fades to a pure tone
 BELL = (3, 96, 2, 12, 64, 1, 18, 16, 0, 0, 5)
 BELL_ECHO = (3, 70, 2, 10, 42, 1, 12, 16, 0, 0, 5)
