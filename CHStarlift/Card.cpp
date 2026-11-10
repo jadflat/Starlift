@@ -15,7 +15,8 @@ namespace card {
 enum { SLOTS = 6, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
 __attribute__((section(".sbss.card_tag"))) static uint16_t tag[ALL];   // (open() empties them; nothing looks before that)
-static uint8_t used[ALL], pri[ALL], frameNo;               // the frame each slot was last used in (the oldest is the one to replace)
+static uint8_t used[ALL], frameNo;
+static bool pri[ALL];               // the frame each slot was last used in (the oldest is the one to replace)
 static uint8_t misses;                            // blocks read from the card this frame
 bool lowPri;                                      // scenery: it may wait a frame rather than read more than two blocks
 static uint8_t *slotBuf(int i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
@@ -52,7 +53,7 @@ static uint8_t findDat(uint8_t *b) {
     const uint32_t rootSecs = (rd16(b + 17) + 15) >> 4, rootLba = fatLba + b[16] * fsz;
     dataLba = rootLba + rootSecs;
     uint32_t dir = rd32(b + 44), sec = 0;
-    for (uint32_t guard = 4096; guard--;) {
+    for (;;) {
         uint32_t lba;
         if (!f32) { if (sec == rootSecs) return 0; lba = rootLba + sec; }
         else { if (sec >> shift) { if ((dir = nextC(dir, b)) < 2) return 0; sec = 0; } lba = clus(dir) + sec; }
@@ -105,7 +106,7 @@ const uint8_t *at(uint32_t off) {
     uint8_t best = 0;
     for (int i = 0; i < SLOTS; i++) {
         uint8_t a = frameNo - used[i];
-        if (!a && pri[i] && misses > 1) a = 1;         // (the age 0 of a scenery block is as good as 1 to a frame block)
+        if (!a && pri[i] && misses > 5) a = 1;         // (the age 0 of a scenery block is as good as 1 to a frame block)
         if (a > best) { best = a; v = i; }
     }
     if (lowPri && misses >= 2) return nullptr;    // the scenery can show up a frame later; a frame cannot be late
