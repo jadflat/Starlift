@@ -597,7 +597,7 @@ static void saveProgress(bool inGame) {
 static void newStage() {
     planet = stage & 7;
     loadReq = true;
-    state = INTRO; timer = HZ[stage & 7] ? 290 : 210;                                            // the stage card, then who's who
+    state = INTRO; timer = 210;                                            // the stage card, then who's who
     synth::music((stage & 3) == 3 ? 9 : 1 + planet);                     // a boss stage: SHOWDOWN
 }
 static void newGame() {
@@ -964,6 +964,7 @@ static NOINL void snatch(Enemy &e, int x, int y) {
     if (e.st != 4 && (e.st != 5 || e.cargo)) return;
     const int by = e.st == 4 ? groundAt(burgerX + 35) - 8 - e.cargo / 2 : y + 6;   // the bag where it was: in the beam, or aboard
     addScoreS(500, x, by - 16); say(MS_FOOD_SNATCHED, 60);
+    addFuel(FUEL_MAX / 3); shield = shMax(); sfx(S_FUEL);              // 0.46: the lander refuelled and mended for it
 #ifdef SL_TRACE
     fprintf(stderr, "snatch f%d\n", frameNo);
 #endif
@@ -2257,7 +2258,7 @@ static void drawWorld() {
         if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
         else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
     }
-    if (fqPic) { panel(36, 44); tC(39, (uint8_t)(MS_FQ0 + fq.kind), C_GOLD); blitBC(FETCH[fq.kind], 64, 64, false); tC(68, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out: a card of its own, ~2.5 s
+    if (fqPic) { panel(82, 44); tC(85, (uint8_t)(MS_FQ0 + fq.kind), C_GOLD); blitBC(FETCH[fq.kind], 64, 110, false); tC(114, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out: a card of its own, ~2.5 s
 }
 
 // ---- title, menus ------------------------------------------------------------------------------------------------------
@@ -2352,8 +2353,7 @@ static void drawIntro() {
     drawWorld();
 #ifndef SL_SLIM
     char s[28];
-    const int split = hz ? 80 : 0;                                         // with hazards: a second page for them
-    if (timer <= 100 + split) {                                            // who's who (0.46: back, from a table)
+    if (timer <= 100) {                                                    // (100: who's who, 50: hazards; each waits for a key)                                            // who's who (0.46: back, from a table)
         struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };   // kind: the enemy that must be about, or 0x80 + the stage's hazard bit
         static const Row ROWS[13] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
             { &C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { &C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
@@ -2362,7 +2362,7 @@ static void drawIntro() {
             { &C_IHZ_TUNNEL, 12, 1, 0x80 | HZ_TUNNEL, MS_R_TUNNEL, C_WHITE }, { &C_IHZ_MAG, 12, 1, 0x80 | HZ_MAG, MS_R_MAG, C_GOLD },
             { &C_IHZ_VENTS, 12, 2, 0x80 | HZ_VENTS, MS_R_VENTS, C_RED }, { &C_IHZ_METEORS, 12, 1, 0x80 | HZ_METEORS, MS_R_METEOR, C_GOLD },
             { &C_IHZ_EVAC, 12, 1, 0x80 | HZ_EVAC, MS_R_EVAC, C_RED } };
-        const int i0 = timer <= split ? 6 : 0, i1 = i0 ? 13 : 6;
+        const int i0 = timer <= 50 ? 6 : 0, i1 = i0 ? 13 : 6;
         int n = 0, m = 0;
         for (int i = i0; i < i1; i++) {
             const uint8_t k = ROWS[i].kind;
@@ -2370,7 +2370,7 @@ static void drawIntro() {
             if (!(k & 0x80)) for (const auto &e : en) h |= e.kind == k;
             if (h) { m |= 1 << i; n++; }
         }
-        panel(18, 17 + n * 13);                                            // the card just as tall as its rows
+        panel(18, 25 + n * 13);                                            // the card just as tall as its rows (and the key line)
         tCS(21, i0 ? MS_HAZARDS : MS_WHO, C_GOLD);
         int y = 32;
         for (int i = i0; i < i1; i++) {
@@ -2380,6 +2380,7 @@ static void drawIntro() {
             blit(ufo ? SAUCER[(frameNo >> 2) & 3] : *r.sp, r.dx, y + r.dy, false, 255, ufo ? EMAP : MAP);
             tX(32, y + 3, r.msg, r.col); y += 13;
         }
+        if (frameNo & 16) tC(y + 1, MS_PRESS_A, C_SILVER);
         return;
     }
     panel(30, 68);
@@ -2600,8 +2601,9 @@ static void update() {
     case INTRO:
         updateWeather(); updateCritters();
         updateCamera();
-        if ((edge & 4) && timer > 100) timer = 100;                       // A: on to who's who, then to play
-        else if (--timer <= 0 || ((edge & 4) && timer < 95)) { state = PLAY; say((stage & 3) == 3 ? (uint8_t)(MS_MOTHER + ((stage >> 2) & 3)) : hz ? MS_METEORS : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
+        if (timer > 100) { timer--; if (edge) timer = 100; }              // the stage card (a key: on to who's who)
+        else if (edge && timer == 100 && hz) timer = 50;                  // who's who waits for a key; then the hazards page
+        else if (edge) { state = PLAY; say((stage & 3) == 3 ? (uint8_t)(MS_MOTHER + ((stage >> 2) & 3)) : hz ? MS_METEORS : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
         break;
     case PLAY:
 #ifdef SL_DLV
