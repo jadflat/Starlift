@@ -2015,6 +2015,7 @@ static void drawEnemies() {
         const int sx = (e.x >> 4) - cam, sy = e.y >> 4;
         if (sx < -16 || sx > 144) continue;
         const uint8_t solid = e.hit ? C_WHITE : 255;
+        int sp = -1, ox = 0, oy = 0; bool fl = false;                  // (a sprite drawn after the switch)
         switch (e.kind) {
         case E_UFO:
             if (e.st == 1 && e.target != 255) drawBeam(sx, sy, men[e.target].y + 1);
@@ -2026,8 +2027,8 @@ static void drawEnemies() {
             blit(SAUCER + ((frameNo >> 2) & 3), sx - 11, sy - 5, false, solid, EMAP);
             for (int k = 0; k < e.cargo && e.st < 3; k++) pset(sx - 4 + k * 2, sy - 3, (frameNo + k * 4) & 8 ? C_WHITE : C_GOLD);
             break;
-        case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid, EMAP); break;
-        case E_MINE: blit((frameNo & 4) ? C_MINE0 : C_MINE1, sx - 4, sy - 4, false, solid, EMAP); break;
+        case E_STINGER: sp = (frameNo & 8) ? C_SNATCH0 : C_SNATCH1; ox = 7; oy = 6; fl = sx > LX() - cam; break;
+        case E_MINE: sp = (frameNo & 4) ? C_MINE0 : C_MINE1; ox = oy = 4; break;
         case E_WORM: {
 #ifdef SLF_WORM_LIFT
             if (e.st >= 4) {                                            // hanging by its head: the rope, the maw, the body swinging below
@@ -2082,10 +2083,11 @@ static void drawEnemies() {
 #ifdef SLF_SNIPER
             if ((hz & HZ_SNIPER) && nearL(e.x >> 4, 100) && (e.t % 70) >= 50 && (frameNo & 1)) for (int k = 1; k < 16; k++) pset(sx + (LX() - cam - sx) * k / 16, sy - 8 + (LY() - sy + 8) * k / 16, C_RED);   // the sight line
 #endif
-            blit(C_TURRET, sx - 6, sy - 4, false, solid, EMAP);
+            sp = C_TURRET; ox = 6; oy = 4;
             break;
         }
         }
+        if (sp >= 0) blit(sp, sx - ox, sy - oy, fl, solid, EMAP);
     }
 }
 
