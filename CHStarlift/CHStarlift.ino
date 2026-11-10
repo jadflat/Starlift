@@ -2159,7 +2159,7 @@ static void drawShots() {
             if (frameNo & 1) part(s.x - s.dir * 4 + rnd(5) - 2, s.y - (s.dir ? 0 : 4), -s.dir * 6, s.dir ? 0 : -6, 6, C_GOLD);
             continue;
         }
-        if (s.kind) { pset(x, s.y, C_WHITE); pset(x - s.dir, s.y, C_GOLD); pset(x - s.dir * 2, s.y, C_GOLD); pset(x - s.dir * 4, s.y, C_RED); continue; }
+        if (s.kind) { static const uint8_t RC[4] = { C_WHITE, C_GOLD, C_GOLD, C_RED }; for (int k = 0; k < 4; k++) pset(x - s.dir * (k + (k >> 1 & k)), s.y, RC[k]); continue; }   // (dots 0, 1, 2, 4)
         static const uint8_t BEAMC[14] = { C_WHITE, C_WHITE, C_ACC, C_ACC, C_ACC, C_ACC, C_SKY0, C_WHITE, C_SKY0, C_WHITE, C_SKY0, C_WHITE, C_SKY0, C_WHITE };
         for (int k = 0; k < 14; k++) pset(x - s.dir * k, s.y, BEAMC[k]);
     }
