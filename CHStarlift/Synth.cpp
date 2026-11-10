@@ -29,7 +29,7 @@ __attribute__((section(".sbss.syn_v"))) Voice v[3];   // (.sbss: inside the gp w
 uint8_t lfo;                                             // the vibrato's phase (about 5 Hz)
 
 struct Drum { uint16_t ph, inc, lfsr; uint8_t vol, kind, decay; };      // kind 0 kick, 1 snare, 2 hat
-__attribute__((section(".sdata.syn_dr"))) Drum dr = { 0, 0, 0xACE1, 0, 0, 0 };
+__attribute__((section(".sbss.syn_dr"))) Drum dr;       // (its lfsr is seeded in begin(): 0xACE1)
 
 uint8_t musV = 4, fxV = 4;                               // the volumes, 0-4
 uint8_t engT, engV;                                      // the engine's target and its level now
@@ -280,6 +280,7 @@ extern "C" void TIM3_IRQHandler(void) {
 }
 
 void synth::begin() {
+    dr.lfsr = 0xACE1;
     RCC->APB2PCENR |= RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOB | RCC_APB2Periph_TIM1;
     RCC->APB1PCENR |= RCC_APB1Periph_TIM3;
     AFIO->PCFR1 = (AFIO->PCFR1 & ~(7u << 15)) | (1u << 15);          // TIM1 partial remap: CH2 on PB10
@@ -298,5 +299,5 @@ void synth::begin() {
     TIM3->CTLR1 = 1;
 }
 #else
-void synth::begin() {}
+void synth::begin() { dr.lfsr = 0xACE1; }
 #endif
