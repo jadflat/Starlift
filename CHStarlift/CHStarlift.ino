@@ -126,6 +126,9 @@ static NOINL void sfx(uint8_t id) { int at = 0; for (int i = 0; i < id; i++) at 
 // the pictures this world draws, from its pack on the card (tools/make_card.py), the ones every frame needs first
 struct Pack { CSpr sky, giant, plant[3][2], crit[2][2], st[6], shop, food, base, coll, mother; };
 static Pack PK;
+// a picture by number: below 128 one of the game's own (Sprites.h: CS), from 128 one of the world's pack
+enum : uint8_t { P_SKY = 128, P_GIANT, P_PLANT, P_CRIT = P_PLANT + 6, P_ST = P_CRIT + 4, P_SHOP = P_ST + 6, P_FOOD, P_BASE, P_COLL, P_MOTHER };
+static NOINL const CSpr &cs(int id) { return id < 128 ? CS[id] : ((const CSpr *)&PK)[id - 128]; }
 static Planet PLR;                                         // the world being shown, loaded from the card (CARD_PLANET)
 static_assert(sizeof(Planet) == PLANET_LEN, "Planet must match tools/make_card.py");
 
@@ -294,7 +297,8 @@ RAMFUNC(blitRd) static void blitRd(Rd &rd, int w, int h, int x, int y, bool flip
 }
 static NOINL void blit(const Spr &s, int x, int y, bool flip, uint8_t solid, const uint8_t *map) { Rd rd = { s.d, 0, 0, false }; blitRd(rd, s.w, s.h, x, y, flip, solid, map); }
 static NOINL void blitBC(const Spr &s, int cx, int by, bool flip, uint8_t solid, const uint8_t *map) { blit(s, cx - s.w / 2, by - s.h + 1, flip, solid, map); }
-static NOINL void blit(const CSpr &s, int x, int y, bool flip, uint8_t solid, const uint8_t *map) {    // from the card (nothing without one)
+static NOINL void blit(int id, int x, int y, bool flip, uint8_t solid, const uint8_t *map) {    // from the card (nothing without one)
+    const CSpr &s = cs(id);
 #ifdef SL_NOPICS
     if (s.w != 96 && s.w != 108) return;                           // a perf test: card pictures off (the logos stay)
 #endif
@@ -303,12 +307,12 @@ static NOINL void blit(const CSpr &s, int x, int y, bool flip, uint8_t solid, co
     Rd rd = { nullptr, CARD_PIC + s.off, 0, true };
     blitRd(rd, s.w, s.h, x, y, flip, solid, map);
 }
-static NOINL void blitBC(const CSpr &s, int cx, int by, bool flip, uint8_t solid, const uint8_t *map) { blit(s, cx - s.w / 2, by - s.h + 1, flip, solid, map); }
+static NOINL void blitBC(int id, int cx, int by, bool flip, uint8_t solid, const uint8_t *map) { const CSpr &s = cs(id); blit(id, cx - s.w / 2, by - s.h + 1, flip, solid, map); }
 static NOINL void blit(const Spr &s, int x, int y, bool flip) { blit(s, x, y, flip, 255, MAP); }          // plain, in the sprite's own colours
-static NOINL void blit(const CSpr &s, int x, int y, bool flip) { blit(s, x, y, flip, 255, MAP); }
+static NOINL void blit(int s, int x, int y, bool flip) { blit(s, x, y, flip, 255, MAP); }
 static NOINL void blitBC(const Spr &s, int cx, int by, bool flip) { blitBC(s, cx, by, flip, 255, MAP); }
-static NOINL void blitBC(const CSpr &s, int cx, int by, bool flip) { blitBC(s, cx, by, flip, 255, MAP); }
-static NOINL void blitRm(const CSpr &s, int x, int y, bool flip, uint32_t rm) { uint8_t mp[14]; remap(mp, rm); blit(s, x, y, flip, 255, mp); }   // in a world's own colours
+static NOINL void blitBC(int s, int cx, int by, bool flip) { blitBC(s, cx, by, flip, 255, MAP); }
+static NOINL void blitRm(int s, int x, int y, bool flip, uint32_t rm) { uint8_t mp[14]; remap(mp, rm); blit(s, x, y, flip, 255, mp); }   // in a world's own colours
 // text with a number in it, without printf (which costs about 2 KB of flash): fmt(buf, T(MS_SCORE), n, T(MS_PTS))
 static NOINL char *fmt(char *d, const char *a, int v = -1, const char *b = "", int v2 = -1, const char *c = "") {
     char *o = d;
@@ -1427,7 +1431,7 @@ static void drawSkyObjects() {
     switch (p.sky) {
     default: {                                                  // a planet, a sun or moons: a picture from the card
         const CSpr &c = PK.sky;
-        blitRm(c, p.skyAt[0] - pc - c.w / 2, p.skyAt[1] - c.h / 2, false, RM(7, C_SKY0) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);
+        blitRm(P_SKY, p.skyAt[0] - pc - c.w / 2, p.skyAt[1] - c.h / 2, false, RM(7, C_SKY0) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);
         break;
     }
     case SK_AURORA:                                             // curtains of light, shimmering
@@ -1439,9 +1443,8 @@ static void drawSkyObjects() {
         break;
     }
     {                                                           // the world's sky giant, drifting across far away
-        const CSpr &g = PK.giant;
         const int gx = 150 - (int)(((uint32_t)frameNo / 3 + stage * 97u) % 420u), gy = (stage & 7) == 1 ? 50 : TOP + 14 + isin(frameNo + stage * 30) / 20;
-        if ((stage & 7) != 1 || ((frameNo >> 8) & 1)) blitRm(g, gx, gy, false, RM(7, C_MID) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);   // the far worm only shows now and then
+        if ((stage & 7) != 1 || ((frameNo >> 8) & 1)) blitRm(P_GIANT, gx, gy, false, RM(7, C_MID) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);   // the far worm only shows now and then
     }
     if (p.clouds) {                                             // dithered cloud banks drifting slowly
         const int cc = (cam >> 4) + (frameNo >> 3);
@@ -1540,7 +1543,7 @@ static void drawGroundCols() {
 static void structure(int n, int sx, int base, int L, uint32_t h) {
     const CSpr &c = PK.st[n];
     const int x = sx, y = base - c.h + 1;
-    blitRm(c, x, y, ((h >> 22) & 1) && n != 3, RM(2, LDARK[L]) | RM(3, LBODY[L]) << 8 | RM(4, LLIT[L]) << 16);
+    blitRm(P_ST + n, x, y, ((h >> 22) & 1) && n != 3, RM(2, LDARK[L]) | RM(3, LBODY[L]) << 8 | RM(4, LLIT[L]) << 16);
     const int8_t *li = PLR.light[n];
     const int lx = x + li[0], ly = y + li[1];
     switch (li[2]) {
@@ -1640,7 +1643,7 @@ static void drawItems() {
         if (it.st != 1) continue;
         const int x = it.x - cam - 3, y = groundAt(it.x) - 5;
         if (x < -8 || x > 130) continue;
-        blit(ITEMPIC[it.kind], x, y, false);
+        blit(ITEMPIC + it.kind, x, y, false);
         if (it.kind != IT_REPAIR && it.kind != IT_FUEL) pset(x + 3, y + 2, (frameNo & 4) ? C_WHITE : C_GOLD);
         if ((frameNo & 16) && absi(it.x - LX()) < 60) pset(x + 3, y - 3, C_GOLD);   // a beacon when the lander is near
     }
@@ -1713,12 +1716,12 @@ static void drawFetch() {
     }
 #endif
     if (fq.st != 1 && fq.st != 2) return;
-    const CSpr &sp = FETCH[fq.kind];
+    const int id = FETCH + fq.kind; const CSpr &sp = cs(id);
     const int sx = fq.x - cam, by = fq.st == 2 ? LY() + 28 : groundAt(fq.x), ty = by - sp.h;
     if (sx < -20 || sx > 148) return;
     if (fq.st == 2) R(sx, LY() + 8, 1, ty - LY() - 8, C_SILVER);                   // the rope
     else if (fq.kind < 3 && hoverT && hoverT < 255 && absi(fq.x - LX()) < 16) hoverBar(sx, ty, C_GOLD);
-    blitBC(sp, sx, by, false);
+    blitBC(id, sx, by, false);
     const int bx = (frameNo & 8) ? sx - sp.w / 2 : sx + sp.w / 2 - 2;     // the beacons flash in turn
     R(bx, ty - 2, 2, 2, C_RED);
 }
@@ -1747,7 +1750,7 @@ static void drawGroundThings() {
     if (PLR.wind) { windsock(startPadX + (baseRight ? 46 : -6) - cam, groundAt(startPadX)); windsock(basePadX + (baseRight ? -6 : 46) - cam, groundAt(basePadX)); }
     int bx, gy;
     if (placeAt(buildX, 22, -49, 129, bx, gy)) {
-        blitRm(PK.base, bx, gy - PK.base.h + 1, !baseRight, RM(5, PLR.basec));                // the base in this world's colours
+        blitRm(P_BASE, bx, gy - PK.base.h + 1, !baseRight, RM(5, PLR.basec));                // the base in this world's colours
         flag(baseRight ? bx - 4 : bx + 46, gy, 0);
     }
     drawAlienBase();
@@ -1760,7 +1763,7 @@ static void drawGroundThings() {
 // a flag on a pole, rippling: the colony's (a gold star) or the aliens' (an eye)
 static void flag(int x, int gy, uint8_t kind) {
     R(x, gy - 24, 1, 24, C_SILVER); pset(x, gy - 25, C_GOLD);
-    blit(FLAGPIC[kind * 2 + ((frameNo >> 4) & 1)], x + 1, gy - 25, false);
+    blit(FLAGPIC + kind * 2 + ((frameNo >> 4) & 1), x + 1, gy - 25, false);
 }
 
 // the aliens' collecting bucket: its tubes run down to pods in a chamber under the ground
@@ -1779,7 +1782,7 @@ static void drawAlienBase() {
         for (int k = 3; k < 37; k += 5) pset(bx + k, cy + 2, ((frameNo >> 2) + k) & 4 ? C_RED : C_GOLD);
     }
     for (int t = 0; t < 3; t++) R(bx + TX[t], gy, 2, cy - gy, C_STEEL);
-    blit(PK.coll, bx, gy - PK.coll.h + 1, false);
+    blit(P_COLL, bx, gy - PK.coll.h + 1, false);
     if (tubeT) for (int t = 0; t < 3; t++) {                           // green slime pulsing down the tubes
         const int y = gy - 12 + ((45 - tubeT) * 2 + t * 3) % 22;
         R(bx + TX[t], y, 2, 3, C_GREEN); pset(bx + TX[t], y + 1, C_WHITE);
@@ -1794,8 +1797,8 @@ static void drawDiner() {
     int bx, gy;
     if (!placeAt(burgerX, 30, -60, 140, bx, gy)) return;
     const int top = gy - 37;
-    blitRm(PK.shop, bx, top, false, RM(6, PLR.shopc));                  // the shop's own colour
-    blit(PK.food, bx + 44, top + 1, false);
+    blitRm(P_SHOP, bx, top, false, RM(6, PLR.shopc));                  // the shop's own colour
+    blit(P_FOOD, bx + 44, top + 1, false);
     const bool flicker = (hash((uint32_t)(frameNo >> 1)) & 63) == 0;
     if (!flicker) text35(bx + 23 - text35Width(PLR.shop) / 2, top + 5, PLR.shop, (frameNo & 32) ? C_GOLD : C_WHITE);
     for (int k = 0; k < 46; k += 2) {                                   // chasing bulbs round the board
@@ -1819,7 +1822,7 @@ static bool busyAt(int x) {
 static void plant(uint8_t k, int x, int gy, uint32_t h) {          // from the card; the ground's tones are this world's
     uint8_t mp[14];
     remap(mp, RM(9, C_GND) | RM(12, C_GNDL) << 8 | RM(7, C_GNDD) << 16);
-    blitBC(PK.plant[k][((frameNo >> 4) + (int)(h >> 9)) & 1], x, gy + 1, (h >> 11) & 1, 255, mp);
+    blitBC(P_PLANT + k * 2 + (((frameNo >> 4) + (int)(h >> 9)) & 1), x, gy + 1, (h >> 11) & 1, 255, mp);
 }
 static void drawPlants() {
     for (int c = cam / 9 - 1; c <= (cam + 128) / 9 + 1; c++) {
@@ -1905,7 +1908,7 @@ static void drawCritters() {
         }
         const int fl = c.kind == 1, kind = (fl ? PLR.fly : PLR.crawl) - 1, f = (c.t >> (fl ? 2 : 3)) & 1;
         const int hop = (!fl && kind == 0 && (c.t & 31) < 8) ? ((c.t & 31) * (8 - (c.t & 31))) / 4 : 0;
-        blitBC(PK.crit[!fl][f], c.x - cam, c.y - hop, c.vx < 0);
+        blitBC(P_CRIT + !fl * 2 + f, c.x - cam, c.y - hop, c.vx < 0);
     }
 }
 
@@ -1955,7 +1958,7 @@ static void manKit(const Man &m, int sx, int by, bool jet) {
     }
 }
 
-static void spinAt(int i, int sx, int y, bool flip, const uint8_t *mp) { blitBC(SPIN[i], sx, y, flip, 255, mp); }   // a tumbling colonist
+static void spinAt(int i, int sx, int y, bool flip, const uint8_t *mp) { blitBC(SPIN + i, sx, y, flip, 255, mp); }   // a tumbling colonist
 static void drawMen() {
     for (int i = 0; i < nMen; i++) {
         const Man &m = men[i];
@@ -1966,18 +1969,18 @@ static void drawMen() {
         const uint8_t *mp = manMap(m.look);
         switch (m.st) {
         case M_IDLE: {
-            const CSpr *s = &C_MAN_STAND;
+            int s = C_MAN_STAND;
             int by = m.y;
             switch (m.act) {
-            case D_GAZE: s = &C_MAN_LOOKUP; break;
-            case D_TRIP: s = &SPIN[2]; break;                                // flat out
-            case D_WANDER: case D_TREK: s = (phase & 8) ? &C_MAN_RUN1 : &C_MAN_STAND; break;
-            case D_WAVE: s = (phase & 4) ? &C_MAN_WAVE1 : &C_MAN_WAVE2; break;
-            case D_CHEER: if (phase & 8) { s = &C_MAN_CHEER; by--; } break;
+            case D_GAZE: s = C_MAN_LOOKUP; break;
+            case D_TRIP: s = SPIN + 2; break;                                // flat out
+            case D_WANDER: case D_TREK: s = (phase & 8) ? C_MAN_RUN1 : C_MAN_STAND; break;
+            case D_WAVE: s = (phase & 4) ? C_MAN_WAVE1 : C_MAN_WAVE2; break;
+            case D_CHEER: if (phase & 8) { s = C_MAN_CHEER; by--; } break;
             case D_CHAT: {
                 const bool speaking = (((m.t >> 5) & 1) == m.by);
                 if (speaking) {
-                    if (phase & 8) s = &C_MAN_TALK;
+                    if (phase & 8) s = C_MAN_TALK;
                     const int bx = sx + m.face * 4 - 3, byy = m.y - 18;          // a speech bubble
                     R(bx, byy, 8, 5, C_WHITE); pset(bx + (m.face > 0 ? 1 : 6), byy + 5, C_WHITE);
                     for (int d = 0; d < 3; d++) if (((m.t >> 2) % 4) > d) pset(bx + 1 + d * 2, byy + 2, C_INK);
@@ -1986,7 +1989,7 @@ static void drawMen() {
             }
             default: break;
             }
-            blitBC(*s, sx, by, flip, 255, mp);
+            blitBC(s, sx, by, flip, 255, mp);
             manKit(m, sx, by, false);
             break;
         }
@@ -2014,7 +2017,7 @@ static void drawEnemies() {
                 drawBeam(sx, sy, gy + 2);
                 drawBag(sx, by);
             }
-            blit(SAUCER[(frameNo >> 2) & 3], sx - 11, sy - 5, false, solid, EMAP);
+            blit(SAUCER + ((frameNo >> 2) & 3), sx - 11, sy - 5, false, solid, EMAP);
             for (int k = 0; k < e.cargo && e.st < 3; k++) pset(sx - 4 + k * 2, sy - 3, (frameNo + k * 4) & 8 ? C_WHITE : C_GOLD);
             break;
         case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid, EMAP); break;
@@ -2063,7 +2066,7 @@ static void drawEnemies() {
             break;
         }
         case E_MOTHER:
-            blit(PK.mother, sx - 22, sy - 10, false, solid, EMAP);
+            blit(P_MOTHER, sx - 22, sy - 10, false, solid, EMAP);
             if (frameNo & 8) pset(sx - 16 + ((frameNo >> 2) % 9) * 4, sy, C_RED);       // a light running round its rim
             R(sx - 12, sy - 13, e.hp * 24 / (10 + stage), 1, C_RED);                 // how much it can still take
             break;
@@ -2105,7 +2108,7 @@ static void drawLander() {
     }
     if (sy < TOP - 8 && (frameNo & 4)) { const int ax = clampi(sx, 3, 124); pset(ax, 17, C_GOLD); hl(ax - 1, 18, 3, C_GOLD); }   // above the screen: an arrow
     const int a = absi(ang);
-    blit((!gear ? LANDER_UP : LANDER)[a], sx - 11, sy - 11, ang < 0);
+    blit((!gear ? LANDER_UP : LANDER) + a, sx - 11, sy - 11, ang < 0);
     if (lidT) rects(sx, sy, RX_LID, 2);   // the flip-top lid, open
     else if (foodOn && (frameNo & 8)) pset(sx, sy - 10, C_GOLD);      // the takeaway aboard
     if (charge == CHARGED) {                                         // charged: the nose glows
@@ -2125,7 +2128,7 @@ static NOINL void drawBag(int x, int y) {                                   // a
 static void drawDelivery() {
     if (partyT) {                                                       // the feast at the base door, a colonist dancing either side
         const int fx = (doorX + basePadX + 20) / 2, gy = groundAt(fx) - 1, hop = (frameNo >> 3) & 1;   // between the pad and the door
-        blitBC(PK.food, fx - cam, gy, false);
+        blitBC(P_FOOD, fx - cam, gy, false);
         for (int k = -1; k <= 1; k += 2) blitBC(hop ? C_MAN_CHEER : C_MAN_WAVE1, fx - cam + k * 12, gy - hop, k > 0, 255, manMap((uint8_t)(k + 3)));
     }
     if (!dlv) return;
@@ -2259,7 +2262,7 @@ static void drawWorld() {
         if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
         else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
     }
-    if (fqPic) { panel(82, 44); tC(85, (uint8_t)(MS_FQ0 + fq.kind), C_GOLD); blitBC(FETCH[fq.kind], 64, 110, false); tC(114, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out: a card of its own, ~2.5 s
+    if (fqPic) { panel(82, 44); tC(85, (uint8_t)(MS_FQ0 + fq.kind), C_GOLD); blitBC(FETCH + fq.kind, 64, 110, false); tC(114, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out: a card of its own, ~2.5 s
 }
 
 // ---- title, menus ------------------------------------------------------------------------------------------------------
@@ -2355,14 +2358,14 @@ static void drawIntro() {
 #ifndef SL_SLIM
     char s[28];
     if (timer <= 100) {                                                    // (100: who's who, 50: hazards; each waits for a key)                                            // who's who (0.46: back, from a table)
-        struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };   // kind: the enemy that must be about, or 0x80 + the stage's hazard bit
-        static const Row ROWS[13] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
-            { &C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { &C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
-            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_WORM_UP, 10, -2, E_WORM, MS_R_WORM, C_RED },
-            { &C_IHZ_LEAK, 12, 2, 0x80 | HZ_LEAK, MS_R_LEAK, C_GOLD }, { &C_IHZ_SNIPER, 12, 1, 0x80 | HZ_SNIPER, MS_R_SNIPER, C_RED },
-            { &C_IHZ_TUNNEL, 12, 1, 0x80 | HZ_TUNNEL, MS_R_TUNNEL, C_WHITE }, { &C_IHZ_MAG, 12, 1, 0x80 | HZ_MAG, MS_R_MAG, C_GOLD },
-            { &C_IHZ_VENTS, 12, 2, 0x80 | HZ_VENTS, MS_R_VENTS, C_RED }, { &C_IHZ_METEORS, 12, 1, 0x80 | HZ_METEORS, MS_R_METEOR, C_GOLD },
-            { &C_IHZ_EVAC, 12, 1, 0x80 | HZ_EVAC, MS_R_EVAC, C_RED } };
+        struct Row { uint8_t sp; int8_t dx, dy; uint8_t kind, msg, col; };   // kind: the enemy that must be about, or 0x80 + the stage's hazard bit
+        static const Row ROWS[13] = { { C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { SAUCER, 6, 2, 0, MS_R_UFO, C_RED },
+            { C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
+            { C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { C_WORM_UP, 10, -2, E_WORM, MS_R_WORM, C_RED },
+            { C_IHZ_LEAK, 12, 2, 0x80 | HZ_LEAK, MS_R_LEAK, C_GOLD }, { C_IHZ_SNIPER, 12, 1, 0x80 | HZ_SNIPER, MS_R_SNIPER, C_RED },
+            { C_IHZ_TUNNEL, 12, 1, 0x80 | HZ_TUNNEL, MS_R_TUNNEL, C_WHITE }, { C_IHZ_MAG, 12, 1, 0x80 | HZ_MAG, MS_R_MAG, C_GOLD },
+            { C_IHZ_VENTS, 12, 2, 0x80 | HZ_VENTS, MS_R_VENTS, C_RED }, { C_IHZ_METEORS, 12, 1, 0x80 | HZ_METEORS, MS_R_METEOR, C_GOLD },
+            { C_IHZ_EVAC, 12, 1, 0x80 | HZ_EVAC, MS_R_EVAC, C_RED } };
         const int i0 = timer <= 50 ? 6 : 0, i1 = i0 ? 13 : 6;
         int n = 0, m = 0;
         for (int i = i0; i < i1; i++) {
@@ -2377,8 +2380,8 @@ static void drawIntro() {
         for (int i = i0; i < i1; i++) {
             const Row &r = ROWS[i];
             if (!(m >> i & 1)) continue;
-            const bool ufo = r.sp == &SAUCER[0];
-            blit(ufo ? SAUCER[(frameNo >> 2) & 3] : *r.sp, r.dx, y + r.dy, false, 255, ufo ? EMAP : MAP);
+            const bool ufo = r.sp == SAUCER;
+            blit(r.sp + (ufo ? (frameNo >> 2) & 3 : 0), r.dx, y + r.dy, false, 255, ufo ? EMAP : MAP);
             tX(32, y + 3, r.msg, r.col); y += 13;
         }
         if (frameNo & 16) tC(y + 1, MS_PRESS_A, C_SILVER);

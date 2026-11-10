@@ -12,6 +12,7 @@ The game maps a HOUSE index onto its own palette when it blits (blit() in CHStar
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 
@@ -430,7 +431,6 @@ def main():
         assert len(data) <= (1536 if name.startswith('LOGO') else 1024), name   # at most two blocks (the title pictures three: drawn alone)
         if len(data) <= 512 and (len(sec) % 512) + len(data) > 512:
             sec += bytes(512 - len(sec) % 512)
-        lines.append("static const CSpr C_%s ROM(C_%s) = { %d, %d, %d };   // %d bytes" % (name, name, len(sec), len(p[0]), len(p), len(data)))
         where[name] = (len(sec), len(p[0]), len(p), len(data))
         sec += bytes(data)
         SPR_ALL[name] = p
@@ -439,31 +439,24 @@ def main():
     os.makedirs(card, exist_ok=True)
     open(os.path.join(card, 'pics.bin'), 'wb').write(bytes(sec))
     json.dump(where, open(os.path.join(card, 'pics.json'), 'w'))      # make_card.py builds each world's pack from these
-    lines.append("static const CSpr *const STRUCT[3][6] = { %s };   // the background buildings of the ruins, the bases, the aliens" % ", ".join(
-        "{ %s }" % ", ".join("&C_" + n for n in structures.THEMES[th]) for th in (1, 2, 3)))
     lines.append("static const int8_t STRUCT_LIGHT[3][6][3] = { %s };   // a light on each: x, y, kind (1 beacon, 2 rising glow, 3 arc, 4 eyes)" % ", ".join(
         "{ %s }" % ", ".join("{ %s }" % ", ".join(map(str, (structures.PICS[n][1] or [(0, 0, 0)])[0])) for n in structures.THEMES[th]) for th in (1, 2, 3)))
-    lines.append("static const CSpr *const BASEPIC[4] = { &C_BASE, &C_BASE1, &C_BASE2, &C_BASE3 };")
     lines.append("static const uint8_t BASE_DOOR[4] = { %s };   // the door's x in each" % ", ".join(map(str, BASE_DOOR)))
-    lines.append("static const CSpr *const COLLPIC[4] = { &C_BUCKET, &C_COLL1, &C_COLL2, &C_COLL3 };")
     lines.append("static const uint8_t COLL_TOP[4] = { %s };    // where colonists drop in, above the ground" % ", ".join(map(str, COLL_TOP)))
     lines.append("static const uint8_t COLL_TUBE[4][3] = { %s };" % ", ".join("{ %s }" % ", ".join(map(str, t)) for t in COLL_TUBE))
-    lines.append("static const CSpr *const PLANTPIC[9][2] = { %s };" % ", ".join("{ &C_PL_%s0, &C_PL_%s1 }" % (n, n) for n in plantdesigns.ORDER))
-    lines.append("static const CSpr *const SKYPIC[8] = { %s };   // by SkyObj; the aurora is drawn by code" % ", ".join("&C_SKY_" + n if f else "nullptr" for n, f, x, y in skies.SKIES))
     lines.append("static const uint8_t SKY_AT[8][2] = { %s };   // where each one's centre sits on screen" % ", ".join("{ %d, %d }" % (x, y) for n, f, x, y in skies.SKIES))
-    lines.append("static const CSpr *const CRITPIC[2][3][2] = { %s };   // fliers, crawlers; two frames each" % ", ".join(
-        "{ %s }" % ", ".join("{ &C_CR_%s0, &C_CR_%s1 }" % (n, n) for n in order) for order in (life.FLY_ORDER, life.CRAWL_ORDER)))
-    lines.append("static const CSpr *const GIANTPIC[8] = { %s };   // each world's sky giant" % ", ".join("&C_GI_" + n for n in life.GIANT_OF))
-    lines.append("static const CSpr *const FOODPIC[8] = { %s };" % ", ".join("&C_FOOD%d" % k for k in range(8)))
-    # animation frames as arrays of the entries themselves (a table of pointers to them costs 4 B more a frame)
-    arr = lambda names: ", ".join("{ %d, %d, %d }" % where[n][:3] for n in names)
-    lines.append("static const CSpr SPIN[8] = { %s };" % arr("MAN_SPIN%d" % i for i in range(8)))
-    lines.append("static const CSpr LANDER_UP[7] = { %s };" % arr("LANDUP%d" % i for i in range(7)))
-    lines.append("static const CSpr SAUCER[4] = { %s };" % arr("SAUCER%d" % i for i in range(4)))
-    lines.append("static const CSpr LANDER[7] = { %s };   // gear down: 0 to 90 degrees" % arr("LAND%d" % i for i in range(7)))
-    lines.append("static const CSpr ITEMPIC[4] = { %s };" % arr("ITEM%d" % i for i in range(4)))
-    lines.append("static const CSpr FETCH[6] = { %s };   // 0-2 lifted, 3-5 landed on" % arr("FETCH%d" % i for i in range(6)))
-    lines.append("static const CSpr FLAGPIC[6] = { %s };   // two frames of each, waving" % arr("FLAG%d" % i for i in range(6)))
+    # The pictures the game names (C_<name> in CHStarlift.ino) and its animation families get a number each, an index into one table
+    # in flash: a number is 2 B to load where an address is 6. The rest are reached through each world's pack (make_card.py).
+    FAMILIES = [("SPIN", "MAN_SPIN", 8), ("LANDER_UP", "LANDUP", 7), ("LANDER", "LAND", 7), ("SAUCER", "SAUCER", 4), ("ITEMPIC", "ITEM", 4),
+                ("FETCH", "FETCH", 6), ("FLAGPIC", "FLAG", 6)]
+    used = [n for fam, pre, k in FAMILIES for n in ("%s%d" % (pre, i) for i in range(k))]
+    src = open(os.path.join(ROOT, 'CHStarlift', 'CHStarlift.ino')).read()
+    used += sorted(n for n in set(re.findall(r'\bC_([A-Z0-9_]+)\b', src)) if n in where and n not in used)
+    assert len(used) < 128
+    lines.append("enum : uint8_t { %s };" % ", ".join("C_" + n for n in used))
+    lines.append("static const CSpr CS[%d] = { %s };" % (len(used), ", ".join("{ %d, %d, %d }" % where[n][:3] for n in used)))
+    for fam, pre, k in FAMILIES:
+        lines.append("#define %s C_%s0   // %d frames, one after another" % (fam, pre, k))
     open(os.path.join(ROOT, 'CHStarlift', 'Sprites.h'), 'w', newline='').write("\n".join(lines) + "\n")
     print("Sprites.h: %d sprites, %d bytes; card pictures %d bytes" % (len(SPR), total, len(sec)))
     from PIL import Image
