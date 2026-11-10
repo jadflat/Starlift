@@ -224,6 +224,8 @@ static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
 static uint8_t won, wpn;                                      // wpn: the laser power-up, 0 none, 1 spread, 2 fat, 3 rapid, 4 twin                                           // all eight worlds done
 struct Fetch { int16_t x; uint8_t kind, st; };               // a fetch quest's cargo: st 0 none, 1 on the ground, 2 on the rope, 3 aboard
 static Fetch fq;
+static Critter *fqC;                                          // 0.48: the cargo on the rope / led in, riding a cow's slot (the cow's rope, landing and crew)
+static void fqCrit(int kind, int y);
 // each stage's hazards (0.46): a different mix from stage 3 on
 enum : uint8_t { HZ_LEAK = 1, HZ_SNIPER = 2, HZ_TUNNEL = 4, HZ_MAG = 8, HZ_VENTS = 16, HZ_METEORS = 32, HZ_EVAC = 64 };
 #define hz PLR.hz                                             // this stage's hazards: with its world, from the card (tools/make_card.py's HAZARDS)
@@ -557,7 +559,7 @@ static void genStage() {
     wxLvl = 3;                                                     // a perf test: the worst weather
 #endif
     ticket = 0; tubeT = 0;
-    memset(crit, 0, sizeof crit);
+    memset(crit, 0, sizeof crit); fqC = 0;
 }
 
 // ---- effects ------------------------------------------------------------------------------------------------------
@@ -744,7 +746,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
                 }
             const int dgy = groundAt(doorX);
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
-                if (fq.st == 3) fqDone();
+                if (fq.st == 3) fqCrit(8, groundAt(LX()));                // the crate: the crew come out for it
                 leak = 0;                                            // the tank patched
                 if (foodOn) {
                     foodOn = 0; partyT = 180; feasts++; addScoreS(2000, doorX, dgy - 28); sfx(S_CLEAR);
@@ -1654,6 +1656,7 @@ static void drawItems() {
 #endif
 
 // ---- fetch quests (stage 3 on): a call-out with a picture, cargo with beacons, lifted or landed on, taken to base -----
+static void fqCrit(int kind, int y) { Critter *c = &crit[CRITS - 1]; *c = { (int16_t)LX(), (int16_t)y, (int8_t)sgn(doorX - LX()), (uint8_t)kind, 0 }; fqC = c; fq.st = 2; }
 static void fqDone() {
     fq.st = 0; fqT = 240; fqPic = 0; hoverT = 0; tankT = 160; shield = shMax();             // a full tank (filled after the call-out) and a mended hull
     addScore(1500, doorX, groundAt(doorX) - 24); sfx(S_SAVED);
@@ -1691,10 +1694,9 @@ static void updateFetch() {
         return;
     }
     if (fq.st == 1) {
-        if (fq.kind < 3) { if (lst == 0 && hoverT < 255 && absi(fq.x - LX()) < 16 && groundAt(fq.x) - LY() < 56 && hoverTick()) { fq.st = 2; hoverT = 255; sfx(S_CATCH); } }
+        if (fq.kind < 3) { if (lst == 0 && hoverT < 255 && absi(fq.x - LX()) < 16 && groundAt(fq.x) - LY() < 56 && hoverTick()) { fqCrit(6, groundAt(fq.x)); hoverT = 255; sfx(S_CATCH); } }
         else if (lst == 1 && absi(fq.x - LX()) < 12) { fq.st = 3; sfxSay(S_CATCH, MS_SUPPLIES); }
-    } else if (lst == 2) { fq.st = 1; fq.x = (int16_t)LX(); hoverT = 0; say(MS_FQ_DROP, 60); }   // the lander lost: the cargo falls where it was
-    else if (fq.st == 2) { fq.x = (int16_t)LX(); if (within(fq.x, basePadX + 20, 24)) fqDone(); }   // carried on the rope: set down at the base
+    }
 }
 static void drawVents() {
     for (int k = 0; k < 3; k++) {
@@ -1716,12 +1718,11 @@ static void drawFetch() {
         for (int j = 0; j < 10; j++) { const int y = gy - 8 - ((j * 13 + (k ? -1 : 1) * (int)frameNo * 3) & 63); pset(sx - 6 + (j * 7) % 13, y, C_WHITE); }   // the air streaming
     }
 #endif
-    if (fq.st != 1 && fq.st != 2) return;
+    if (fq.st != 1) return;
     const int id = FETCH + fq.kind; const CSpr &sp = cs(id);
-    const int sx = fq.x - cam, by = fq.st == 2 ? LY() + 28 : groundAt(fq.x), ty = by - sp.h;
+    const int sx = fq.x - cam, by = groundAt(fq.x), ty = by - sp.h;
     if (sx < -20 || sx > 148) return;
-    if (fq.st == 2) R(sx, LY() + 8, 1, ty - LY() - 8, C_SILVER);                   // the rope
-    else if (fq.kind < 3 && hoverT && hoverT < 255 && absi(fq.x - LX()) < 16) hoverBar(sx, ty, C_GOLD);
+    if (fq.kind < 3 && hoverT && hoverT < 255 && absi(fq.x - LX()) < 16) hoverBar(sx, ty, C_GOLD);
     blitBC(id, sx, by, false);
     const int bx = (frameNo & 8) ? sx - sp.w / 2 : sx + sp.w / 2 - 2;     // the beacons flash in turn
     R(bx, ty - 2, 2, 2, C_RED);
@@ -1850,14 +1851,15 @@ static void updateCritters() {
         if (c.kind >= 6) {                                              // a cow in its harness: 6 on the rope, 7 let down at the base, 8 led in by the crew
             const int d = sgn(doorX - c.x);
             if (c.kind == 6) {
-                if (lst == 2) { c.kind = 3; c.t = 0; hoverT = 0; continue; }  // the lander lost: down it drops
-                if ((c.t & 63) == 0) sfx(S_MOO);                             // mooing all the way
+                if (lst == 2) { c.kind = 3; c.t = 0; hoverT = 0; if (&c == fqC) { c.kind = 0; fqC = 0; fq.st = 1; fq.x = c.x; say(MS_FQ_DROP, 60); } continue; }  // the lander lost: down it drops
+                if ((c.t & 63) == 0 && &c != fqC) sfx(S_MOO);                             // mooing all the way
                 c.x = (int16_t)LX();
                 c.y = (int16_t)(c.y + clampi(LY() + 22 - c.y, -1, 4));       // winched up a little, then along under the lander
                 if (within(c.x, basePadX + 20, 24)) c.kind = 7;               // over the base: let down
             } else if (c.kind == 7) { c.x = (int16_t)LX(); if ((c.t & 3) == 0) c.y++; }   // slowly down the rope, still under the lander
             else if (c.t / 2 >= absi(c.x - doorX) && (c.t & 1)) { c.x = (int16_t)(c.x + d); c.t--; }   // the crew come out, take the cow and lead it in
             if (c.y >= groundAt(c.x)) { c.y = (int16_t)groundAt(c.x); if (c.kind == 7) { c.kind = 8; c.t = 0; c.vx = (int8_t)d; ropeL = (uint8_t)clampi(c.y - LY() - 16, 0, 255); } }
+            if (!d && c.kind == 8 && &c == fqC) { c.kind = 0; fqC = 0; fqDone(); }   // the cargo in: the reward
             if (!d && c.kind == 8) { c.kind = 0; hoverT = 0; cowsN++; addScore(1000, doorX, c.y - 20); sfxSay(S_SAVED, MS_COWS_HOME, 60); tankT = 100; shield = shMax(); }   // home with the colonists: steaks up, and the lander topped up
             continue;
         }
@@ -1904,6 +1906,7 @@ static void drawCritters() {
             }   // the crew
             if (c.kind == 5) { const Enemy &e = en[c.vx]; drawBeam((e.x >> 4) - cam, e.y >> 4, c.y + 1); }   // beamed up, legs kicking
             const bool fall = c.kind != 4 && c.kind != 8, eat = c.kind == 4 && (c.t & 127) >= 40;
+            if (&c == fqC) { blitBC(FETCH + fq.kind, c.x - cam, c.y, false); continue; }   // (the fetch cargo in a cow's place)
             blitBC(fall ? (((c.t >> 2) & 1) ? C_COWUP : C_COW) : eat ? C_COWEAT : C_COW, c.x - cam, c.y, fall ? ((c.t >> 3) & 1) : c.vx < 0);
             continue;
         }
@@ -2637,7 +2640,7 @@ static void update() {
                 else if (SL_DLV == 20) { placeLanderOnPad(ventX[0] - 30); shield = 99; }                   // beside a vent
                 else if (SL_DLV >= 10) wpn = SL_DLV - 10;                                                 // a laser power-up from the start
                 else if (SL_DLV == 7) { fq = { (int16_t)LX(), 3, 1 }; fqN = 0; fuel = 300; shield = 1; }   // a fetch crate under the lander (landed on it)
-                else if (SL_DLV == 8) { fq = { (int16_t)LX(), 0, 2 }; fqN = 0; fuel = 300; shield = 1; lst = 0; ly = 30 << 8; lvy = -300; }   // rocket parts on the rope
+                else if (SL_DLV == 8) { fq = { (int16_t)LX(), 0, 1 }; fqN = 0; fuel = 300; shield = 1; lst = 0; ly = 30 << 8; lvy = -300; fqCrit(6, 52); }   // rocket parts on the rope
                 else if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
                 else if (SL_DLV == 6) { dlv = 2; bagX = LX() + 2; bagY = groundAt(bagX) - 3; scX = LX() + 60; scY = groundAt(scX) - 7; }   // the bag right beside the lander
                 else if (SL_DLV == 5) { lx = (int32_t)(alienX + 20 + (baseRight ? -40 : 40)) << 8; ly = (int32_t)56 << 8; lst = 1; gear = 1; shield = 99; ang = baseRight ? -1 : 1; facing = (int8_t)(baseRight ? -1 : 1); }   // near the boss, facing it
