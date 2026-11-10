@@ -1679,7 +1679,7 @@ static void updateFetch() {
         if (fqN && fqT && !--fqT) {
             fqN--;
             const int k = stage + fqN;
-            fq = { fqX[fqN], (uint8_t)((k & 1 ? 0 : 3) + (k >> 1) % 3), 1 };
+            fq = { fqX[fqN], (uint8_t)((k % 3 ? 0 : 3) + (k >> 1) % 3), 1 };
             sfx(S_WARN); fqPic = 100;
         }
         return;
