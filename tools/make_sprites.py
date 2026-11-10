@@ -452,6 +452,8 @@ def main():
     used = [n for fam, pre, k in FAMILIES for n in ("%s%d" % (pre, i) for i in range(k))]
     src = open(os.path.join(ROOT, 'CHStarlift', 'CHStarlift.ino')).read()
     used += sorted(n for n in set(re.findall(r'\bC_([A-Z0-9_]+)\b', src)) if n in where and n not in used)
+    import who
+    used += [w[0] for w in who.WHO if w[0] not in used]              # and the who's-who rows' (their table is on the card)
     assert len(used) < 128
     lines.append("enum : uint8_t { %s };" % ", ".join("C_" + n for n in used))
     lines.append("static const CSpr CS[%d] = { %s };" % (len(used), ", ".join("{ %d, %d, %d }" % where[n][:3] for n in used)))

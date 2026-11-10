@@ -101,6 +101,14 @@ def fixed(t, n):
 GEN = {}
 for m in re.finditer(r'static const u?int8_t (STRUCT_LIGHT|SKY_AT|COLL_TUBE|COLL_TOP|BASE_DOOR)\b[^=]*= (.*?);', open(os.path.join(ROOT, 'CHStarlift', 'Sprites.h')).read()):
     GEN[m.group(1)] = [int(v) for v in re.findall(r'-?\d+', m.group(2))]
+SPR_ID = {n: k for k, n in enumerate(re.search(r'^enum : uint8_t \{ (C_[^}]*) \};', open(os.path.join(ROOT, 'CHStarlift', 'Sprites.h')).read(), re.M).group(1).split(', '))}
+MSG_ID = {l.split('	', 1)[0]: k for k, l in enumerate(l for l in open(os.path.join(HERE, 'messages.txt')) if l.strip() and not l.startswith('#'))}
+E_TURRET, E_WORM = 4, 5                                              # Game.h's EnKind
+HZB = dict(LEAK=1, SNIPER=2, TUNNEL=4, MAG=8, VENTS=16, METEORS=32, EVAC=64)   # the .ino's HZ_ bits
+sys.path.insert(0, HERE)
+from who import WHO
+WHO_B = b''.join(struct.pack('<BbbBBB', SPR_ID['C_' + sp], dx, dy, 0x80 | HZB[k] if isinstance(k, str) else k, MSG_ID['MS_' + m] if 'MS_' + m in MSG_ID else MSG_ID[m], C[c])
+                 for sp, dx, dy, k, m, c in WHO)
 FALL = dict(RAIN=(5, C['SILVER'], C['STEEL']), DRIZZLE=(2, C['GNDL'], C['SKY1']), ACID=(4, C['GREEN'], C['GREEN']))   # rain: px a frame, two colours
 ST, SI, IN = C['STEEL'], C['SILVER'], C['INK']
 RX = [0, 0, 40, 3, ST,  0, 0, 40, 1, SI,  -1, -6, 1, 6, ST,  40, -6, 1, 6, ST,                       # RX_PAD: the pad's slab, then its lamp posts
@@ -126,6 +134,7 @@ for st, w in enumerate(WORLDS):
     r += struct.pack('%db' % len(RX), *RX)
     # the stage's numbers (a world is a stage, 0-7): camps, colonists (the game's MEN is 20), items, fetch quests, turrets, rough, ridges
     r += bytes([min(4 + st // 3, 8), 8 + st, (st + 2) // 3, 0 if st < 2 else 1 if st < 5 else 2, st // 2, 10 + st * 3, 26 + st * 3])
+    r += WHO_B
     PLANET_LEN = len(r)
     plan += r
 
