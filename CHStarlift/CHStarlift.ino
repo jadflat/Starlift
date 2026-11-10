@@ -1655,7 +1655,7 @@ static void fqDone() {
 }
 static void updateFetch() {
     if (fqPic) fqPic--;
-    else if (fq.st == 1 && (frameNo % 720) == 0) { fqPic = 100; sfx(S_WARN); }   // not fetched yet: the call-out again now and then
+    else if (fq.st == 1 && (frameNo % 1260) == 0) { fqPic = 100; sfx(S_WARN); }   // not fetched yet: the call-out again now and then
 #ifdef SLF_LEAK
     if (leak && fuel && lst != 2 && !(frameNo & 3)) { fuel--; if (!(frameNo & 12)) part(LX(), LY() + 6, rnd(5) - 2, 8, 16, C_GOLD); }   // dripping
 #endif
