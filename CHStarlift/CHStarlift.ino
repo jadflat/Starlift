@@ -559,8 +559,8 @@ static NOINL void addScore(int v, int x, int y) {
     if (score >= nextLife) { nextLife += 10000; if (lives < 9) lives++; say(MS_EXTRA_LANDER); }
     if (x >= 0) for (auto &q : pops) if (!q.t) { q = { (int16_t)x, (int16_t)y, (uint16_t)v, 30 }; break; }
 }
-static NOINL void addScoreS(int v, int x, int y) { addScore(v * (sector + 1), x, y); }          // worth more in each sector
-static NOINL void addFuel(int n) { fuel = (uint16_t)(fuel + n > FUEL_MAX ? FUEL_MAX : fuel + n); }
+static void addScoreS(int v, int x, int y) { addScore(v * (sector + 1), x, y); }          // worth more in each sector
+static void addFuel(int n) { fuel = (uint16_t)(fuel + n > FUEL_MAX ? FUEL_MAX : fuel + n); }
 static inline uint8_t shMax() { return (uint8_t)(diff ? 4 - diff : 5); }           // hits the hull takes: 5 easy, 3 normal, 2 hard
 static int gEff() { return PLR.grav > 11 ? (PLR.grav + 11) / 2 : PLR.grav; }   // 0.44: the heavier worlds pull halfway to the Moon's
 static int gHund() { return gEff() * 100 / 64; }   // gravity in hundredths of a G
@@ -814,7 +814,7 @@ static NOINL void rope(int x1, int y1) {                         // a taut rope 
 
 static inline bool walking() { for (const auto &m : men) if (m.st == M_WALK) return true; return false; }   // colonists still on their way in
 
-static NOINL bool roomBeside(int x) {                            // flat ground on one side: twice the lander's width
+static bool roomBeside(int x) {                            // flat ground on one side: twice the lander's width
     const int g = groundAt(x);
     for (int d = -1; d <= 1; d += 2) {
         int k = 6;
