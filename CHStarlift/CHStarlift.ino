@@ -192,7 +192,7 @@ static uint32_t rng = 1;
 static uint8_t wxLvl;
 __attribute__((section(".sbss.topsAt"))) static int topsAt[4];       // the layer x of column 0 when the tops were made (-9999: none; genStage() sets them)
                                      // this stage's weather, rolled when it is built: 0 clear .. 3 a storm
-static bool loadReq;                                      // the stage's world is to be read from the card and the stage built
+static uint8_t loadReq;                                   // a stage's load, a part a frame: 3 its world is to be read from the card and the stage built, 2 the ground's tile and the scenery's tops made, 1 the palette set; 0 done
 
 // the lander: position 1/256 px, velocity 1/256 px a frame
 static int32_t lx, ly;
@@ -546,7 +546,6 @@ static void genStage() {
     }
     for (int k = 0; k < PLR.worms; k++) if (Enemy *e = spawnEn(E_WORM, 500 + k * 700, 100)) e->hp = 12;
     if ((stage & 3) == 3) if (Enemy *e = spawnEn(E_MOTHER, alienX + 20, 34)) e->hp = (uint8_t)(6 + stage / 2);   // 0.48: easier (was 10 + stage)
-    buildTile();
     memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
     placeLanderOnPad(startPadX);
     cam = clampi(LX() - 64, 0, W - 128);
@@ -603,7 +602,7 @@ static void saveProgress(bool inGame) {
 
 static void newStage() {
     planet = stage & 7;
-    loadReq = true;
+    loadReq = 3;
     state = INTRO; timer = 210;                                            // the stage card, then who's who
     synth::music((stage & 3) == 3 ? 9 : 1 + planet);                     // a boss stage: SHOWDOWN
 }
@@ -1464,6 +1463,7 @@ static void layerTops(int L) {
     for (int x = x0; x < x1; x++) topA[L][x] = (uint8_t)clampi(L == 3 ? groundAt(lc + x) : layerH(L, lc + x), TOP, 127);
     topsAt[L] = lc;
 }
+static NOINL void allTops() { for (int L = 0; L < 4; L++) layerTops(L); }
 
 // fill one layer's columns from its top down to the next layer's top: slope lighting and a stone texture
 // the inner loops of the scenery: a run of one colour, or of colours looked up from the column's texture
@@ -2209,7 +2209,7 @@ static void drawWorld() {
     if (shake) cam += (frameNo & 1) ? (shake >> 2) : -(shake >> 2);
     cam = clampi(cam, 0, W - 128);
     dbg::profStart();
-    for (int L = 0; L < 4; L++) layerTops(L);
+    allTops();
     dbg::prof(0);
     drawSky();
     dbg::prof(1);
@@ -2356,11 +2356,8 @@ static void drawOptions() {
 }
 
 static void drawIntro() {
-#ifdef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
-    return;
-#endif
     drawWorld();
-#ifndef SL_SLIM
+#ifndef SL_SLIM                                                   // a board perf build leaves the card's text out so the debug image fits (the world it does draw: the frame after a load is measured)
     char s[28];
     if (timer <= 100) {                                                    // (100: who's who, 50: hazards; each waits for a key)                                            // who's who (0.46: back, from a table)
         const Planet::Row *const ROWS = PLR.who;                             // (the table is on the card, with the world: tools/who.py)
@@ -2406,7 +2403,8 @@ static void drawPause() {
 }
 
 static void draw() {
-    if (!card::ok() || loadReq) {                                      // STARLIFT.DAT holds the worlds, the music and the big pictures
+    if (loadReq && card::ok()) return;                                 // a stage is loading: the last picture stays up
+    if (loadReq || !card::ok()) {                                      // STARLIFT.DAT holds the worlds, the music and the big pictures
         gfx_clear(C_INK);
         textC(60, "NEED STARLIFT.DAT", C_WHITE);
         return;
@@ -2464,7 +2462,7 @@ static void draw() {
 // ---- update ------------------------------------------------------------------------------------------------------------
 static void toTitle() {
     state = TITLE; titleSel = 0; stage = 0; planet = 0; credits = 5; won = 0;
-    loadReq = true;
+    loadReq = 3;
     cam = 200; synth::music(0); synth::engine(0);
 }
 
@@ -2545,13 +2543,13 @@ static void update() {
 #ifdef SL_STAGESEL
         if (edge & 48) {
             selStage = (uint8_t)((selStage + ((edge & 32) ? 1 : 31)) & 31);
-            planet = stage = selStage & 7; loadReq = true; cam = 200; sfx(S_GEAR);
+            planet = stage = selStage & 7; loadReq = 3; cam = 200; sfx(S_GEAR);
         }
         if (!selStage && (frameNo % 240) == 0) {
 #else
         if ((frameNo % 240) == 0) {
 #endif                                 // show the next world
-            planet = (planet + 1) & 7; stage = planet; loadReq = true; cam = 200;
+            planet = (planet + 1) & 7; stage = planet; loadReq = 3; cam = 200;
         }
         uint8_t it[5];
         const uint8_t n = menuItems(it);
@@ -2725,6 +2723,11 @@ void setup() {
     toTitle();
 }
 
+static NOINL void loadStep() {                                     // the later parts of a stage's load
+    if (--loadReq) { buildTile(); allTops(); }                    // (the tops now, not in the first frame drawn)
+    else applyPalette();
+}
+
 void loop() {
     static bool startPrev;
     const bool st = chgame.pressed(START_BUTTON);
@@ -2750,17 +2753,18 @@ void loop() {
         if (hasSave) titleSel = 0;
     }
     card::frame();
-    if (!card::ok() && (frameNo % 60) == 2) card::open();
-    if (loadReq && card::ok() && card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)
-        && card::copy((uint8_t *)&PK, CARD_PACK + (uint32_t)(stage & 15) * sizeof(Pack), sizeof(Pack))) {
-        loadReq = false;
-        genStage();
-        applyPalette();
-        if (state == TITLE) cam = 200;
-    }
-    if (card::ok() && synth::wanted() >= 0) {                     // the next song, from the card
+    if (!card::ok()) { if ((frameNo % 60) == 2) card::open(); }
+    else if (loadReq == 3) {                                      // (each part in a frame of its own, none drawn: together they took 52 ms)
+        if (card::copy((uint8_t *)&PLR, CARD_PLANET + (uint32_t)(stage & 7) * PLANET_LEN, PLANET_LEN)
+            && card::copy((uint8_t *)&PK, CARD_PACK + (uint32_t)(stage & 15) * sizeof(Pack), sizeof(Pack))) {
+            loadReq = 2;
+            genStage();
+            if (state == TITLE) cam = 200;
+        }
+    } else if (loadReq) loadStep();
+    else {                                                        // the next song, from the card
         const int id = synth::wanted();
-        if (card::copy(synth::buffer(), CARD_SONG + SONG_OFF[id], SONG_LEN[id])) synth::loaded();
+        if (id >= 0 && card::copy(synth::buffer(), CARD_SONG + SONG_OFF[id], SONG_LEN[id])) synth::loaded();
     }
     draw();
 #ifdef SL_STAGESEL                                                   // the speed: 100% = full 30 fps, lower = slow; from the worst frame of the last second
