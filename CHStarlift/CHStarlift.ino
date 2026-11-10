@@ -572,7 +572,7 @@ static NOINL void blast(int x, int y, int r, int delay) {
     for (auto &b : booms) if (!b.t) { b = { (int16_t)x, (int16_t)y, 16, (uint8_t)r, (uint8_t)delay }; break; }
 }
 // an explosion: a fireball and its shock ring, sparks and debris thrown out, smoke rising after
-static void boom(int x, int y, int n, int r) {
+static NOINL void boom(int x, int y, int n, int r) {
     static const uint8_t COLS[4] = { C_GOLD, C_RED, C_WHITE, C_GOLD };
     for (int i = 0; i < n; i++) part(x, y, rnd(56) - 28, rnd(56) - 36, (uint8_t)(12 + rnd(22)), COLS[rnd(4)]);
     for (int i = 0; i < n / 3; i++) part(x + rnd(9) - 4, y + rnd(7) - 3, rnd(9) - 4, -4 - rnd(6), (uint8_t)(24 + rnd(24)), i & 1 ? C_STEEL : C_SILVER);   // smoke
@@ -1024,6 +1024,7 @@ static void killEn(Enemy &e) {
 
 static NOINL bool nearL(int x, int r) { return lst != 2 && absi(LX() - x) < r; }   // the lander still flies, within r px of x sideways
 static NOINL void aim(Enemy &e, int dx, int dy, int mx, int my) { e.vx = (int8_t)clampi(dx * 2, -mx, mx); e.vy = (int8_t)clampi(dy * 2, -my, my); }   // head for a point, quickly
+static NOINL bool aimAt(Enemy &e, int dx, int dy, int mx, int my, int ry) { aim(e, dx, dy, mx, my); return absi(dx) < 2 && absi(dy) < ry; }   // aim; true when there
 static NOINL void nudge(Enemy &e, int dx, int dy, int mx, int my) { e.vx = (int8_t)clampi(e.vx + sgn(dx), -mx, mx); e.vy = (int8_t)clampi(e.vy + sgn(dy), -my, my); }   // accelerate towards a point
 static inline bool hungry(const Enemy &e) { return e.kind == E_UFO && e.st >= 3 && e.st <= 5; }   // a saucer on its way to the diner
 static void updateEnemies() {
@@ -1070,8 +1071,7 @@ static void updateEnemies() {
                 if (e.target == 255 && e.cargo) { e.st = 2; break; }            // nobody left to take: home with what it has
                 int tx = X + 40, ty = 34;
                 if (e.target != 255) { tx = men[e.target].x; ty = men[e.target].y - 44; }
-                aim(e, tx - ex, ty - ey, sp, 10);
-                if (e.target != 255 && within(tx, ex, 2) && within(ty, ey, 2)) {     // over the colonist: the beam
+                if (aimAt(e, tx - ex, ty - ey, sp, 10, 2) && e.target != 255) {     // over the colonist: the beam
                     e.st = 1; e.t = 0; e.vx = e.vy = 0;
                     Man &m = men[e.target];
                     m.st = M_BEAM; m.by = (uint8_t)(ei + 1);
@@ -1090,8 +1090,7 @@ static void updateEnemies() {
                 }
             } else if (e.st == 2) {                                           // home to the bucket, slow when full
                 const int tx = alienX + 20, ty = groundAt(tx) - 54;
-                aim(e, tx - ex, ty - ey, sp, 8);
-                if (within(tx, ex, 2) && within(ty, ey, 3)) { e.st = 6; e.t = 0; e.vx = e.vy = 0; }
+                if (aimAt(e, tx - ex, ty - ey, sp, 8, 3)) { e.st = 6; e.t = 0; e.vx = e.vy = 0; }
             } else if (e.st == 6) {                                           // one colonist at a time into the bucket
                 if (e.t % 20 == 10) {
                     if (e.cargo) {
@@ -1104,8 +1103,7 @@ static void updateEnemies() {
                 int pos = 0;
                 for (auto &o : en) if (o.kind == E_UFO && (o.st == 3 || o.st == 4) && o.target < e.target) pos++;
                 const int win = burgerX + 35, tx = win + 4 + pos * 26 + (((e.t + e.target * 37) % 110) < 12 ? isin(e.t * 32) / 64 : 0), ty = groundAt(win) - 26;
-                aim(e, tx - ex, ty - ey, 10, 8);
-                if (!pos && within(tx, ex, 2) && within(ty, ey, 3) && ++e.cargo > 100) { e.st = 4; e.cargo = 0; sfx(S_ORDER); }
+                if (aimAt(e, tx - ex, ty - ey, 10, 8, 3) && !pos && ++e.cargo > 100) { e.st = 4; e.cargo = 0; sfx(S_ORDER); }
             } else if (e.st == 4) {                                           // the order comes up in the beam
                 e.vx = e.vy = 0;
                 if ((e.t % 14) == 0 && within(ex, X, 90)) sfx(S_BEAM);
@@ -1328,7 +1326,7 @@ static void updateShots() {
         if ((q.y >> 4) > gq) { q.y = (int16_t)(gq * 16); q.vy = (int8_t)(-q.vy / 3); q.vx = (int8_t)(q.vx / 2); }
     }
     for (auto &b : booms) {
-        if (b.delay) { if (--b.delay == 0) { sfx(S_BOOM); burst(b.x, b.y, 6, 40, 40, 26, 16, C_GOLD, C_RED); shake = 8; } }
+        if (b.delay) { if (--b.delay == 0) { sfxShake(S_BOOM, 8); burst(b.x, b.y, 6, 40, 40, 26, 16, C_GOLD, C_RED); } }
         else if (b.t) b.t--;
     }
 }
