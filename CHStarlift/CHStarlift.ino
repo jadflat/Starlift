@@ -724,6 +724,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
         if (thrLvl >= 4) { lst = 0; gear = 2; ly -= 512; lvy = -40; onPad = 0; unloadT = 0; tripN = 0; }
         else {
             synth::engine(0);
+            for (const auto &c : crit) if (c.kind == 4 && absi(c.x - LX()) < 18 && fuel < FUEL_MAX) { addFuel(3); if (!(frameNo & 7)) sfx(S_FUEL); }   // a cow alongside: a milk run tops up the tank
             for (auto &it : items)                                   // things beside the lander are loaded
                 if (it.st == 1 && absi(it.x - LX()) < 20) {
                     it.st = 0;
