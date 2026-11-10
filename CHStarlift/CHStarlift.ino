@@ -545,7 +545,7 @@ static void genStage() {
         spawnEn(E_TURRET, x, groundAt(x) - 3);
     }
     for (int k = 0; k < PLR.worms; k++) if (Enemy *e = spawnEn(E_WORM, 500 + k * 700, 100)) e->hp = 12;
-    if ((stage & 3) == 3) if (Enemy *e = spawnEn(E_MOTHER, alienX + 20, 34)) e->hp = (uint8_t)(10 + stage);
+    if ((stage & 3) == 3) if (Enemy *e = spawnEn(E_MOTHER, alienX + 20, 34)) e->hp = (uint8_t)(6 + stage / 2);   // 0.48: easier (was 10 + stage)
     buildTile();
     memset(shots, 0, sizeof shots); memset(es, 0, sizeof es); memset(pt, 0, sizeof pt); memset(booms, 0, sizeof booms); memset(pops, 0, sizeof pops);
     placeLanderOnPad(startPadX);
@@ -1201,7 +1201,7 @@ static void updateEnemies() {
         }
         case E_MOTHER:                                                        // a big saucer: follows the lander across the top, firing
             e.vx = (int8_t)clampi((X - ex) / 4, -6, 6); e.vy = (int8_t)clampi((34 - ey) * 2, -8, 8);
-            if (nearL(ex, 120) && (frameNo % 60) == 0) for (int k = -8; k <= 8; k += 16) eshot(ex + k, ey + 6, X, Y, 20, 1);
+            if (nearL(ex, 120) && (frameNo % 100) == 0) for (int k = -8; k <= 8; k += 16) eshot(ex + k, ey + 6, X, Y, 16, 1);   // 0.48: slower and fewer shots
             break;
         case E_TURRET:
             if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, (hz & HZ_SNIPER) ? 38 : 26, 1);   // (stage 6 on: a sniper's fast shot)
