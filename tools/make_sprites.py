@@ -352,6 +352,9 @@ CARD['COWUP'] = life.g(life.COWUP)
 import fetch                                          # fetch-quest cargo (tools/fetch.py)
 for _k, _f in enumerate(fetch.FETCH):
     CARD['FETCH%d' % _k] = life.g(_f)
+for _k, _f in enumerate(fetch.FLAGS):
+    CARD['FLAG%d' % _k] = life.g(_f)
+CARD['MAW'] = life.g(fetch.MAW)
 for n in life.GIANT_ORDER:
     CARD['GI_' + n] = life.g(life.GIANTS[n])
 for n, gr in life.LOGOS.items():

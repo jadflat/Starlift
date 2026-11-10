@@ -42,7 +42,7 @@
 #ifdef SL_STAGESEL
 #define SL_VERSION "0.30j"                                        // jadflat's local build: stage select
 #else
-#define SL_VERSION "0.44"
+#define SL_VERSION "0.45"
 #endif
 #ifdef SL_STAGESEL
 #define SL_NOSAVE                                                  // the local test build does not load or save
@@ -207,10 +207,10 @@ static uint8_t diff = SL_DIFF;                                   // 0 easy, 1 no
 static uint8_t selStage;
 #endif
 static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
-static uint8_t won;                                           // all eight worlds done
+static uint8_t won, wpn;                                      // wpn: the laser power-up, 0 none, 1 spread, 2 fat, 3 rapid, 4 twin                                           // all eight worlds done
 struct Fetch { int16_t x; uint8_t kind, st; };               // a fetch quest's cargo: st 0 none, 1 on the ground, 2 on the rope, 3 aboard
 static Fetch fq;
-static int16_t fqX[2];                                        // where this stage's cargo turns up
+static int16_t fqX[2], ventX[3];                               // ventX: stage 5 on, vents in the ground that erupt                                        // where this stage's cargo turns up
 static uint8_t fqN, fqT;                                      // quests still to come, frames to the next
 static uint8_t credits = 5;                                   // continues left this game
 static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
@@ -510,6 +510,7 @@ static void genStage() {
     nSaved = nLost = 0;
     fq.st = 0; fqT = 200; fqN = (uint8_t)(stage < 2 ? 0 : stage < 5 ? 1 : 2);   // stage 3 on: fetch quests (two from stage 6)
     for (int k = 0; k < fqN; k++) { int x = (baseRight ? 300 : W / 2) + (int)(hash(s + k * 89u) % (W / 2 - 300)); while (busyAt(x)) x += 23; fqX[k] = (int16_t)x; flatten(x, 24); }
+    for (int k = 0; k < 3; k++) { int x = stage < 4 ? -999 : 380 + k * (W - 760) / 2 + (int)(hash(s + k * 37u) % 90); if (x > 0) while (busyAt(x)) x += 23; ventX[k] = (int16_t)x; }
     memset(en, 0, sizeof en);
     const int turrets = clampi(planet / 2 + sector * 2, 0, 4);
     for (int k = 0; k < turrets; k++) {                                       // turrets on open ground between the camps
@@ -598,15 +599,15 @@ static void gameOver() { state = OVER; overT = 0; newHi = score > 0 && score >= 
 
 // ---- the lander -----------------------------------------------------------------------------------------------------
 static void wreck() {
+    wpn = 0;                                                          // the power-up goes with the lander
     lst = 2; deadT = 80; shake = 18; flashT = 6; crashN++;
     boom(LX(), LY(), 34, 20);
-    for (int k = 0; k < 4; k++) blast(LX() + rnd(25) - 12, LY() + rnd(15) - 9, 8 + rnd(8), 4 + k * 5);   // the tanks go one after another
+    blast(LX() + 6, LY() - 4, 12, 8);                                  // a tank goes after it
     burst(LX(), LY(), 14, 60, 50, 60, 50, C_SILVER, C_GOLD);           // the hull in pieces
     sfx(S_CRASH);
     synth::engine(0);
     int lost = 0;
     for (auto &m : men) if (m.st == M_ABOARD) { m.st = M_LOST; nLost++; lost++; }
-    for (auto &it : items) if (it.st == 2) it.st = 0;                // the supplies go down with it (and the takeaway)
     foodOn = 0;
     seats = 0;
     say(lost ? MS_CREW_LOST : MS_LANDER_LOST, 60);
@@ -649,8 +650,8 @@ static void touchDown() {
         if (m.st == M_IDLE && absi(m.x - x) <= 9) { m.st = M_LOST; nLost++; sfxSay(S_SQUASH, MS_SQUASHED); part(m.x, m.y - 4, 0, -12, 20, C_WHITE); }
 }
 
-static NOINL bool newShot(int x, int y, int dir, uint8_t life, uint8_t kind) {
-    for (auto &s : shots) if (!s.life) { s = { (int16_t)x, (int16_t)y, (int8_t)dir, life, kind }; return true; }
+static NOINL bool newShot(int x, int y, int dir, uint8_t life, uint8_t kind, int vy = 0) {
+    for (auto &s : shots) if (!s.life) { s = { (int16_t)x, (int16_t)y, (int8_t)dir, life, kind, (int8_t)vy }; return true; }
     return false;
 }
 
@@ -687,7 +688,11 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
     if (fire) {                                                      // B: the rotary cannon chatters, the laser fires with it
         hovT = 18;                                                   // firing: the lander hovers, and for a moment after
         if (!gunCd && newShot(LX() + facing * 8, LY() + 2 + ((frameNo >> 1) & 1) - (frameNo & 1), facing, 9, 1)) { gunCd = 3; sfx(S_GUN); }
-        if (!fireCd && newShot(LX() + facing * 9, LY() - 1, facing, 26, 0)) { fireCd = 7; sfx(S_LASER); }
+        if (!fireCd && newShot(LX() + facing * 9, LY() - 1, facing, 26, wpn == 2 ? 4 : 0)) {   // the laser, as the power-up has it
+            fireCd = wpn == 3 ? 3 : wpn == 2 ? 9 : 7; sfx(S_LASER);
+            if (wpn == 1) for (int v = -1; v <= 1; v += 2) newShot(LX() + facing * 9, LY() - 1, facing, 26, 0, v);   // spread: two more, fanning out
+            if (wpn == 4) newShot(LX() - facing * 9, LY() - 1, -facing, 26, 0);                                                                // twin: one behind too
+        }
     }
     if (thr && fuel > 0) { if (thrLvl < 6) thrLvl++; } else if (thrLvl) thrLvl = thrLvl > 2 ? thrLvl - 2 : 0;   // the engine spools up and down
     thrusting = thrLvl > 0;
@@ -1246,25 +1251,26 @@ static void updateShots() {
         if (!s.life) continue;
         s.life--;
         for (int step = 0; step < 7 && s.life; step++) {
-            if (s.kind == 3) s.y++; else s.x = (int16_t)(s.x + s.dir);
+            if (s.kind == 3) s.y++; else { s.x = (int16_t)(s.x + s.dir); if (step & 1) s.y = (int16_t)(s.y + s.vy); }
             if (s.y >= groundAt(s.x) && s.kind != 2) { part(s.x, s.y, -s.dir * 8, -10, 8, C_GOLD); s.life = 0; break; }
             for (auto &e : en) {
                 if (!e.kind) continue;
                 const int ex = e.x >> 4, ey = e.y >> 4, hw = e.kind == E_UFO ? 11 : e.kind == E_MOTHER ? 22 : 6;
                 if (e.kind == E_UFO && ey < TOP) continue;
                 if (absi(s.x - ex) <= hw && absi(s.y - ey) <= (s.kind >= 2 ? 8 : 5)) {
-                    if (s.kind >= 2) { if (e.hit || (e.kind == E_WORM && e.st == 0)) continue; e.hit = 30; }
+                    if ((s.kind & 6) == 2) { if (e.hit || (e.kind == E_WORM && e.st == 0)) continue; e.hit = 30; }
                     else {
                         s.life = 0;
                         e.hit = 4;
                         if (s.kind == 1 && e.kind == E_MOTHER) break;                    // a cannon round does nothing to a mothership's armour
                     }
                     part(s.x, s.y, -s.dir * 10, -8, s.kind >= 2 ? 10 : 8, C_WHITE);
-                    if (s.kind >= 2) {
+                    if ((s.kind & 6) == 2) {
                         if (e.hp <= 4) killEn(e); else { e.hp -= 4; sfx(S_HIT); }
                         continue;
                     }
                     if (e.kind == E_WORM && e.st == 0) { s.life = 1; e.hit = 0; e.hp++; }   // under the sand: the shot goes into the ground
+                    if (s.kind == 4 && e.hp > 1) e.hp--;                                     // the fat laser: double damage
                     if (--e.hp == 0) killEn(e); else { sfx(S_HIT); if (e.kind == E_WORM && e.st == 1) { e.st = 3; e.t = 0; } }
                     break;
                 }
@@ -1340,8 +1346,8 @@ static void drawWeather() {
         const int x = wxX[i], y = wxY[i];
         if (x >= 128) continue;
         switch (p.weather) {
-        case WX_DUST: pset(x, y, (i & 1) ? C_GNDL : C_SKY1); pset(x - 1, y, C_SKY1);; break;
-        case WX_SNOW: pset(x, y, C_WHITE); if ((i & 3) == 0) { pset(x + 1, y, C_WHITE); pset(x, y + 1, C_WHITE); pset(x + 1, y + 1, C_SILVER); } break;
+        case WX_DUST: pset(x, y, (i & 1) ? C_GNDL : C_SKY1); break;
+        case WX_SNOW: pset(x, y, C_WHITE); if ((i & 3) == 0) pset(x + 1, y + 1, C_SILVER); break;
         case WX_RAIN: case WX_DRIZZLE: case WX_ACID: {                // a falling streak: its speed and colours from the table
             const uint8_t *f = FALL[p.weather - WX_RAIN];
             pset(x, y, f[1]); pset(x + (p.weather == WX_RAIN), y - 1, f[2]);
@@ -1349,8 +1355,7 @@ static void drawWeather() {
         }
         case WX_ASH: if (i & 1) pset(x, y, (i & 2) ? C_GOLD : C_RED); else pset(x, y, C_STEEL); break;
         case WX_GLINT: {
-            const int ph = (frameNo + i * 11) & 31;
-            if (ph < 6) { const uint8_t c = ph < 3 ? C_WHITE : C_ACC; pset(x, y, c); }
+            if (((frameNo + i * 11) & 31) < 4) pset(x, y, C_WHITE);
             break;
         }
         default: break;
@@ -1405,7 +1410,7 @@ static void drawSkyObjects() {
         for (int x = 0; x < 128; x++) {
             const int wx = x + (cam >> 5), top = TOP + 6 + (isin(wx * 3 + frameNo) >> 5);
             const int len = 10 + (isin(wx * 5 + frameNo / 2) >> 5);
-            for (int y = top; y < top + len; y++) if (((x + y + (frameNo >> 1)) & 1) == 0 || y < top + 3) pset(x, y, (y - top) < 4 ? C_GREEN : C_ACC);
+            for (int y = top; y < top + len; y++) if (((x + y) & 1) == 0 || y < top + 3) pset(x, y, (y - top) < 4 ? C_GREEN : C_ACC);
         }
         break;
     }
@@ -1419,17 +1424,12 @@ static void drawSkyObjects() {
         for (int k = (cc >> 6) - 1; k <= ((cc + 128) >> 6) + 1; k++) {
             const uint32_t h = hash((uint32_t)k * 4243u + planet);
             const int cx = k * 64 - cc + (int)(h & 15), cy = TOP + 10 + (int)((h >> 4) & 31), hw = 16 + (int)((h >> 9) & 15), hh = 3 + (int)((h >> 13) & 3);
-            for (int r = -hh; r <= hh; r++) {
-                const int w = hw - (hw * r * r) / (hh * hh + 1) - (r < 0 ? -r * 2 : 0);
-                if (w <= 0) continue;
-                const int y = cy + r;
-                hl(cx - w + 1, y, 2 * w - 2, p.clouds);
-            }
+            for (int r = -hh; r <= hh; r++) hl(cx - hw + absi(r) * 4, cy + r, 2 * (hw - absi(r) * 4), p.clouds);   // 0.45: plainer banks (for room)
         }
     }
     if (lightT > 4) {                                          // a lightning bolt from the clouds
         int x = 30 + (frameNo * 37) % 70;
-        for (int y = TOP + 8; y < 80; y++) { { const uint32_t q = hash((uint32_t)(y + frameNo)) & 7; x += (q == 0) - (q == 1); } pset(x, y, PLR.weather == WX_ACID ? C_GREEN : C_WHITE); }
+        for (int y = TOP + 8; y < 80; y++) { x += rnd(3) - 1; pset(x, y, PLR.weather == WX_ACID ? C_GREEN : C_WHITE); }
     }
 }
 
@@ -1590,7 +1590,6 @@ static void drawPad(int px, bool base) {
     } else {                                                        // a launch gantry
         const int gx = baseRight ? sx - 10 : sx + 44;
         blit(C_GANTRY, gx, gy - 32, false);
-        if (frameNo & 16) pset(gx + 2, gy - 32, C_STEEL);
     }
 }
 
@@ -1631,9 +1630,15 @@ static void drawItems() {
 static const CSpr *const FETCH[6] = { &C_FETCH0, &C_FETCH1, &C_FETCH2, &C_FETCH3, &C_FETCH4, &C_FETCH5 };   // 0-2 lifted, 3-5 landed on
 static void fqDone() {
     fq.st = 0; fqT = 240; hoverT = 0; tankT = 160; shield = shMax();             // a full tank (filled after the call-out) and a mended hull
-    addScore(1500, doorX, groundAt(doorX) - 24); sfxSay(S_SAVED, MS_FQ_DONE, 90);
+    addScore(1500, doorX, groundAt(doorX) - 24); sfx(S_SAVED);
+    wpn = (uint8_t)(wpn % 4 + 1); say((uint8_t)(MS_WPN1 + wpn - 1), 90);   // the reward: a laser power-up (and the call-out names it)
 }
 static void updateFetch() {
+    if (stage >= 5 && (frameNo % (200 - stage * 15)) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP - 8, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
+    for (int k = 0; k < 3; k++) {                                       // the vents: rumble, then a column of fire (or steam) 60 px high
+        const int vx = ventX[k];
+        if (vx > 0 && (frameNo + k * 53) % 160 >= 125 && absi(vx - LX()) < 6 && LY() > groundAt(vx) - 64) damage(1);
+    }
     if (!fq.st) {
         if (fqN && fqT && !--fqT) {
             fqN--;
@@ -1649,7 +1654,17 @@ static void updateFetch() {
     } else if (lst == 2) { fq.st = 1; fq.x = (int16_t)LX(); hoverT = 0; say(MS_FQ_DROP, 60); }   // the lander lost: the cargo falls where it was
     else if (fq.st == 2) { fq.x = (int16_t)LX(); if (absi(fq.x - basePadX - 20) < 24) fqDone(); }   // carried on the rope: set down at the base
 }
+static void drawVents() {
+    for (int k = 0; k < 3; k++) {
+        const int sx = ventX[k] - cam, ph = (frameNo + k * 53) % 160;
+        if (ventX[k] < 0 || sx < -8 || sx > 136) continue;
+        const int gy = groundAt(ventX[k]);
+        R(sx - 4, gy - 2, 9, 2, ph >= 110 && (frameNo & 2) ? C_RED : C_GNDD);                   // the vent's lip, glowing before it blows
+        if (ph >= 125) { const int h = ph < 135 ? (ph - 124) * 6 : 60; R(sx - 2, gy - h, 5, h, (frameNo & 2) ? (planet == 4 ? C_RED : C_SILVER) : C_WHITE); }
+    }
+}
 static void drawFetch() {
+    drawVents();
     if (fq.st != 1 && fq.st != 2) return;
     const CSpr &sp = *FETCH[fq.kind];
     const int sx = fq.x - cam, by = fq.st == 2 ? LY() + 28 : groundAt(fq.x), ty = by - sp.h;
@@ -1697,26 +1712,9 @@ static void drawGroundThings() {
 
 // a flag on a pole, rippling: the colony's (a gold star) or the aliens' (an eye)
 static void flag(int x, int gy, uint8_t kind) {
-    if (x < -14 || x > 130) return;
+    static const CSpr *const FL[6] = { &C_FLAG0, &C_FLAG1, &C_FLAG2, &C_FLAG3, &C_FLAG4, &C_FLAG5 };   // two frames of each, waving (from the card)
     R(x, gy - 24, 1, 24, C_SILVER); pset(x, gy - 25, C_GOLD);
-    static const int8_t WAVE[8] = { 0, 0, 1, 1, 1, 0, 0, -1 };
-    for (int c = 0; c < 11; c++) {
-        const int off = c > 1 ? WAVE[(c + (frameNo >> 2)) & 7] : 0;
-        for (int r = 0; r < 7; r++) {
-            uint8_t col;
-            if (kind == 2) {
-                col = (c < 5 && r < 4) ? ((((c + r) & 1) && c && r && r < 3) ? C_WHITE : C_ACC) : (r & 1) ? C_WHITE : C_RED;   // the moon's flag: the stars and stripes
-            }
-            else if (kind) {
-                const int d = (c - 5) * (c - 5) + (r - 3) * (r - 3) * 2;
-                col = d == 0 ? C_INK : d < 3 ? C_RED : d < 9 ? C_WHITE : C_GREEN;
-            } else {
-                col = (r == 0 || r == 6) ? C_ACC : C_WHITE;
-                if ((c == 5 && r >= 2 && r <= 4) || (r == 3 && c >= 4 && c <= 6)) col = C_GOLD;
-            }
-            psetR(x + 1 + c, gy - 24 + r + off, col);
-        }
-    }
+    blit(*FL[kind * 2 + ((frameNo >> 4) & 1)], x + 1, gy - 25, false);
 }
 
 // the aliens' collecting bucket: its tubes run down to pods in a chamber under the ground
@@ -1987,10 +1985,7 @@ static void drawEnemies() {
                 }
                 if (e.st == 6) for (int k = 0; k < 6; k++) R(sx + (int)(hash(k * 97u + e.t / 4) % 61) - 30, cy - 4 - (int)(hash(k * 31u + e.t / 4) % 40), 2 + (k & 1), 2, C_RED);   // blood spattering round the collector
                 if (hy < cy) {                                          // the head: a maw, pink inside, teeth top and bottom
-                    const int op = 1, top = hy - 5 - op;
-                    R(sx - 7, top, 15, 5 + op, C_INK);
-                    for (int y = top + 1; y < hy - 1; y++) for (int x = sx - 5; x <= sx + 5; x++) pset(x, y, ((x + y) & 1) ? C_RED : C_WHITE);
-                    for (int k = -6; k < 8; k += 2) { pset(sx + k, top, C_WHITE); pset(sx + k, top + 1, C_WHITE); pset(sx + k - 1, hy - 1, C_WHITE); }
+                    blit(C_MAW, sx - 7, hy - 6, false);
                 }
                 break;
             }
@@ -2097,6 +2092,7 @@ static void drawShots() {
     for (const auto &s : shots) {
         if (!s.life) continue;
         const int x = s.x - cam;
+        if (s.kind == 4) { const int bx = s.dir > 0 ? x - 13 : x; R(bx, s.y - 1, 14, 3, C_ACC); R(bx, s.y, 14, 1, C_WHITE); continue; }   // the fat laser: a thick beam
         if (s.kind >= 2) {                                                 // a plasma ball: a flickering halo round a white-hot core
             gfx_fillCircle(x, s.y, 4 + (frameNo & 1), (frameNo & 2) ? C_ACC : C_GOLD); gfx_fillCircle(x, s.y, 2, C_WHITE);
             if (frameNo & 1) part(s.x - s.dir * 4 + rnd(5) - 2, s.y - (s.dir ? 0 : 4), -s.dir * 6, s.dir ? 0 : -6, 6, C_GOLD);
@@ -2109,23 +2105,15 @@ static void drawShots() {
     for (const auto &s : es) {
         if (!s.life) continue;
         const int x = (s.x >> 4) - cam, y = s.y >> 4;
+        if (s.kind == 2) { R(x - 1, y - 1, 3, 3, C_GNDD); pset(x, y - 3, C_GOLD); continue; }   // a meteor and its trail
         const uint8_t c = s.kind ? ((frameNo & 2) ? C_RED : C_GOLD) : ((frameNo & 2) ? C_GREEN : C_WHITE);
         pset(x, y, C_WHITE); pset(x - 1, y, c); pset(x + 1, y, c); pset(x, y - 1, c); pset(x, y + 1, c);
     }
     for (const auto &q : pt) if (q.life) pset((q.x >> 4) - cam, q.y >> 4, q.col);
     for (const auto &b : booms) if (b.t && !b.delay) {
-        const int age = 16 - b.t, x = b.x - cam, r = b.r;
-        if (age < 2) gfx_fillCircle(x, b.y, 2 + r * (age + 1) / 4, C_WHITE);
-        else if (age < 7) {
-            const int rr = r * (age + 2) / 9;
-            gfx_fillCircle(x, b.y, rr, C_RED); gfx_fillCircle(x - 1, b.y - 1, rr * 2 / 3, C_GOLD); gfx_fillCircle(x - 1, b.y - 1, rr / 3, C_WHITE);
-        } else if (age < 12) {
-            const int rr = r * (12 - age) / 6;
-            if (rr > 0) { gfx_fillCircle(x, b.y - (age - 7), rr, C_RED); if (rr > 2) gfx_fillCircle(x, b.y - (age - 7), rr / 2, C_GOLD); }
-        } else {
-            const int rr = r / 2 + (age - 10) * 2;
-            for (int k = 0; k < 32; k += 2) pset(x + isin(k * 8 + 64) * rr / 128, b.y - (age - 10) + isin(k * 8) * rr / 160, (k & 2) ? C_STEEL : C_SILVER);
-        }
+        const int age = 16 - b.t, x = b.x - cam, r = b.r, y = b.y - (age > 7 ? age - 7 : 0);   // 0.45: a flash, then the fireball rising and shrinking (the smoke ring dropped for room)
+        const int rr = age < 2 ? 2 + r * (age + 1) / 4 : age < 7 ? r * (age + 2) / 9 : r * (12 - age) / 6;
+        if (rr > 0) { gfx_fillCircle(x, y, rr, age < 2 ? C_WHITE : C_RED); if (age >= 2) gfx_fillCircle(x - 1, y - 1, rr / 2, (age & 1) ? C_GOLD : C_WHITE); }
     }
 }
 
@@ -2354,7 +2342,7 @@ static void draw() {
         else for (int k = 0; k < 3; k++) {                              // the stars: quota, everyone home, no lander lost
             const int x = 52 + k * 10;
             const uint8_t c = k < stars ? C_GOLD : C_STEEL;
-            R(x + 2, 85, 1, 7, c); R(x - 1, 88, 7, 1, c); R(x + 1, 86, 3, 5, c);
+            R(x + 2, 85, 1, 7, c); R(x - 1, 88, 7, 1, c);
         }
         fmt(s, T(MS_RESCUED), nSaved, T(MS_OF), nMen);
         textC(44, s, C_WHITE);
@@ -2533,7 +2521,7 @@ static void update() {
         updateWeather(); updateCritters();
         updateCamera();
         if ((edge & 4) && timer > 100) timer = 100;                       // A: on to who's who, then to play
-        else if (--timer <= 0 || ((edge & 4) && timer < 95)) { state = PLAY; say((stage & 3) == 3 ? (uint8_t)(MS_MOTHER + ((stage >> 2) & 3)) : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
+        else if (--timer <= 0 || ((edge & 4) && timer < 95)) { state = PLAY; say((stage & 3) == 3 ? (uint8_t)(MS_MOTHER + ((stage >> 2) & 3)) : stage >= 4 ? MS_METEORS : wxLvl == 3 ? MS_STORM : MS_FLY_SAFE, 50); }
         break;
     case PLAY:
 #ifdef SL_DLV
@@ -2544,7 +2532,9 @@ static void update() {
             if (SL_DLV == 8 && tf == 40) { lx = (int32_t)(basePadX + 20) << 8; ly = (int32_t)70 << 8; }   // the cargo on the rope: over the base
             if (!once) {
                 once = true;
-                if (SL_DLV == 7) { fq = { (int16_t)LX(), 3, 1 }; fqN = 0; fuel = 300; shield = 1; }   // a fetch crate under the lander (landed on it)
+                if (SL_DLV == 20) { placeLanderOnPad(ventX[0] - 30); shield = 99; }                   // beside a vent
+                else if (SL_DLV >= 10) wpn = SL_DLV - 10;                                                 // a laser power-up from the start
+                else if (SL_DLV == 7) { fq = { (int16_t)LX(), 3, 1 }; fqN = 0; fuel = 300; shield = 1; }   // a fetch crate under the lander (landed on it)
                 else if (SL_DLV == 8) { fq = { (int16_t)LX(), 0, 2 }; fqN = 0; fuel = 300; shield = 1; lst = 0; ly = 30 << 8; lvy = -300; }   // rocket parts on the rope
                 else if (SL_DLV == 2) { placeLanderOnPad(basePadX); partyT = 200; }
                 else if (SL_DLV == 6) { dlv = 2; bagX = LX() + 2; bagY = groundAt(bagX) - 3; scX = LX() + 60; scY = groundAt(scX) - 7; }   // the bag right beside the lander

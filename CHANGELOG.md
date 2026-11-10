@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.45 (2026-11-10)
+
+- Laser power-ups, one per fetch-quest delivery, in turn: SPREAD (three-way fan), FAT (thick beam, double damage), RAPID, TWIN (fires behind too). Lost with the lander.
+- Hazards from stage 5: vents that glow, rumble and erupt in a 60 px column (fire on Vulcan, steam elsewhere); from stage 6 meteors fall around the lander.
+- Room made: flags, the sandworm's maw and item boxes are card pictures now; plainer explosions (no smoke ring), clouds, snow, dust, glint, lightning and aurora; a lighter crash.
+
 ## 0.44 (2026-11-10)
 
 - Easier to fly: the heavier worlds now pull halfway to the Moon's gravity (the Moon is unchanged; the engines are not).
