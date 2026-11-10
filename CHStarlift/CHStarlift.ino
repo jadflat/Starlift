@@ -1414,7 +1414,7 @@ static void drawSky() {
 static void drawSkyObjects() {
     const Planet &p = PLR;
     const int pc = cam >> 6;
-    if (p.sky == SK_EARTH || p.sky == SK_AURORA || p.sky == SK_MOONS || p.sky == SK_TWINSUN) {    // stars
+    if ((1 << p.sky) & (1 << SK_EARTH | 1 << SK_AURORA | 1 << SK_MOONS | 1 << SK_TWINSUN)) {    // stars
         const int sc = cam >> 5;
         for (int i = 0; i < 40; i++) {
             const uint32_t h = hash((uint32_t)i * 7777u + 1u);
@@ -1432,13 +1432,14 @@ static void drawSkyObjects() {
         for (int x = 0; x < 128; x++) {
             const int wx = x + (cam >> 5), top = TOP + 6 + (isin(wx * 3 + frameNo) >> 5);
             const int len = 10 + (isin(wx * 5 + frameNo / 2) >> 5);
-            for (int y = top; y < top + len; y++) if (((x + y) & 1) == 0 || y < top + 3) pset(x, y, (y - top) < 4 ? C_GREEN : C_ACC);
+            uint8_t *b = gfx_fb + top * GFX_FB_STRIDE + (x >> 1);      // (straight into the framebuffer: always on screen)
+            for (int i = 0; i < len; i++, b += GFX_FB_STRIDE) if (((x + top + i) & 1) == 0 || i < 3) { const uint8_t c = i < 4 ? C_GREEN : C_ACC; *b = (x & 1) ? (uint8_t)((*b & 0x0F) | (c << 4)) : (uint8_t)((*b & 0xF0) | c); }
         }
         break;
     }
     {                                                           // the world's sky giant, drifting across far away
-        const int gx = 150 - (int)(((uint32_t)frameNo / 3 + stage * 97u) % 420u), gy = (stage & 7) == 1 ? 50 : TOP + 14 + isin(frameNo + stage * 30) / 20;
-        if ((stage & 7) != 1 || ((frameNo >> 8) & 1)) blitRm(P_GIANT, gx, gy, false, RM(7, C_MID) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);   // the far worm only shows now and then
+        const int gx = 150 - (int)(((uint32_t)frameNo / 3 + stage * 97u) % 420u), gy = planet == 1 ? 50 : TOP + 14 + isin(frameNo + stage * 30) / 20;
+        if (planet != 1 || ((frameNo >> 8) & 1)) blitRm(P_GIANT, gx, gy, false, RM(7, C_MID) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);   // the far worm only shows now and then
     }
     if (p.clouds) {                                             // dithered cloud banks drifting slowly
         const int cc = (cam >> 4) + (frameNo >> 3);
@@ -1490,8 +1491,8 @@ static void drawLayerCols(int L) {
         const int y0 = topA[L][x], y1 = topA[L + 1][x];
         if (y0 >= y1) continue;
         const int slope = x ? (int)topA[L][x - 1] - y0 : 0;            // > 0: rising to the right, facing the light
-        const int sh = (x & 1) ? 4 : 0;
-        const uint8_t keep = (x & 1) ? 0x0F : 0xF0;
+        const int sh = (x & 1) * 4;
+        const uint8_t keep = (uint8_t)(0xF0 >> sh);
         uint8_t *p = gfx_fb + y0 * GFX_FB_STRIDE + (x >> 1);
         int rim = slope > 0 ? 2 + slope * 2 : slope < 0 ? 2 - slope : 1;
         if (rim > y1 - y0) rim = y1 - y0;
@@ -1520,7 +1521,7 @@ static void drawGroundCols() {
         const int hi = y0[0] < y0[1] ? 0 : 1, yTop = y0[hi], yBoth = y0[hi ^ 1];
         for (int b = 0; b < 5 && yTop + EDGE[b] < yBoth; b++) {                    // where only one of the two is ground yet
             const int ya = yTop + EDGE[b], yb = yTop + EDGE[b + 1] < yBoth ? yTop + EDGE[b + 1] : yBoth;
-            colTex(col + ya * GFX_FB_STRIDE, hi ? 0x0F : 0xF0, hi ? 4 : 0, ya, yb, LUT[b], tc[hi]);
+            colTex(col + ya * GFX_FB_STRIDE, (uint8_t)(0xF0 >> hi * 4), hi * 4, ya, yb, LUT[b], tc[hi]);
         }
         int y = yBoth, ba = 0, bb = 0;                                            // both: a byte at a time
         while (ba < 4 && y0[0] + EDGE[ba + 1] <= y) ba++;
