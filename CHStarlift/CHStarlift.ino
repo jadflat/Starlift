@@ -1960,8 +1960,8 @@ static void drawMen() {
         const uint8_t *mp = manMap(m.look);
         int s = C_MAN_STAND, by = m.y;
         bool jet = false;
-        switch (m.st) {
-        case M_IDLE: {
+        const uint8_t st = m.st;
+        if (st == M_IDLE) {
             const uint8_t a = m.act;
             if (a == D_GAZE) s = C_MAN_LOOKUP;
             else if (a == D_TRIP) s = SPIN + 2;                                // flat out
@@ -1977,14 +1977,12 @@ static void drawMen() {
                     for (int d = 0; d < 3; d++) if (((m.t >> 2) % 4) > d) pset(bx + 1 + d * 2, byy + 2, C_INK);
                 }
             }
-            break;
         }
-        case M_RUN: case M_WALK: s = (phase & 4) ? C_MAN_RUN1 : C_MAN_RUN2; break;
-        case M_BEAM: spinAt((frameNo >> 2) & 7, sx, m.y + 1, (frameNo >> 4) & 1, mp); continue;   // tumbling and twisting
-        case M_DROP: spinAt((frameNo >> 1) & 7, sx, (m.y >> 2) + 1, (frameNo >> 3) & 1, mp); continue;
-        case M_JET: by = m.y >> 2; s = (frameNo & 8) ? C_MAN_CHEER : C_MAN_WAVE1; jet = true; break;
-        default: continue;
-        }
+        else if (st == M_RUN || st == M_WALK) s = (phase & 4) ? C_MAN_RUN1 : C_MAN_RUN2;
+        else if (st == M_BEAM) { spinAt((frameNo >> 2) & 7, sx, m.y + 1, (frameNo >> 4) & 1, mp); continue; }   // tumbling and twisting
+        else if (st == M_DROP) { spinAt((frameNo >> 1) & 7, sx, (m.y >> 2) + 1, (frameNo >> 3) & 1, mp); continue; }
+        else if (st == M_JET) { by = m.y >> 2; s = (frameNo & 8) ? C_MAN_CHEER : C_MAN_WAVE1; jet = true; }
+        else continue;
         blitBC(s, sx, by, flip, 255, mp);
         manKit(m, sx, by, jet);
     }
