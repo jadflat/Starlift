@@ -108,7 +108,7 @@ RX = [0, 0, 40, 3, ST,  0, 0, 40, 1, SI,  -1, -6, 1, 6, ST,  40, -6, 1, 6, ST,  
       0, 0, 1, 6, ST,  8, 0, 1, 6, ST,                                                              # RX_POST
       -3, -10, 7, 2, IN,  4, -17, 2, 8, SI]                                                         # RX_LID
 plan = bytearray()
-for w in WORLDS:
+for st, w in enumerate(WORLDS):
     r = bytearray()
     for c in w['pal']:
         r += bytes(c)
@@ -124,6 +124,8 @@ for w in WORLDS:
     r += bytes(GEN['SKY_AT'][SKY[w['sky']] * 2:][:2]) + bytes(FALL.get(w['wx'], (0, 0, 0)))
     r += bytes(GEN['COLL_TUBE'][w['coll'] * 3:][:3]) + bytes([GEN['COLL_TOP'][w['coll']], GEN['BASE_DOOR'][w['base']]])
     r += struct.pack('%db' % len(RX), *RX)
+    # the stage's numbers (a world is a stage, 0-7): camps, colonists (the game's MEN is 20), items, fetch quests, turrets, rough, ridges
+    r += bytes([min(4 + st // 3, 8), 8 + st, (st + 2) // 3, 0 if st < 2 else 1 if st < 5 else 2, st // 2, 10 + st * 3, 26 + st * 3])
     PLANET_LEN = len(r)
     plan += r
 

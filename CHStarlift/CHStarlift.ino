@@ -474,12 +474,12 @@ static void genStage() {
 
     baseRight = ((stage + sector) & 1) == 0;
     const uint32_t s = (uint32_t)stage * 977u + 13u;
-    const int rough = 10 + planet * 3 + sector * 6;
+    const int rough = PLR.rough;                                             // (the stage's numbers come with its world, from the card)
     for (int i = 0; i < HN; i++) {
         const int x = i * 4;
         int h = 116 - ((vn(s, x, 7, true) * 24) >> 8) - ((vn(s + 1, x, 5, true) * 14) >> 8) - ((vn(s + 2, x, 3, false) * rough) >> 8);
         const int pk = vn(s + 3, x, 7, true);
-        if (pk > 170) h -= (pk - 170) * (26 + planet * 3) / 85;                // ridges to climb over
+        if (pk > 170) h -= (pk - 170) * PLR.ridge / 85;                // ridges to climb over
         hgt[i] = (uint8_t)clampi(h, 46, 122);
     }
     // the pads: the start at one end, the base (pad and building) at the other
@@ -492,7 +492,7 @@ static void genStage() {
     burgerX = W / 2 - 160 + (int)(hash(s + 5u) % 200) - 100;            // the takeaway, somewhere in the middle
     if (burgerX >= 0) flatten(burgerX + 50, 130);
     // the colonists' camps: flat ground, the colonists on one half, room to land on the other
-    nZones = (uint8_t)clampi(4 + stage / 3, 4, ZONES);
+    nZones = PLR.zones;
     const int span = W - 360;
     for (int z = 0; z < nZones; z++) {
         int cx = 200 + span * (2 * z + 1) / (2 * nZones) + (int)(hash(s + z * 7u) % 60) - 30;
@@ -501,12 +501,12 @@ static void genStage() {
         flatten(cx, 60);
     }
     memset(men, 0, sizeof men);
-    nMen = (uint8_t)clampi(8 + stage, 8, MEN);
+    nMen = PLR.people;
     quota = (uint8_t)clampi(3 + stage + diff, 3, nMen * 3 / 4);      // 3, 4, 5, 6 ... one more each stage (and each difficulty)
     memset(items, 0, sizeof items);
     { const uint8_t *a = PLR.alien[sector & 1]; remap(EMAP, RM(3, a[0]) | RM(5, a[1]) << 8 | RM(11, a[2]) << 16 | RM(6, a[3]) << 24); }
     dlv = foodOn = partyT = lidT = feasts = cowsN = crashN = 0;
-    const int nIt = clampi((stage + 2) / 3, 0, 5);
+    const int nIt = PLR.nItems;
     for (int k = 0; k < nIt + 2; k++) {                          // (easy: three more shield kits)                // things to pick up: supplies, repairs, fuel, now and then an engine part
         int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
         while (busyAt(x)) x += 23;
@@ -524,13 +524,13 @@ static void genStage() {
         m.st = M_IDLE; m.act = D_STAND; m.t = (uint8_t)rnd(60); m.face = (int8_t)(rnd(2) ? 1 : -1); m.look = (uint8_t)(hash(s + i * 71u) & 31);
     }
     nSaved = nLost = 0;
-    fq.st = 0; fqT = 200; fqN = (uint8_t)(stage < 2 ? 0 : stage < 5 ? 1 : 2);   // stage 3 on: fetch quests (two from stage 6)
+    fq.st = 0; fqT = 200; fqN = PLR.quests;   // stage 3 on: fetch quests (two from stage 6)
     for (int k = 0; k < fqN; k++) { int x = (baseRight ? 300 : W / 2) + (int)(hash(s + k * 89u) % (W / 2 - 300)); while (busyAt(x)) x += 23; fqX[k] = (int16_t)x; flatten(x, 24); }
     for (int k = 0; k < 2; k++) { int x = !(hz & HZ_TUNNEL) ? -999 : 600 + k * (W - 1200) + (int)(hash(s + k * 61u) % 120); tunX[k] = (int16_t)x; }
     leak = magT = 0; evT = (hz & HZ_EVAC) ? 3600 : 0;   // two minutes (the seconds fit the call-out)
     for (int k = 0; k < 3; k++) { int x = !(hz & HZ_VENTS) ? -999 : 380 + k * (W - 760) / 2 + (int)(hash(s + k * 37u) % 90); if (x > 0) while (busyAt(x)) x += 23; ventX[k] = (int16_t)x; }
     memset(en, 0, sizeof en);
-    const int turrets = clampi(planet / 2 + sector * 2, 0, 4);
+    const int turrets = PLR.turrets;
     for (int k = 0; k < turrets; k++) {                                       // turrets on open ground between the camps
         int x = 260 + (int)(hash(s + k * 41u) % (W - 520));
         for (int z = 0; z < nZones; z++) if (absi(x - zoneX[z]) < 60) x += 70;
@@ -1637,8 +1637,7 @@ static void drawItems() {
         if (it.st != 1) continue;
         const int x = it.x - cam - 3, y = groundAt(it.x) - 5;
         if (x < -8 || x > 130) continue;
-        static const CSpr *const IS[4] = { &C_ITEM0, &C_ITEM1, &C_ITEM2, &C_ITEM3 };
-        blit(*IS[it.kind], x, y, false);
+        blit(ITEMPIC[it.kind], x, y, false);
         if (it.kind != IT_REPAIR && it.kind != IT_FUEL) pset(x + 3, y + 2, (frameNo & 4) ? C_WHITE : C_GOLD);
         if ((frameNo & 16) && absi(it.x - LX()) < 60) pset(x + 3, y - 3, C_GOLD);   // a beacon when the lander is near
     }
@@ -1648,7 +1647,6 @@ static void drawItems() {
 #endif
 
 // ---- fetch quests (stage 3 on): a call-out with a picture, cargo with beacons, lifted or landed on, taken to base -----
-static const CSpr *const FETCH[6] = { &C_FETCH0, &C_FETCH1, &C_FETCH2, &C_FETCH3, &C_FETCH4, &C_FETCH5 };   // 0-2 lifted, 3-5 landed on
 static void fqDone() {
     fq.st = 0; fqT = 240; hoverT = 0; tankT = 160; shield = shMax();             // a full tank (filled after the call-out) and a mended hull
     addScore(1500, doorX, groundAt(doorX) - 24); sfx(S_SAVED);
@@ -1710,7 +1708,7 @@ static void drawFetch() {
     }
 #endif
     if (fq.st != 1 && fq.st != 2) return;
-    const CSpr &sp = *FETCH[fq.kind];
+    const CSpr &sp = FETCH[fq.kind];
     const int sx = fq.x - cam, by = fq.st == 2 ? LY() + 28 : groundAt(fq.x), ty = by - sp.h;
     if (sx < -20 || sx > 148) return;
     if (fq.st == 2) R(sx, LY() + 8, 1, ty - LY() - 8, C_SILVER);                   // the rope
@@ -1756,9 +1754,8 @@ static void drawGroundThings() {
 
 // a flag on a pole, rippling: the colony's (a gold star) or the aliens' (an eye)
 static void flag(int x, int gy, uint8_t kind) {
-    static const CSpr *const FL[6] = { &C_FLAG0, &C_FLAG1, &C_FLAG2, &C_FLAG3, &C_FLAG4, &C_FLAG5 };   // two frames of each, waving (from the card)
     R(x, gy - 24, 1, 24, C_SILVER); pset(x, gy - 25, C_GOLD);
-    blit(*FL[kind * 2 + ((frameNo >> 4) & 1)], x + 1, gy - 25, false);
+    blit(FLAGPIC[kind * 2 + ((frameNo >> 4) & 1)], x + 1, gy - 25, false);
 }
 
 // the aliens' collecting bucket: its tubes run down to pods in a chamber under the ground
@@ -1953,7 +1950,7 @@ static void manKit(const Man &m, int sx, int by, bool jet) {
     }
 }
 
-static void spinAt(int i, int sx, int y, bool flip, const uint8_t *mp) { blitBC(*SPIN[i], sx, y, flip, 255, mp); }   // a tumbling colonist
+static void spinAt(int i, int sx, int y, bool flip, const uint8_t *mp) { blitBC(SPIN[i], sx, y, flip, 255, mp); }   // a tumbling colonist
 static void drawMen() {
     for (int i = 0; i < nMen; i++) {
         const Man &m = men[i];
@@ -1968,7 +1965,7 @@ static void drawMen() {
             int by = m.y;
             switch (m.act) {
             case D_GAZE: s = &C_MAN_LOOKUP; break;
-            case D_TRIP: s = SPIN[2]; break;                                // flat out
+            case D_TRIP: s = &SPIN[2]; break;                                // flat out
             case D_WANDER: case D_TREK: s = (phase & 8) ? &C_MAN_RUN1 : &C_MAN_STAND; break;
             case D_WAVE: s = (phase & 4) ? &C_MAN_WAVE1 : &C_MAN_WAVE2; break;
             case D_CHEER: if (phase & 8) { s = &C_MAN_CHEER; by--; } break;
@@ -2012,7 +2009,7 @@ static void drawEnemies() {
                 drawBeam(sx, sy, gy + 2);
                 drawBag(sx, by);
             }
-            blit(*SAUCER[(frameNo >> 2) & 3], sx - 11, sy - 5, false, solid, EMAP);
+            blit(SAUCER[(frameNo >> 2) & 3], sx - 11, sy - 5, false, solid, EMAP);
             for (int k = 0; k < e.cargo && e.st < 3; k++) pset(sx - 4 + k * 2, sy - 3, (frameNo + k * 4) & 8 ? C_WHITE : C_GOLD);
             break;
         case E_STINGER: blit((frameNo & 8) ? C_SNATCH0 : C_SNATCH1, sx - 7, sy - 6, sx > LX() - cam, solid, EMAP); break;
@@ -2103,7 +2100,7 @@ static void drawLander() {
     }
     if (sy < TOP - 8 && (frameNo & 4)) { const int ax = clampi(sx, 3, 124); pset(ax, 17, C_GOLD); hl(ax - 1, 18, 3, C_GOLD); }   // above the screen: an arrow
     const int a = absi(ang);
-    blit(!gear ? *LANDER_UP[a] : a < 3 ? *LANDER[a] : *LANDER_STEEP[a - 3], sx - 11, sy - 11, ang < 0);
+    blit((!gear ? LANDER_UP : LANDER)[a], sx - 11, sy - 11, ang < 0);
     if (lidT) rects(sx, sy, RX_LID, 2);   // the flip-top lid, open
     else if (foodOn && (frameNo & 8)) pset(sx, sy - 10, C_GOLD);      // the takeaway aboard
     if (charge == CHARGED) {                                         // charged: the nose glows
@@ -2257,7 +2254,7 @@ static void drawWorld() {
         if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
         else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
     }
-    if (bannerT && banner >= MS_FQ0 && banner <= MS_FQ5) { panel(36, 36); blitBC(*FETCH[fq.kind], 64, 55, false); tC(60, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out's picture
+    if (bannerT && banner >= MS_FQ0 && banner <= MS_FQ5) { panel(36, 36); blitBC(FETCH[fq.kind], 64, 55, false); tC(60, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out's picture
 }
 
 // ---- title, menus ------------------------------------------------------------------------------------------------------

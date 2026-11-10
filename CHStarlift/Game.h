@@ -20,6 +20,7 @@ struct Planet {
     // small tables that were in flash: this world's lights on its buildings (x, y, kind), its sky object's centre, its rain (speed, two colours),
     // its collector's tubes and mouth and its base's door; then rectangle lists (the same on every world: rects(), RX_...)
     int8_t light[6][3]; uint8_t skyAt[2], fall[3], tube[3], collTop, door; int8_t rx[65];
+    uint8_t zones, people, nItems, quests, turrets, rough, ridge;   // the stage's numbers (a world is a stage): camps, colonists, items, fetch quests, turrets, how rough and ridged the ground
 };
 enum State : uint8_t { TITLE, INTRO, PLAY, CLEAR, OVER, WIN, PAUSED, HELP, OPTIONS };
 enum ManSt : uint8_t { M_NONE, M_IDLE, M_RUN, M_ABOARD, M_BEAM, M_JET, M_WALK, M_SAVED, M_LOST, M_HELD, M_DROP };   // HELD: in a UFO; DROP: falling into its bucket; JET: jet-packing down
