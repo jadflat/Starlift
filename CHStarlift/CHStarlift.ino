@@ -2353,7 +2353,7 @@ static void drawIntro() {
         struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };
         static const Row ROWS[6] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
             { &C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { &C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
-            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_MAW, 10, 3, E_WORM, MS_R_WORM, C_RED } };
+            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_GI_WORM, 6, 3, E_WORM, MS_R_WORM, C_RED } };
         int n = 0, m = 0;
         for (int i = 0; i < 6; i++) { bool h = !ROWS[i].kind; for (const auto &e : en) h |= e.kind == ROWS[i].kind; if (h) { m |= 1 << i; n++; } }
         panel(18, 17 + n * 13);                                            // the card just as tall as its rows
