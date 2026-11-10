@@ -1962,13 +1962,13 @@ static void drawMen() {
         bool jet = false;
         switch (m.st) {
         case M_IDLE: {
-            switch (m.act) {
-            case D_GAZE: s = C_MAN_LOOKUP; break;
-            case D_TRIP: s = SPIN + 2; break;                                // flat out
-            case D_WANDER: case D_TREK: s = (phase & 8) ? C_MAN_RUN1 : C_MAN_STAND; break;
-            case D_WAVE: s = (phase & 4) ? C_MAN_WAVE1 : C_MAN_WAVE2; break;
-            case D_CHEER: if (phase & 8) { s = C_MAN_CHEER; by--; } break;
-            case D_CHAT: {
+            const uint8_t a = m.act;
+            if (a == D_GAZE) s = C_MAN_LOOKUP;
+            else if (a == D_TRIP) s = SPIN + 2;                                // flat out
+            else if (a == D_WANDER || a == D_TREK) s = (phase & 8) ? C_MAN_RUN1 : C_MAN_STAND;
+            else if (a == D_WAVE) s = (phase & 4) ? C_MAN_WAVE1 : C_MAN_WAVE2;
+            else if (a == D_CHEER) { if (phase & 8) { s = C_MAN_CHEER; by--; } }
+            else if (a == D_CHAT) {
                 const bool speaking = (((m.t >> 5) & 1) == m.by);
                 if (speaking) {
                     if (phase & 8) s = C_MAN_TALK;
@@ -1976,9 +1976,6 @@ static void drawMen() {
                     R(bx, byy, 8, 5, C_WHITE); pset(bx + (m.face > 0 ? 1 : 6), byy + 5, C_WHITE);
                     for (int d = 0; d < 3; d++) if (((m.t >> 2) % 4) > d) pset(bx + 1 + d * 2, byy + 2, C_INK);
                 }
-                break;
-            }
-            default: break;
             }
             break;
         }
