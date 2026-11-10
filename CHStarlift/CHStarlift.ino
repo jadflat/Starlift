@@ -477,6 +477,7 @@ static void placeLanderOnPad(int padX) {
     if (onPad == 2) facing = (int8_t)-facing;
 }
 
+static NOINL int freeX(int x) { while (busyAt(x)) x += 23; return x; }   // on along to ground nothing else uses
 static void genStage() {
     planet = stage & 7;
 
@@ -516,8 +517,7 @@ static void genStage() {
     dlv = foodOn = partyT = lidT = feasts = cowsN = crashN = 0;
     const int nIt = PLR.nItems;
     for (int k = 0; k < nIt + 2; k++) {                          // (easy: three more shield kits)                // things to pick up: supplies, repairs, fuel, now and then an engine part
-        int x = 300 + (int)(hash(s + k * 53u) % (W - 600));
-        while (busyAt(x)) x += 23;
+        const int x = freeX(300 + (int)(hash(s + k * 53u) % (W - 600)));
         items[k] = { (int16_t)x, (uint8_t)(k >= nIt ? (k > nIt ? IT_FUEL : IT_REPAIR) : (k & 1) ? IT_REPAIR : IT_FUEL), 1 };
         flatten(x, 24);
     }
@@ -533,10 +533,10 @@ static void genStage() {
     }
     nSaved = nLost = 0;
     fq.st = 0; fqT = 200; fqPic = 0; fqN = PLR.quests;   // stage 3 on: fetch quests (two from stage 6)
-    for (int k = 0; k < fqN; k++) { int x = (baseRight ? 300 : W / 2) + (int)(hash(s + k * 89u) % (W / 2 - 300)); while (busyAt(x)) x += 23; fqX[k] = (int16_t)x; flatten(x, 24); }
+    for (int k = 0; k < fqN; k++) { const int x = freeX((baseRight ? 300 : W / 2) + (int)(hash(s + k * 89u) % (W / 2 - 300))); fqX[k] = (int16_t)x; flatten(x, 24); }
     for (int k = 0; k < 2; k++) { int x = !(hz & HZ_TUNNEL) ? -999 : 600 + k * (W - 1200) + (int)(hash(s + k * 61u) % 120); tunX[k] = (int16_t)x; }
     leak = magT = 0; evT = (hz & HZ_EVAC) ? 3600 : 0;   // two minutes (the seconds fit the call-out)
-    for (int k = 0; k < 3; k++) { int x = !(hz & HZ_VENTS) ? -999 : 380 + k * (W - 760) / 2 + (int)(hash(s + k * 37u) % 90); if (x > 0) while (busyAt(x)) x += 23; ventX[k] = (int16_t)x; }
+    for (int k = 0; k < 3; k++) { int x = !(hz & HZ_VENTS) ? -999 : 380 + k * (W - 760) / 2 + (int)(hash(s + k * 37u) % 90); if (x > 0) x = freeX(x); ventX[k] = (int16_t)x; }
     memset(en, 0, sizeof en);
     const int turrets = PLR.turrets;
     for (int k = 0; k < turrets; k++) {                                       // turrets on open ground between the camps
@@ -1973,10 +1973,10 @@ static void drawMen() {
         const bool flip = m.face < 0;
         const int phase = (frameNo + i * 7);
         const uint8_t *mp = manMap(m.look);
+        int s = C_MAN_STAND, by = m.y;
+        bool jet = false;
         switch (m.st) {
         case M_IDLE: {
-            int s = C_MAN_STAND;
-            int by = m.y;
             switch (m.act) {
             case D_GAZE: s = C_MAN_LOOKUP; break;
             case D_TRIP: s = SPIN + 2; break;                                // flat out
@@ -1995,16 +1995,16 @@ static void drawMen() {
             }
             default: break;
             }
-            blitBC(s, sx, by, flip, 255, mp);
-            manKit(m, sx, by, false);
             break;
         }
-        case M_RUN: case M_WALK: blitBC((phase & 4) ? C_MAN_RUN1 : C_MAN_RUN2, sx, m.y, flip, 255, mp); manKit(m, sx, m.y, false); break;
-        case M_BEAM: spinAt((frameNo >> 2) & 7, sx, m.y + 1, (frameNo >> 4) & 1, mp); break;   // tumbling and twisting
-        case M_DROP: spinAt((frameNo >> 1) & 7, sx, (m.y >> 2) + 1, (frameNo >> 3) & 1, mp); break;
-        case M_JET: { const int y = m.y >> 2; blitBC((frameNo & 8) ? C_MAN_CHEER : C_MAN_WAVE1, sx, y, flip, 255, mp); manKit(m, sx, y, true); break; }
-        default: break;
+        case M_RUN: case M_WALK: s = (phase & 4) ? C_MAN_RUN1 : C_MAN_RUN2; break;
+        case M_BEAM: spinAt((frameNo >> 2) & 7, sx, m.y + 1, (frameNo >> 4) & 1, mp); continue;   // tumbling and twisting
+        case M_DROP: spinAt((frameNo >> 1) & 7, sx, (m.y >> 2) + 1, (frameNo >> 3) & 1, mp); continue;
+        case M_JET: by = m.y >> 2; s = (frameNo & 8) ? C_MAN_CHEER : C_MAN_WAVE1; jet = true; break;
+        default: continue;
         }
+        blitBC(s, sx, by, flip, 255, mp);
+        manKit(m, sx, by, jet);
     }
 }
 
