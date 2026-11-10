@@ -1203,7 +1203,7 @@ static void updateEnemies() {
             if (nearL(ex, 120) && (frameNo % 60) == 0) for (int k = -8; k <= 8; k += 16) eshot(ex + k, ey + 6, X, Y, 20, 1);
             break;
         case E_TURRET:
-            if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, (hz & HZ_SNIPER) ? 34 : 26, 1);   // (stage 6 on: a sniper's fast shot)
+            if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, (hz & HZ_SNIPER) ? 38 : 26, 1);   // (stage 6 on: a sniper's fast shot)
             break;
         }
         if (!e.kind) continue;
@@ -1313,7 +1313,7 @@ static void updateShots() {
         s.x = (int16_t)(s.x + s.vx); s.y = (int16_t)(s.y + s.vy);
         const int x = s.x >> 4, y = s.y >> 4;
         if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
-        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (++chip >= 4) { chip = 0; damage(1); } else { sfx(S_CLANG); shake = 2; } }   // 0.46: shots and meteors are weak: a pip every 4th hit
+        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (++chip >= 3) { chip = 0; damage(1); } else { sfx(S_CLANG); shake = 2; } }   // 0.46: shots and meteors are weak: a pip every 3rd hit
         if (dlv == 3 && absi(x - scX) < 8 && absi(y - scY + 4) < 6) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
     }
     for (auto &q : pt) {
@@ -1678,12 +1678,12 @@ static void updateFetch() {
 #endif
 #ifdef SLF_MAG
     if ((hz & HZ_MAG) && !magT && (frameNo % 1100) == 600) { magT = 150; sfxSay(S_WARN, MS_MAG, 90); }
-    if (magT) { magT--; if (lst == 0 && !(frameNo & 3)) lvx = (int16_t)(lvx + rnd(21) - 10); }   // the controls drift
+    if (magT) { magT--; if (lst == 0 && !(frameNo & 3)) lvx = (int16_t)(lvx + rnd(31) - 15); }   // the controls drift
 #endif
-    if ((hz & HZ_METEORS) && (frameNo % 240) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP + 1, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
+    if ((hz & HZ_METEORS) && (frameNo % 180) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP + 1, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
     for (int k = 0; k < 3; k++) {                                       // the vents: rumble, then a column of fire (or steam) 60 px high
         const int vx = ventX[k];
-        if (vx > 0 && (frameNo + k * 53) % 160 >= 125 && absi(vx - LX()) < 6 && LY() > groundAt(vx) - 64) lvy = (int16_t)(lvy - 40);   // the blast throws the lander up (no harm: variety, not difficulty)
+        if (vx > 0 && (frameNo + k * 53) % 160 >= 125 && absi(vx - LX()) < 6 && LY() > groundAt(vx) - 64) { lvy = (int16_t)(lvy - 40); if (!(frameNo & 15)) chip++; }   // the blast throws the lander up (no harm: variety, not difficulty)
     }
     if (!fq.st) {
         if (fqN && fqT && !--fqT) {
