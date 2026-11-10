@@ -224,10 +224,10 @@ struct Fetch { int16_t x; uint8_t kind, st; };               // a fetch quest's 
 static Fetch fq;
 // each stage's hazards (0.46): a different mix from stage 3 on
 enum : uint8_t { HZ_LEAK = 1, HZ_SNIPER = 2, HZ_TUNNEL = 4, HZ_MAG = 8, HZ_VENTS = 16, HZ_METEORS = 32, HZ_EVAC = 64 };
-static const uint8_t HZ[8] = { 0, 0, HZ_LEAK | HZ_TUNNEL, HZ_SNIPER | HZ_METEORS, HZ_VENTS | HZ_TUNNEL | HZ_MAG,
+static const uint8_t HZ[8] = { 0, 0, HZ_TUNNEL, HZ_SNIPER | HZ_METEORS, HZ_VENTS | HZ_TUNNEL | HZ_MAG,
                                HZ_METEORS | HZ_LEAK | HZ_SNIPER, HZ_VENTS | HZ_MAG | HZ_TUNNEL, HZ_EVAC | HZ_METEORS | HZ_SNIPER | HZ_LEAK | HZ_VENTS };
 static uint8_t hz;                                            // this stage's
-static uint8_t leak, magT;
+static uint8_t leak, magT, chip;                              // chip: bullet hits since the last pip lost
 static uint16_t evT;                                          // stage 8: frames to the reactor blowing                                    // leak: the tank holed; magT: a magnetic storm's frames left
 static int16_t tunX[2];                                       // wind tunnels (stage 4 on)
 static int16_t fqX[2], ventX[3];                               // ventX: stage 5 on, vents in the ground that erupt                                        // where this stage's cargo turns up
@@ -639,7 +639,7 @@ static void damage(int n) {
     if (invT || lst == 2) return;
     sfx(S_HIT); shake = 6; invT = 80;
 #ifdef SLF_LEAK
-    if ((hz & HZ_LEAK) && !leak && rnd(2)) { leak = 1; say(MS_LEAK, 90); }     // a holed tank
+    if ((hz & HZ_LEAK) && !leak && lst == 0 && rnd(2)) { leak = 1; say(MS_LEAK, 90); }     // a holed tank
 #endif
     if (shield <= n) { shield = 0; wreck(); } else shield -= (uint8_t)n;
 }
@@ -1313,7 +1313,7 @@ static void updateShots() {
         s.x = (int16_t)(s.x + s.vx); s.y = (int16_t)(s.y + s.vy);
         const int x = s.x >> 4, y = s.y >> 4;
         if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
-        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; damage(1); }
+        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (s.kind == 2 || ++chip >= 4) { chip = 0; damage(1); } else { sfx(S_CLANG); shake = 2; } }   // 0.46: bullets are weak (a pip every 4th), meteors hit hard
         if (dlv == 3 && absi(x - scX) < 8 && absi(y - scY + 4) < 6) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
     }
     for (auto &q : pt) {
@@ -1680,7 +1680,7 @@ static void updateFetch() {
     if ((hz & HZ_MAG) && !magT && (frameNo % 1100) == 600) { magT = 150; sfxSay(S_WARN, MS_MAG, 90); }
     if (magT) { magT--; if (lst == 0 && !(frameNo & 3)) lvx = (int16_t)(lvx + rnd(41) - 20); }   // the controls drift
 #endif
-    if ((hz & HZ_METEORS) && (frameNo % (200 - stage * 15)) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP - 8, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
+    if ((hz & HZ_METEORS) && (frameNo % (200 - stage * 15)) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP + 1, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
     for (int k = 0; k < 3; k++) {                                       // the vents: rumble, then a column of fire (or steam) 60 px high
         const int vx = ventX[k];
         if (vx > 0 && (frameNo + k * 53) % 160 >= 125 && absi(vx - LX()) < 6 && LY() > groundAt(vx) - 64) damage(1);
