@@ -2307,6 +2307,9 @@ static void drawTitleScene() {
 }
 
 static void drawTitle() {
+#ifdef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
+    return;
+#endif
     drawTitleScene();
 
 #ifndef SL_SLIM
@@ -2376,6 +2379,9 @@ static void drawOptions() {
 }
 
 static void drawIntro() {
+#ifdef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
+    return;
+#endif
     drawWorld();
 #ifndef SL_SLIM
     char s[28];

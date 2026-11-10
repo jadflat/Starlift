@@ -15,8 +15,7 @@ namespace card {
 enum { SLOTS = 6, ALL = SLOTS + 1 };                // the last slot is CHGfx's scratch buffer, free while a frame is drawn
 alignas(4) static uint8_t buf[SLOTS][512];
 __attribute__((section(".sbss.card_tag"))) static uint16_t tag[ALL];   // (open() empties them; nothing looks before that)
-static uint8_t age[ALL], tick;                    // the least recently used slot is the one to replace
-static uint8_t used[ALL], frameNo;               // the frame each slot was last used in
+static uint8_t used[ALL], frameNo;               // the frame each slot was last used in (the oldest is the one to replace)
 static uint8_t misses;                            // blocks read from the card this frame
 bool lowPri;                                      // scenery: it may wait a frame rather than read more than two blocks
 static uint8_t *slotBuf(int i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
@@ -27,6 +26,8 @@ static bool open_;
 // STARLIFT.DAT's place on the card, found without CHSd's general FAT code (only its block reads): the first FAT16 or FAT32
 // volume (at LBA 0, or the MBR's first partition), the file in its root, in up to four runs. A card that is not like
 // that simply finds no file; the header check below catches the rest. About half the size of fat::open().
+static void nop(const uint8_t *, void *) {}
+static bool rd(uint32_t lba, uint8_t *b) { return sd::stream(lba, 1, b, b, nop, nullptr); }   // 24 MHz DMA: ~0.5 ms a block against ~1.5 for rd()
 static uint32_t fatLba, dataLba;
 static uint8_t shift;
 static bool f32;
@@ -35,14 +36,14 @@ static uint32_t rd32(const uint8_t *p) { return rd16(p) | rd16(p + 2) << 16; }
 static uint32_t clus(uint32_t c) { return dataLba + ((c - 2) << shift); }
 static uint32_t nextC(uint32_t c, uint8_t *b) {                 // the cluster after c, 0 at the end (or on a read error)
     const uint32_t off = c << (f32 ? 2 : 1);
-    if (!sd::read(fatLba + (off >> 9), b)) return 0;
+    if (!rd(fatLba + (off >> 9), b)) return 0;
     const uint32_t n = f32 ? rd32(b + (off & 511)) & 0x0FFFFFFFu : rd16(b + (off & 511));
     return n >= (f32 ? 0x0FFFFFF8u : 0xFFF8u) ? 0 : n;
 }
 static uint8_t findDat(uint8_t *b) {
     uint32_t base = 0;
-    if (!sd::init() || !sd::read(0, b)) return 0;
-    if (b[0] != 0xEB && b[0] != 0xE9 && !sd::read(base = rd32(b + 454), b)) return 0;   // an MBR: its first partition
+    if (!sd::init() || !rd(0, b)) return 0;
+    if (b[0] != 0xEB && b[0] != 0xE9 && !rd(base = rd32(b + 454), b)) return 0;   // an MBR: its first partition
     uint32_t fsz = rd16(b + 22);
     f32 = !fsz;
     if (f32) fsz = rd32(b + 36);
@@ -56,7 +57,7 @@ static uint8_t findDat(uint8_t *b) {
         if (!f32) { if (sec == rootSecs) return 0; lba = rootLba + sec; }
         else { if (sec >> shift) { if ((dir = nextC(dir, b)) < 2) return 0; sec = 0; } lba = clus(dir) + sec; }
         sec++;
-        if (!sd::read(lba, b)) return 0;
+        if (!rd(lba, b)) return 0;
         for (const uint8_t *d = b; d < b + 512; d += 32) {
             if (!d[0]) return 0;
             if (d[0] == 0xE5 || (d[11] & 0x1A) || memcmp(d, "STARLIFTDAT", 11)) continue;
@@ -76,7 +77,7 @@ static uint8_t findDat(uint8_t *b) {
     return 0;
 }
 static bool readBlk(uint32_t k, uint8_t *dst) {
-    for (int i = 0; i < nRuns; i++) { if (k < runs[i].blocks) return sd::read(runs[i].lba + k, dst); k -= runs[i].blocks; }
+    for (int i = 0; i < nRuns; i++) { if (k < runs[i].blocks) return rd(runs[i].lba + k, dst); k -= runs[i].blocks; }
     return false;
 }
 
@@ -97,12 +98,12 @@ const uint8_t *at(uint32_t off) {
 #ifdef SL_TRACE
     if ((frameNo & 63) == 7) fprintf(stderr, "use f%u b%u lp%d\n", (unsigned)frameNo, (unsigned)blk, (int)lowPri);
 #endif
-    for (int i = 0; i < ALL; i++) if (tag[i] == blk) { age[i] = ++tick; used[i] = frameNo; return slotBuf(i) + (off & 511); }
+    for (int i = 0; i < ALL; i++) if (tag[i] == blk) { used[i] = frameNo; return slotBuf(i) + (off & 511); }
     // the slot to replace: the least recently used of those not used this frame (a frame that needs more blocks than there
     // are slots reads the extra ones through the scratch slot, so the others stay put and only the extra ones miss)
     int v = SLOTS;
     for (int i = 0; i < SLOTS; i++)
-        if (used[i] != frameNo && (v == SLOTS || (uint8_t)(tick - age[i]) > (uint8_t)(tick - age[v]))) v = i;
+        if (used[i] != frameNo && (v == SLOTS || (uint8_t)(frameNo - used[i]) > (uint8_t)(frameNo - used[v]))) v = i;
     if (lowPri && misses >= 2) return nullptr;    // the scenery can show up a frame later; a frame cannot be late
     misses++;
 #ifdef SL_TRACE
@@ -111,7 +112,6 @@ const uint8_t *at(uint32_t off) {
     tag[v] = 0xffff;
     if (!readBlk(blk, slotBuf(v))) { open_ = false; return nullptr; }
     tag[v] = blk;
-    age[v] = ++tick;
     used[v] = frameNo;
     return slotBuf(v) + (off & 511);
 }
