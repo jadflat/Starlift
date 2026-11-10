@@ -42,7 +42,7 @@
 #ifdef SL_STAGESEL
 #define SL_VERSION "0.30j"                                        // jadflat's local build: stage select
 #else
-#define SL_VERSION "0.45"
+#define SL_VERSION "0.46"
 #endif
 #ifdef SL_STAGESEL
 #define SL_NOSAVE                                                  // the local test build does not load or save

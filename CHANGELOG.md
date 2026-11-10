@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46 (2026-11-11)
+
+- Smoother on the board: the ground tile draws 9x faster, a stage loads over 3 frames, and the card is laid out so every stage stays under 33.3 ms a frame (30 fps).
+
 ## 0.45 (2026-11-10)
 
 - Laser power-ups, one per fetch-quest delivery, in turn: SPREAD (three-way fan), FAT (thick beam, double damage), RAPID, TWIN (fires behind too). Lost with the lander.
