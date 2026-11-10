@@ -1345,19 +1345,16 @@ static void updateWeather() {
     const int gust = windV / 2, nWx = WXN * wxLvl / 3;
     for (int i = 0; i < nWx; i++) {
         int x = wxX[i] - dc, y = wxY[i];
-        switch (p.weather) {
-        case WX_DUST: x += gust / 24 + (i & 1); y += (i % 3) == 0; break;
-        case WX_SNOW: {                                             // flakes ride the wind: small ones are blown hard, big ones lag
+        const uint8_t w = p.weather;
+        if (w == WX_DUST) { x += gust / 24 + (i & 1); y += (i % 3) == 0; }
+        else if (w == WX_SNOW) {                                             // flakes ride the wind: small ones are blown hard, big ones lag
             const bool big = (i & 3) == 0;
             x += (windV * (big ? 2 : 3 + (i & 3)) + (int)(hash((uint32_t)(frameNo * 64 + i)) & 255)) >> 8;   // a fraction of a pixel, rounded at random
             if (absi(windV) < 50) { const int sw = isin(frameNo * 2 + i * 23); x += (sw > 40) - (sw < -40); }   // still air: they sway
             y += big || (((frameNo + i) & 1) && absi(windV) < 110);  // a strong gust holds the small ones up
-            break;
         }
-        case WX_ASH: if (i & 1) { y -= 1; x += (frameNo + i) % 3 == 0; } else { y += (frameNo & 1); } break;
-        case WX_RAIN: case WX_DRIZZLE: case WX_ACID: y += p.fall[0]; x -= p.weather == WX_RAIN; break;
-        default: break;
-        }
+        else if (w == WX_ASH) { if (i & 1) { y -= 1; x += (frameNo + i) % 3 == 0; } else { y += (frameNo & 1); } }
+        else if (w == WX_RAIN || w == WX_DRIZZLE || w == WX_ACID) { y += p.fall[0]; x -= w == WX_RAIN; }
         while (x < 0) x += 160;
         while (x >= 160) x -= 160;
         if (y >= 128) { y = TOP; x = rnd(160); }
