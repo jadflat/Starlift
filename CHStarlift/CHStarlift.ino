@@ -1451,7 +1451,12 @@ static void drawSkyObjects() {
         for (int k = (cc >> 6) - 1; k <= ((cc + 128) >> 6) + 1; k++) {
             const uint32_t h = hash((uint32_t)k * 4243u + planet);
             const int cx = k * 64 - cc + (int)(h & 15), cy = TOP + 10 + (int)((h >> 4) & 31), hw = 16 + (int)((h >> 9) & 15), hh = 3 + (int)((h >> 13) & 3);
-            for (int r = -hh; r <= hh; r++) hl(cx - hw + absi(r) * 4, cy + r, 2 * (hw - absi(r) * 4), p.clouds);   // 0.45: plainer banks (for room)
+            for (int r = -hh; r <= hh; r++) {
+                const int w = hw - (hw * r * r) / (hh * hh + 1) - (r < 0 ? -r * 2 : 0);
+                if (w <= 0) continue;
+                const int y = cy + r;
+                hl(cx - w + 1, y, 2 * w - 2, p.clouds);
+            }
         }
     }
     if (lightT > 4) {                                          // a lightning bolt from the clouds
