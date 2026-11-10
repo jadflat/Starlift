@@ -2770,3 +2770,11 @@ TINYLIB void *memcpy(void *d, const void *s, size_t n) { uint8_t *p = (uint8_t *
 TINYLIB void *memset(void *d, int c, size_t n) { uint8_t *p = (uint8_t *)d; while (n--) *p++ = (uint8_t)c; return d; }
 TINYLIB void *memmove(void *d, const void *s, size_t n) { uint8_t *p = (uint8_t *)d; const uint8_t *q = (const uint8_t *)s; if (p < q) while (n--) *p++ = *q++; else while (n--) p[n] = q[n]; return d; }
 }
+// the C runtime's start-up hook, without newlib's (which also runs a preinit list and _init(), both empty here): about 80 B
+#ifndef CHSIM
+extern "C" {
+extern void (*__init_array_start[])(void), (*__init_array_end[])(void);
+__attribute__((used, noinline)) void __libc_init_array(void) { for (void (**f)(void) = __init_array_start; f != __init_array_end; f++) (*f)(); }
+TINYLIB int memcmp(const void *a, const void *b, size_t n) { const uint8_t *p = (const uint8_t *)a, *q = (const uint8_t *)b; for (; n--; p++, q++) if (*p != *q) return *p - *q; return 0; }
+}
+#endif
