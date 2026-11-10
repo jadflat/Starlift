@@ -812,7 +812,7 @@ static NOINL void rope(int x1, int y1) {                         // a taut rope 
     for (int k = 0; k <= n; k++) pset(x0 + (n ? dx * k / n : 0), y0 + (n ? dy * k / n : 0), C_SILVER);
 }
 
-static NOINL bool walking() { for (const auto &m : men) if (m.st == M_WALK) return true; return false; }   // colonists still on their way in
+static inline bool walking() { for (const auto &m : men) if (m.st == M_WALK) return true; return false; }   // colonists still on their way in
 
 static NOINL bool roomBeside(int x) {                            // flat ground on one side: twice the lander's width
     const int g = groundAt(x);
@@ -988,7 +988,7 @@ static void killEn(Enemy &e) {
 static NOINL bool nearL(int x, int r) { return lst != 2 && absi(LX() - x) < r; }   // the lander still flies, within r px of x sideways
 static NOINL void aim(Enemy &e, int dx, int dy, int mx, int my) { e.vx = (int8_t)clampi(dx * 2, -mx, mx); e.vy = (int8_t)clampi(dy * 2, -my, my); }   // head for a point, quickly
 static NOINL void nudge(Enemy &e, int dx, int dy, int mx, int my) { e.vx = (int8_t)clampi(e.vx + sgn(dx), -mx, mx); e.vy = (int8_t)clampi(e.vy + sgn(dy), -my, my); }   // accelerate towards a point
-static NOINL bool hungry(const Enemy &e) { return e.kind == E_UFO && e.st >= 3 && e.st <= 5; }   // a saucer on its way to the diner
+static inline bool hungry(const Enemy &e) { return e.kind == E_UFO && e.st >= 3 && e.st <= 5; }   // a saucer on its way to the diner
 static void updateEnemies() {
     const int X = LX(), Y = LY();
     int fliers = 0, ufos = 0;
