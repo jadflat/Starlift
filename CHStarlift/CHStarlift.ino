@@ -1376,21 +1376,14 @@ static void drawWeather() {
     for (int i = 0; i < nWx; i++) {
         const int x = wxX[i], y = wxY[i];
         if (x >= 128) continue;
-        switch (p.weather) {
-        case WX_DUST: pset(x, y, (i & 1) ? C_GNDL : C_SKY1); break;
-        case WX_SNOW: pset(x, y, C_WHITE); if ((i & 3) == 0) pset(x + 1, y + 1, C_SILVER); break;
-        case WX_RAIN: case WX_DRIZZLE: case WX_ACID: {                // a falling streak: its speed and colours from the table
-            const uint8_t *f = p.fall;
-            pset(x, y, f[1]); pset(x + (p.weather == WX_RAIN), y - 1, f[2]);
-            break;
-        }
-        case WX_ASH: if (i & 1) pset(x, y, (i & 2) ? C_GOLD : C_RED); else pset(x, y, C_STEEL); break;
-        case WX_GLINT: {
-            if (((frameNo + i * 11) & 31) < 4) pset(x, y, C_WHITE);
-            break;
-        }
-        default: break;
-        }
+        const uint8_t w = p.weather;
+        uint8_t c = C_WHITE;                                          // the drop's colour (snow and glints are white)
+        if (w == WX_DUST) c = (i & 1) ? C_GNDL : C_SKY1;
+        else if (w == WX_ASH) c = (i & 1) ? ((i & 2) ? C_GOLD : C_RED) : C_STEEL;
+        else if (w == WX_RAIN || w == WX_DRIZZLE || w == WX_ACID) { c = p.fall[1]; pset(x + (w == WX_RAIN), y - 1, p.fall[2]); }   // a falling streak: its speed and colours from the table
+        else if (w == WX_SNOW) { if ((i & 3) == 0) pset(x + 1, y + 1, C_SILVER); }
+        else if (w != WX_GLINT || ((frameNo + i * 11) & 31) >= 4) continue;
+        pset(x, y, c);
     }
 }
 
