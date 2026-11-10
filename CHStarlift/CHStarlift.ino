@@ -228,7 +228,8 @@ static uint8_t leak, magT;
 static uint16_t evT;                                          // stage 8: frames to the reactor blowing                                    // leak: the tank holed; magT: a magnetic storm's frames left
 static int16_t tunX[2];                                       // wind tunnels (stage 4 on)
 static int16_t fqX[2], ventX[3];                               // ventX: stage 5 on, vents in the ground that erupt                                        // where this stage's cargo turns up
-static uint8_t fqN, fqT;                                      // quests still to come, frames to the next
+static uint8_t fqN, fqT, fqPic;   // fqPic: the call-out card's frames left
+static uint8_t fqN_unused;                                    // quests still to come, frames to the next
 static uint8_t credits = 5;                                   // continues left this game
 static int gSaved, overT;                                 // colonists home this game; the game-over screen's clock
 static bool newHi;
@@ -524,7 +525,7 @@ static void genStage() {
         m.st = M_IDLE; m.act = D_STAND; m.t = (uint8_t)rnd(60); m.face = (int8_t)(rnd(2) ? 1 : -1); m.look = (uint8_t)(hash(s + i * 71u) & 31);
     }
     nSaved = nLost = 0;
-    fq.st = 0; fqT = 200; fqN = PLR.quests;   // stage 3 on: fetch quests (two from stage 6)
+    fq.st = 0; fqT = 200; fqPic = 0; fqN = PLR.quests;   // stage 3 on: fetch quests (two from stage 6)
     for (int k = 0; k < fqN; k++) { int x = (baseRight ? 300 : W / 2) + (int)(hash(s + k * 89u) % (W / 2 - 300)); while (busyAt(x)) x += 23; fqX[k] = (int16_t)x; flatten(x, 24); }
     for (int k = 0; k < 2; k++) { int x = !(hz & HZ_TUNNEL) ? -999 : 600 + k * (W - 1200) + (int)(hash(s + k * 61u) % 120); tunX[k] = (int16_t)x; }
     leak = magT = 0; evT = (hz & HZ_EVAC) ? 3600 : 0;   // two minutes (the seconds fit the call-out)
@@ -1648,11 +1649,13 @@ static void drawItems() {
 
 // ---- fetch quests (stage 3 on): a call-out with a picture, cargo with beacons, lifted or landed on, taken to base -----
 static void fqDone() {
-    fq.st = 0; fqT = 240; hoverT = 0; tankT = 160; shield = shMax();             // a full tank (filled after the call-out) and a mended hull
+    fq.st = 0; fqT = 240; fqPic = 0; hoverT = 0; tankT = 160; shield = shMax();             // a full tank (filled after the call-out) and a mended hull
     addScore(1500, doorX, groundAt(doorX) - 24); sfx(S_SAVED);
     wpn = (uint8_t)(wpn % 4 + 1); say((uint8_t)(MS_WPN1 + wpn - 1), 90);   // the reward: a laser power-up (and the call-out names it)
 }
 static void updateFetch() {
+    if (fqPic) fqPic--;
+    else if (fq.st == 1 && (frameNo % 720) == 0) { fqPic = 100; sfx(S_WARN); }   // not fetched yet: the call-out again now and then
 #ifdef SLF_LEAK
     if (leak && fuel && lst != 2 && !(frameNo & 3)) { fuel--; if (!(frameNo & 12)) part(LX(), LY() + 6, rnd(5) - 2, 8, 16, C_GOLD); }   // dripping
 #endif
@@ -1677,7 +1680,7 @@ static void updateFetch() {
             fqN--;
             const int k = stage + fqN;
             fq = { fqX[fqN], (uint8_t)((k & 1 ? 0 : 3) + (k >> 1) % 3), 1 };
-            sfxSay(S_WARN, (uint8_t)(MS_FQ0 + fq.kind), 120);
+            sfx(S_WARN); fqPic = 100;
         }
         return;
     }
@@ -2254,7 +2257,7 @@ static void drawWorld() {
         if (w * 2 <= 120) { w *= 2; R((128 - w) / 2 - 3, 19, w + 6, 13, C_INK); text35x2((128 - w) / 2, 21, b, (frameNo & 4) ? C_WHITE : C_GOLD); }   // a call-out: big
         else { R((128 - w) / 2 - 3, 19, w + 6, 9, C_INK); textC(20, b, (frameNo & 4) ? C_WHITE : C_GOLD); }
     }
-    if (bannerT && banner >= MS_FQ0 && banner <= MS_FQ5) { panel(36, 36); blitBC(FETCH[fq.kind], 64, 55, false); tC(60, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out's picture
+    if (fqPic) { panel(36, 44); tC(39, (uint8_t)(MS_FQ0 + fq.kind), C_GOLD); blitBC(FETCH[fq.kind], 64, 64, false); tC(68, fq.kind < 3 ? MS_FQ_LIFT : MS_FQ_LAND, C_WHITE); }   // the call-out: a card of its own, ~2.5 s
 }
 
 // ---- title, menus ------------------------------------------------------------------------------------------------------
