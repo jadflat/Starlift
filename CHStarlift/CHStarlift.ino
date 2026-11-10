@@ -625,7 +625,7 @@ static void wreck() {
     wpn = 0;                                                          // the power-up goes with the lander
     lst = 2; deadT = 80; shake = 18; flashT = 6; crashN++; leak = 0;
     boom(LX(), LY(), 34, 20);
-    blast(LX() + 6, LY() - 4, 12, 8);                                  // a tank goes after it
+    for (int k = 0; k < 4; k++) blast(LX() + rnd(25) - 12, LY() + rnd(15) - 9, 8 + rnd(8), 4 + k * 5);   // the tanks go one after another
     burst(LX(), LY(), 14, 60, 50, 60, 50, C_SILVER, C_GOLD);           // the hull in pieces
     sfx(S_CRASH);
     synth::engine(0);
