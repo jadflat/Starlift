@@ -1229,7 +1229,7 @@ static void updateEnemies() {
                 continue;
             }
             if (e.kind == E_MOTHER) { if (!bumpT) { damage(1); sfxShake(S_CLANG, 4); bumpT = 30; } lvx = X >= nx ? 200 : -200; lvy = 220; continue; }   // a boss can't be rammed: the lander bounces off, hurt
-            damage(e.kind == E_MINE ? 2 : 1);
+            if (e.kind == E_MINE || ++chip >= 3) { chip = 0; damage(1); } else sfxShake(S_CLANG, 3);   // 0.48: ramming small fry chips like a shot (a pip every 3rd); a mine 1 pip (was 2)
             killEn(e);
         }
     }
