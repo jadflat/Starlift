@@ -243,6 +243,7 @@ static NOINL int rnd(int n) { return (int)(rnd32() % (uint32_t)n); }
 static NOINL uint32_t hash(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
 static NOINL int absi(int v) { return v < 0 ? -v : v; }
 static NOINL int sgn(int v) { return (v > 0) - (v < 0); }
+static NOINL bool within(int a, int b, int r) { return absi(a - b) < r; }   // |a - b| < r
 static NOINL int clampi(int v, int a, int b) { return v < a ? a : v > b ? b : v; }
 static NOINL int isin(int a) { a &= 255; int b = a & 127, v = (b * (128 - b)) >> 5; return a < 128 ? v : -v; }   // a parabola sine, -128..128
 static int isqrtTab(int v) { if (v <= 0) return 0; int r = 0; while ((r + 1) * (r + 1) <= v) r++; return r; }   // small values only
@@ -540,7 +541,7 @@ static void genStage() {
     const int turrets = PLR.turrets;
     for (int k = 0; k < turrets; k++) {                                       // turrets on open ground between the camps
         int x = 260 + (int)(hash(s + k * 41u) % (W - 520));
-        for (int z = 0; z < nZones; z++) if (absi(x - zoneX[z]) < 60) x += 70;
+        for (int z = 0; z < nZones; z++) if (within(x, zoneX[z], 60)) x += 70;
         spawnEn(E_TURRET, x, groundAt(x) - 3);
     }
     for (int k = 0; k < PLR.worms; k++) if (Enemy *e = spawnEn(E_WORM, 500 + k * 700, 100)) e->hp = 12;
@@ -834,7 +835,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
 // ---- the colonists --------------------------------------------------------------------------------------------------
 static NOINL int nearestIdle(int x, int maxd) {
     int best = -1, bd = maxd;
-    for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE && absi(men[i].x - x) < bd) { bd = absi(men[i].x - x); best = i; }
+    for (int i = 0; i < nMen; i++) if (men[i].st == M_IDLE && within(men[i].x, x, bd)) { bd = absi(men[i].x - x); best = i; }
     return best;
 }
 
@@ -888,12 +889,12 @@ static void updateMen() {
             if (m.act == D_LOOK && (m.t % 24) == 12) m.face = (int8_t)-m.face;
             if (m.act == D_WANDER && (frameNo & 3) == 0) {
                 const int nx = m.x + m.face;
-                if (absi(nx - zoneX[m.home]) > 26 || absi(nx - X) < 12) m.face = (int8_t)-m.face; else manStep(m, m.face);
+                if (absi(nx - zoneX[m.home]) > 26 || within(nx, X, 12)) m.face = (int8_t)-m.face; else manStep(m, m.face);
             }
             if (!m.t) {                                                                         // something else to do
                 const int r = rnd(10);
                 int buddy = -1;
-                for (int j = 0; j < nMen; j++) if (j != i && men[j].st == M_IDLE && absi(men[j].x - m.x) < 18 && absi(men[j].x - m.x) > 3) buddy = j;
+                for (int j = 0; j < nMen; j++) if (j != i && men[j].st == M_IDLE && within(men[j].x, m.x, 18) && absi(men[j].x - m.x) > 3) buddy = j;
                 if (buddy >= 0 && r < 4) {                                                       // a chat: turn to each other
                     Man &b = men[buddy];
                     m.act = D_CHAT; m.t = (uint8_t)(90 + rnd(60)); m.face = (int8_t)sgn(b.x - m.x);
@@ -923,7 +924,7 @@ static void updateMen() {
             m.y = (int16_t)(m.y + m.vy);
             if (m.t) { m.t--; m.x = (int16_t)(m.x + m.face); }   // (spat out sideways)
             if ((frameNo & 7) == 0) m.x = (int16_t)(m.x + (isin(frameNo * 4 + i * 40) > 0 ? 1 : -1));
-            if (!m.t && lst == 0 && seats < SEATS && absi(m.x - X) < 9 && absi((m.y >> 2) - Y) < 12) {   // caught in the air
+            if (!m.t && lst == 0 && seats < SEATS && within(m.x, X, 9) && absi((m.y >> 2) - Y) < 12) {   // caught in the air
                 m.st = M_ABOARD; seats++; sfx(S_CATCH); addScore(500, X, Y - 14); say(MS_NICE_CATCH, 40);
             } else if ((m.y >> 2) >= (gm = groundAt(m.x))) { m.st = M_IDLE; m.y = (int16_t)gm; m.act = D_CHEER; m.t = 40;   // down safely
                 if (!roomBeside(m.x)) {                                         // no room to land beside it: off to the nearest camp
@@ -1063,14 +1064,14 @@ static void updateEnemies() {
                         if (men[i].st != M_IDLE) continue;
                         bool taken = false;
                         for (auto &o : en) if (&o != &e && o.kind == E_UFO && o.target == i) taken = true;
-                        if (!taken && absi(men[i].x - ex) < bd) { bd = absi(men[i].x - ex); e.target = (uint8_t)i; }
+                        if (!taken && within(men[i].x, ex, bd)) { bd = absi(men[i].x - ex); e.target = (uint8_t)i; }
                     }
                 }
                 if (e.target == 255 && e.cargo) { e.st = 2; break; }            // nobody left to take: home with what it has
                 int tx = X + 40, ty = 34;
                 if (e.target != 255) { tx = men[e.target].x; ty = men[e.target].y - 44; }
                 aim(e, tx - ex, ty - ey, sp, 10);
-                if (e.target != 255 && absi(tx - ex) < 2 && absi(ty - ey) < 2) {     // over the colonist: the beam
+                if (e.target != 255 && within(tx, ex, 2) && within(ty, ey, 2)) {     // over the colonist: the beam
                     e.st = 1; e.t = 0; e.vx = e.vy = 0;
                     Man &m = men[e.target];
                     m.st = M_BEAM; m.by = (uint8_t)(ei + 1);
@@ -1090,7 +1091,7 @@ static void updateEnemies() {
             } else if (e.st == 2) {                                           // home to the bucket, slow when full
                 const int tx = alienX + 20, ty = groundAt(tx) - 54;
                 aim(e, tx - ex, ty - ey, sp, 8);
-                if (absi(tx - ex) < 2 && absi(ty - ey) < 3) { e.st = 6; e.t = 0; e.vx = e.vy = 0; }
+                if (within(tx, ex, 2) && within(ty, ey, 3)) { e.st = 6; e.t = 0; e.vx = e.vy = 0; }
             } else if (e.st == 6) {                                           // one colonist at a time into the bucket
                 if (e.t % 20 == 10) {
                     if (e.cargo) {
@@ -1104,10 +1105,10 @@ static void updateEnemies() {
                 for (auto &o : en) if (o.kind == E_UFO && (o.st == 3 || o.st == 4) && o.target < e.target) pos++;
                 const int win = burgerX + 35, tx = win + 4 + pos * 26 + (((e.t + e.target * 37) % 110) < 12 ? isin(e.t * 32) / 64 : 0), ty = groundAt(win) - 26;
                 aim(e, tx - ex, ty - ey, 10, 8);
-                if (!pos && absi(tx - ex) < 2 && absi(ty - ey) < 3 && ++e.cargo > 100) { e.st = 4; e.cargo = 0; sfx(S_ORDER); }
+                if (!pos && within(tx, ex, 2) && within(ty, ey, 3) && ++e.cargo > 100) { e.st = 4; e.cargo = 0; sfx(S_ORDER); }
             } else if (e.st == 4) {                                           // the order comes up in the beam
                 e.vx = e.vy = 0;
-                if ((e.t % 14) == 0 && absi(ex - X) < 90) sfx(S_BEAM);
+                if ((e.t % 14) == 0 && within(ex, X, 90)) sfx(S_BEAM);
                 if ((frameNo & 3) == 0 && ++e.cargo >= 2 * (groundAt(burgerX + 35) - 8 - ey)) { e.st = 5; e.cargo = 0; }   // slowly
             } else {                                                          // away up into the sky
                 e.vx = 0; e.vy = -22;
@@ -1121,13 +1122,13 @@ static void updateEnemies() {
             nudge(e, tx - ex, ty - ey, 14 + sector * 4, 10);
             const int rate = clampi(130 - planet * 6 - sector * 20, 50, 130) * (9 - 2 * dE) / 7;
             if ((e.t % rate) == 0) {
-                if (dlv == 3 && absi(scX - ex) < 110) eshot(ex, ey, scX, scY, 22 + sector * 6, 0);   // the speeder first
+                if (dlv == 3 && within(scX, ex, 110)) eshot(ex, ey, scX, scY, 22 + sector * 6, 0);   // the speeder first
                 else if (nearL(ex, 110)) eshot(ex, ey, X, Y, 22 + sector * 6, 0);
             }
             break;
         }
         case E_MINE:
-            if (absi(X - ex) < 160) nudge(e, X - ex, Y - ey, 6, 5);
+            if (within(X, ex, 160)) nudge(e, X - ex, Y - ey, 6, 5);
             else e.vx = e.vy = 0;
             break;
         case E_WORM: {
@@ -1155,7 +1156,7 @@ static void updateEnemies() {
                         lvy = (int16_t)(lvy + 3);                                 // heavy: the lander feels it
                         if ((e.t & 31) == 0) { sfxShake(S_WORM, 2); }      // it roars and thrashes all the way
                     }
-                    if (absi(X - alienX - 20) < 18) { e.st = 5; e.t = 0; sfx(S_WORM); }   // over the collector: let go
+                    if (within(X, alienX + 20, 18)) { e.st = 5; e.t = 0; sfx(S_WORM); }   // over the collector: let go
                 } else if (e.st == 5) {
                     e.x = (int16_t)((alienX + 20) * 16); e.y = (int16_t)(e.y + 48);
                     if ((e.y >> 4) + 30 >= cy) { e.st = 6; e.t = 0; }
@@ -1178,20 +1179,20 @@ static void updateEnemies() {
                 int ti = nearestIdle(ex, 400);
                 if (ti >= 0 && absi(men[ti].x - cam - 64) > 150) ti = -1;   // it only hunts where the lander can see it coming
                 int tx = ti >= 0 ? men[ti].x : ex + ((e.t & 128) ? 80 : -80);
-                if (lst == 1 && absi(X - ex) < 300) tx = X;                   // a lander on the sand draws it
+                if (lst == 1 && within(X, ex, 300)) tx = X;                   // a lander on the sand draws it
                 e.vx = (int8_t)(sgn(tx - ex) * (6 + stage / 3));
                 e.y = (int16_t)(gx * 16);
-                if ((e.t & 31) == 0 && absi(ex - X) < 110) { sfxShake(S_WORM, 3); }
-                if (absi(tx - ex) < 3 && (ti >= 0 || lst == 1) && e.t > 120) { e.st = 1; e.t = 0; e.vx = 0; say(MS_WORM, 40); shake = 10; }   // it rests a while after a dive
+                if ((e.t & 31) == 0 && within(ex, X, 110)) { sfxShake(S_WORM, 3); }
+                if (within(tx, ex, 3) && (ti >= 0 || lst == 1) && e.t > 120) { e.st = 1; e.t = 0; e.vx = 0; say(MS_WORM, 40); shake = 10; }   // it rests a while after a dive
             } else {
                 e.vx = 0;
                 e.y = (int16_t)((gx - 16) * 16);                    // up: it can be shot
                 if (e.st == 1 && e.t >= 20) {                                 // the mouth closes on whoever is there
                     e.st = 2; e.t = 0;
                     int n = 0;
-                    for (auto &mm : men) if ((mm.st == M_IDLE || mm.st == M_RUN) && absi(mm.x - ex) < 11) { mm.st = M_LOST; mm.by = (uint8_t)(100 + (&e - en)); nLost++; n++; }   // (by: in this worm)
+                    for (auto &mm : men) if ((mm.st == M_IDLE || mm.st == M_RUN) && within(mm.x, ex, 11)) { mm.st = M_LOST; mm.by = (uint8_t)(100 + (&e - en)); nLost++; n++; }   // (by: in this worm)
                     if (n) { sfxSay(S_TAKEN, MS_SAND, 60); }
-                    if (lst == 1 && absi(X - ex) < 12) { say(MS_SWALLOWED, 60); wreck(); }
+                    if (lst == 1 && within(X, ex, 12)) { say(MS_SWALLOWED, 60); wreck(); }
                 } else if (e.st == 2) {                                       // up: it stays while the lander is near, sinks when it has been gone a while
                     if (nearL(ex, 48) && gx - Y < 80) e.t = 0;
                     else if (e.t >= 90) { e.st = 3; e.t = 0; }
@@ -1269,7 +1270,7 @@ static void updateDelivery() {
     }
     if (dlv == 2) scDir = (int8_t)(tx < scX ? -1 : 1);                // (fixed once it has the bag: a side chosen every frame never settled)
     if (frameNo & 3) { scX = toward(scX, tx, 1); scY = toward(scY, ty, 1); }
-    if (absi(tx - scX) < 4 && absi(ty - scY) < 4) { if (dlv == 2) dlv = 3; else if (dlv == 3) { dlv = 4; lidT = 40; sfx(S_GEAR); } }
+    if (within(tx, scX, 4) && within(ty, scY, 4)) { if (dlv == 2) dlv = 3; else if (dlv == 3) { dlv = 4; lidT = 40; sfx(S_GEAR); } }
 }
 
 // a cut-scene playing (the delivery, the feast, then a pause on the lander): where the camera looks, or -999
@@ -1315,8 +1316,8 @@ static void updateShots() {
         s.x = (int16_t)(s.x + s.vx); s.y = (int16_t)(s.y + s.vy);
         const int x = s.x >> 4, y = s.y >> 4;
         if (y >= groundAt(x) || y < TOP) { s.life = 0; continue; }
-        if (nearL(x, 7) && absi(y - Y) < 8) { s.life = 0; if (++chip >= 3) { chip = 0; damage(1); } else { sfxShake(S_CLANG, 2); } }   // 0.46: shots and meteors are weak: a pip every 3rd hit
-        if (dlv == 3 && absi(x - scX) < 8 && absi(y - scY + 4) < 6) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
+        if (nearL(x, 7) && within(y, Y, 8)) { s.life = 0; if (++chip >= 3) { chip = 0; damage(1); } else { sfxShake(S_CLANG, 2); } }   // 0.46: shots and meteors are weak: a pip every 3rd hit
+        if (dlv == 3 && within(x, scX, 8) && within(y, scY - 4, 6)) { s.life = 0; dlv = 1; boom(scX, scY, 10, 0); sfx(S_BOOM); }   // the bag falls; another speeder will come
     }
     for (auto &q : pt) {
         if (!q.life) continue;
@@ -1700,7 +1701,7 @@ static void updateFetch() {
         if (fq.kind < 3) { if (lst == 0 && hoverT < 255 && absi(fq.x - LX()) < 16 && groundAt(fq.x) - LY() < 56 && hoverTick()) { fq.st = 2; hoverT = 255; sfx(S_CATCH); } }
         else if (lst == 1 && absi(fq.x - LX()) < 12) { fq.st = 3; sfxSay(S_CATCH, MS_SUPPLIES); }
     } else if (lst == 2) { fq.st = 1; fq.x = (int16_t)LX(); hoverT = 0; say(MS_FQ_DROP, 60); }   // the lander lost: the cargo falls where it was
-    else if (fq.st == 2) { fq.x = (int16_t)LX(); if (absi(fq.x - basePadX - 20) < 24) fqDone(); }   // carried on the rope: set down at the base
+    else if (fq.st == 2) { fq.x = (int16_t)LX(); if (within(fq.x, basePadX + 20, 24)) fqDone(); }   // carried on the rope: set down at the base
 }
 static void drawVents() {
     for (int k = 0; k < 3; k++) {
@@ -1821,9 +1822,9 @@ static void drawDiner() {
 
 // the alien wildlife on the ground: rocks and plants of each world, swaying; an eye plant watches the lander
 static bool busyAt(int x) {
-    if (absi(x - startPadX - 20) < 34 || absi(x - basePadX - 20) < 34 || absi(x - buildX - 22) < 30 || absi(x - alienX - 20) < 26) return true;
+    if (within(x, startPadX + 20, 34) || within(x, basePadX + 20, 34) || within(x, buildX + 22, 30) || within(x, alienX + 20, 26)) return true;
     if (burgerX >= 0 && x > burgerX - 6 && x < burgerX + 116) return true;
-    for (int z = 0; z < nZones; z++) if (absi(x - zoneX[z]) < 32) return true;
+    for (int z = 0; z < nZones; z++) if (within(x, zoneX[z], 32)) return true;
     return false;
 }
 static void plant(uint8_t k, int x, int gy, uint32_t h) {          // from the card; the ground's tones are this world's
@@ -1860,7 +1861,7 @@ static void updateCritters() {
                 if ((c.t & 63) == 0) sfx(S_MOO);                             // mooing all the way
                 c.x = (int16_t)LX();
                 c.y = (int16_t)(c.y + clampi(LY() + 22 - c.y, -1, 4));       // winched up a little, then along under the lander
-                if (absi(c.x - basePadX - 20) < 24) c.kind = 7;               // over the base: let down
+                if (within(c.x, basePadX + 20, 24)) c.kind = 7;               // over the base: let down
             } else if (c.kind == 7) { c.x = (int16_t)LX(); if ((c.t & 3) == 0) c.y++; }   // slowly down the rope, still under the lander
             else if (c.t / 2 >= absi(c.x - doorX) && (c.t & 1)) { c.x = (int16_t)(c.x + d); c.t--; }   // the crew come out, take the cow and lead it in
             if (c.y >= groundAt(c.x)) { c.y = (int16_t)groundAt(c.x); if (c.kind == 7) { c.kind = 8; c.t = 0; c.vx = (int8_t)d; ropeL = (uint8_t)clampi(c.y - LY() - 16, 0, 255); } }
