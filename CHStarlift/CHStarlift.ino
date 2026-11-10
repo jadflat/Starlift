@@ -1553,7 +1553,7 @@ static void structure(int n, int sx, int base, int L, uint32_t h) {
     const int lx = x + li[0], ly = y + li[1];
     switch (li[2]) {
     case 1: pset(lx, ly, (frameNo & 16) ? C_RED : C_GOLD); break;                       // a beacon
-    case 2: for (int r = 0; r < 2; r++) R(lx - 3, ly - ((frameNo / 2 + r * 18) % 36), 6, 1, C_ACC); break;   // rings of light climbing
+    case 2: for (int r = 0; r < 2; r++) hl(lx - 3, ly - ((frameNo / 2 + r * 18) % 36), 6, C_ACC); break;   // rings of light climbing
     case 3:                                                                                         // an arc between pylons
         if ((frameNo & 7) < 5) for (int k = 0; k < 18; k++) pset(lx + k, ly + ((k * 5 + frameNo / 2) & 3) - 1, (k & 1) ? C_ACC : C_WHITE);
         break;
@@ -1572,7 +1572,7 @@ static void drawStructures(int L) {
             const int mid = k * cw + cw / 2, sx = mid - lc, top = layerH(0, mid);
             if (cones) {
                 if ((hash((uint32_t)planet * 7919u + (uint32_t)k * 31u) & 3) != 0) continue;
-                R(sx - 3, top + 1, 7, 2, C_ACC); R(sx - 1, top, 3, 1, C_GOLD);
+                R(sx - 3, top + 1, 7, 2, C_ACC); hl(sx - 1, top, 3, C_GOLD);
                 for (int i = 0; i < 4; i++) {
                     const int ph = (frameNo * 2 + i * 23) % 60, bx = sx + (i - 2) * ph / 10, by = top - ph + ph * ph / 34;
                     if (by < top) pset(bx, by, ph < 30 ? C_GOLD : C_ACC);
@@ -1610,7 +1610,7 @@ static void drawPad(int px, bool base) {
     int sx, gy;
     if (!placeAt(px, 20, -48, 130, sx, gy)) return;
     rects(sx, gy, RX_PAD, 2);
-    for (int k = 4; k < 36; k += 8) R(sx + k, gy + 1, 4, 1, C_GOLD);
+    for (int k = 4; k < 36; k += 8) hl(sx + k, gy + 1, 4, C_GOLD);
     const uint8_t lamp = base ? ((frameNo & 8) ? C_GREEN : C_ACC) : ((frameNo & 8) ? C_RED : C_GOLD);
     rects(sx, gy, RX_PAD + 10, 2);
     pset(sx - 1, gy - 7, lamp); pset(sx + 40, gy - 7, lamp);
@@ -1629,7 +1629,7 @@ static void windsock(int x, int gy) {
     if (x < -12 || x > 136) return;
     R(x, gy - 12, 1, 12, C_STEEL);
     const int dir = windV < 0 ? -1 : 1;                                // (a fixed flag: red and white, blowing the way the wind does)
-    R(dir < 0 ? x - 3 : x + 1, gy - 12, 3, 1, C_RED); R(dir < 0 ? x - 3 : x + 1, gy - 11, 3, 1, C_WHITE);
+    hl(dir < 0 ? x - 3 : x + 1, gy - 12, 3, C_RED); hl(dir < 0 ? x - 3 : x + 1, gy - 11, 3, C_WHITE);
 }
 
 static void drawMoonTableau() {
@@ -1638,7 +1638,7 @@ static void drawMoonTableau() {
     const int fxw = baseRight ? startPadX + 74 : startPadX - 34, fx = fxw - cam;
     if (fx < -60 || fx > 180) return;
     const int gy = groundAt(fxw);
-    flag(fx, gy, 2); R(fx, gy - 25, 13, 1, C_SILVER);                      // the flag, held out by its crossbar
+    flag(fx, gy, 2); hl(fx, gy - 25, 13, C_SILVER);                      // the flag, held out by its crossbar
     blitBC(C_DESCENT, fx + (baseRight ? 28 : -20), groundAt(fxw + (baseRight ? 28 : -20)), !baseRight);   // the descent stage left behind
 #endif
 }
@@ -1716,7 +1716,7 @@ static void drawFetch() {
         const int sx = tunX[k] - cam;
         if (tunX[k] < 0 || sx < -12 || sx > 140) continue;
         const int gy = groundAt(tunX[k]);
-        R(sx - 6, gy - 3, 13, 3, C_STEEL); R(sx - 5, gy - 3, 11, 1, (frameNo & 4) ? C_GOLD : C_STEEL);   // the fan housing
+        R(sx - 6, gy - 3, 13, 3, C_STEEL); hl(sx - 5, gy - 3, 11, (frameNo & 4) ? C_GOLD : C_STEEL);   // the fan housing
         for (int j = 0; j < 10; j++) { const int y = gy - 8 - ((j * 13 + (k ? -1 : 1) * (int)frameNo * 3) & 63); pset(sx - 6 + (j * 7) % 13, y, C_WHITE); }   // the air streaming
     }
 #endif
@@ -1792,7 +1792,7 @@ static void drawAlienBase() {
         const int y = gy - 12 + ((45 - tubeT) * 2 + t * 3) % 22;
         R(bx + TX[t], y, 2, 3, C_GREEN); pset(bx + TX[t], y + 1, C_WHITE);
     }
-    if (tubeT && (frameNo & 2)) R(bx + 6, gy - PLR.collTop + 1, 28, 1, C_WHITE);       // a splash as one goes in
+    if (tubeT && (frameNo & 2)) hl(bx + 6, gy - PLR.collTop + 1, 28, C_WHITE);       // a splash as one goes in
     flag(bx + 39, gy, 1);
 }
 
@@ -1901,7 +1901,7 @@ static void drawCritters() {
     for (const auto &c : crit) {
         if (!c.kind) continue;
         if (c.kind >= 3) {                                              // the cow
-            if (c.kind == 6 || c.kind == 7) { R(c.x - cam, LY() + 8, 1, c.y - LY() - 16, C_SILVER); R(c.x - cam - 4, c.y - 7, 9, 1, C_GOLD); }   // the rope and the harness
+            if (c.kind == 6 || c.kind == 7) { R(c.x - cam, LY() + 8, 1, c.y - LY() - 16, C_SILVER); hl(c.x - cam - 4, c.y - 7, 9, C_GOLD); }   // the rope and the harness
             if (c.kind == 8) {
                 const int d = sgn(c.x - doorX), at = c.t / 2 >= absi(c.x - doorX);
                 { const int mx = at ? c.x + d * 9 : doorX + d * (c.t / 2); blitBC((frameNo & 4) ? C_MAN_RUN1 : C_MAN_RUN2, mx - cam, groundAt(mx), d > 0); }
@@ -2073,7 +2073,7 @@ static void drawEnemies() {
         case E_MOTHER:
             blit(P_MOTHER, sx - 22, sy - 10, false, solid, EMAP);
             if (frameNo & 8) pset(sx - 16 + ((frameNo >> 2) % 9) * 4, sy, C_RED);       // a light running round its rim
-            R(sx - 12, sy - 13, e.hp * 24 / (10 + stage), 1, C_RED);                 // how much it can still take
+            hl(sx - 12, sy - 13, e.hp * 24 / (10 + stage), C_RED);                 // how much it can still take
             break;
         case E_TURRET: {
             const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);
@@ -2127,7 +2127,7 @@ static void drawLander() {
 }
 
 static NOINL void drawBag(int x, int y) {                                   // a takeaway bag in the world's shop colour
-    R(x - 2, y - 4, 5, 5, C_WHITE); R(x - 2, y - 4, 5, 1, C_SILVER); R(x - 2, y - 2, 5, 1, PLR.shopc); pset(x, y - 3, C_GOLD);
+    R(x - 2, y - 4, 5, 5, C_WHITE); hl(x - 2, y - 4, 5, C_SILVER); hl(x - 2, y - 2, 5, PLR.shopc); pset(x, y - 3, C_GOLD);
 }
 
 static void drawDelivery() {
@@ -2149,7 +2149,7 @@ static void drawShots() {
     for (const auto &s : shots) {
         if (!s.life) continue;
         const int x = s.x - cam;
-        if (s.kind == 4) { const int bx = s.dir > 0 ? x - 13 : x; R(bx, s.y - 1, 14, 3, C_ACC); R(bx, s.y, 14, 1, C_WHITE); continue; }   // the fat laser: a thick beam
+        if (s.kind == 4) { const int bx = s.dir > 0 ? x - 13 : x; R(bx, s.y - 1, 14, 3, C_ACC); hl(bx, s.y, 14, C_WHITE); continue; }   // the fat laser: a thick beam
         if (s.kind >= 2) {                                                 // a plasma ball: a flickering halo round a white-hot core
             gfx_fillCircle(x, s.y, 4 + (frameNo & 1), (frameNo & 2) ? C_ACC : C_GOLD); gfx_fillCircle(x, s.y, 2, C_WHITE);
             if (frameNo & 1) part(s.x - s.dir * 4 + rnd(5) - 2, s.y - (s.dir ? 0 : 4), -s.dir * 6, s.dir ? 0 : -6, 6, C_GOLD);
@@ -2206,7 +2206,7 @@ static void drawHud() {
     for (int i = 0; i < shMax(); i++) R(x + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
     t35(127 - sw, 1, s, C_WHITE);
     // the scanner: the whole stage, 16 px to a dot
-    R(3, 8, 122, 1, C_STEEL);
+    hl(3, 8, 122, C_STEEL);
 #ifdef SLF_MAG
     if (magT) { if (frameNo & 2) t35(40, 9, "NO SIGNAL", C_RED); return; }   // the storm: no scanner
 #endif
@@ -2338,7 +2338,7 @@ static uint8_t menuItems(uint8_t *it) {
 }
 
 // how to play: three pages over the scene
-static NOINL void panel(int y, int h) { R(4, y, 120, h, C_INK); R(4, y, 120, 1, C_GOLD); R(4, y + h - 1, 120, 1, C_GOLD); }
+static NOINL void panel(int y, int h) { R(4, y, 120, h, C_INK); hl(4, y, 120, C_GOLD); hl(4, y + h - 1, 120, C_GOLD); }
 static void drawHelp() {
 #ifndef SL_SLIM                                                    // a board perf build leaves this out so the debug image fits
     drawTitleScene();
@@ -2434,7 +2434,7 @@ static void draw() {
         else for (int k = 0; k < 3; k++) {                              // the stars: quota, everyone home, no lander lost
             const int x = 52 + k * 10;
             const uint8_t c = k < stars ? C_GOLD : C_STEEL;
-            R(x + 2, 85, 1, 7, c); R(x - 1, 88, 7, 1, c);
+            R(x + 2, 85, 1, 7, c); hl(x - 1, 88, 7, c);
         }
         fmt(s, T(MS_RESCUED), nSaved, T(MS_OF), nMen);
         textC(44, s, C_WHITE);
