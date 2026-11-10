@@ -1538,14 +1538,11 @@ static void structure(int n, int sx, int base, int L, uint32_t h) {
     blitRm(P_ST + n, x, y, ((h >> 22) & 1) && n != 3, RM(2, LDARK[L]) | RM(3, LBODY[L]) << 8 | RM(4, LLIT[L]) << 16);
     const int8_t *li = PLR.light[n];
     const int lx = x + li[0], ly = y + li[1];
-    switch (li[2]) {
-    case 1: pset(lx, ly, (frameNo & 16) ? C_RED : C_GOLD); break;                       // a beacon
-    case 2: for (int r = 0; r < 2; r++) hl(lx - 3, ly - ((frameNo / 2 + r * 18) % 36), 6, C_ACC); break;   // rings of light climbing
-    case 3:                                                                                         // an arc between pylons
-        if ((frameNo & 7) < 5) for (int k = 0; k < 18; k++) pset(lx + k, ly + ((k * 5 + frameNo / 2) & 3) - 1, (k & 1) ? C_ACC : C_WHITE);
-        break;
-    case 4: { const uint8_t e = (frameNo & 32) ? C_GOLD : C_RED; pset(lx, ly, e); pset(lx + 6, ly, e); break; }   // eyes that glow
-    }
+    const int8_t k2 = li[2];
+    if (k2 == 1) pset(lx, ly, (frameNo & 16) ? C_RED : C_GOLD);                       // a beacon
+    else if (k2 == 2) for (int r = 0; r < 2; r++) hl(lx - 3, ly - ((frameNo / 2 + r * 18) % 36), 6, C_ACC);   // rings of light climbing
+    else if (k2 == 3) { if ((frameNo & 7) < 5) for (int k = 0; k < 18; k++) pset(lx + k, ly + ((k * 5 + frameNo / 2) & 3) - 1, (k & 1) ? C_ACC : C_WHITE); }   // an arc between pylons
+    else if (k2 == 4) { const uint8_t e = (frameNo & 32) ? C_GOLD : C_RED; pset(lx, ly, e); pset(lx + 6, ly, e); }   // eyes that glow
 }
 
 static void drawStructures(int L) {
