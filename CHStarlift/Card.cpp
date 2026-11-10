@@ -17,7 +17,7 @@ alignas(4) static uint8_t buf[SLOTS][512];
 __attribute__((section(".sbss.card_tag"))) static uint16_t tag[ALL];   // (open() empties them; nothing looks before that)
 static uint8_t used[ALL], frameNo;               // the frame each slot was last used in (the oldest is the one to replace)
 static uint8_t misses;                            // blocks read from the card this frame
-bool lowPri;                                      // scenery: it may wait a frame rather than read more than two blocks
+bool lowPri;                                      // scenery: it may wait a frame rather than read after another block
 static uint8_t *slotBuf(int i) { return i < SLOTS ? buf[i] : gfx_chunkScratch(); }
 __attribute__((section(".sbss.card_runs"))) static fat::Run runs[4];
 static uint8_t nRuns;
@@ -104,7 +104,7 @@ const uint8_t *at(uint32_t off) {
     int v = SLOTS;
     for (int i = 0; i < SLOTS; i++)
         if (used[i] != frameNo && (v == SLOTS || (uint8_t)(frameNo - used[i]) > (uint8_t)(frameNo - used[v]))) v = i;
-    if (lowPri && misses >= 2) return nullptr;    // the scenery can show up a frame later; a frame cannot be late
+    if (lowPri && misses >= 1) return nullptr;    // the scenery can show up a frame later; a frame cannot be late
     misses++;
 #ifdef SL_TRACE
     fprintf(stderr, "miss f%u b%u lp%d\n", (unsigned)frameNo, (unsigned)blk, (int)lowPri);
