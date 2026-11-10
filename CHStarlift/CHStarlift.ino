@@ -49,6 +49,13 @@
 #endif
 // the GBA copy's gameplay features that fit are on; the rest (with their flash cost) are left out here: uncomment to try
 #define SLF_WORM_LIFT   // the sandworm rope lift: hover bar, tug of war, swinging, spitting, chewing, gore, bonuses (~2.3 KB + 72 B RAM)
+#ifndef SLF_NONE                // later-stage extras (0.46): comment out to save flash
+#define SLF_LEAK        // stage 4 on: a hit can hole the tank: fuel drips until the base pad mends it
+#define SLF_SNIPER      // stage 6 on: turrets take aim (a red sight line), then fire a fast shot
+#define SLF_TUNNEL      // stage 4 on: wind tunnels: columns of air blowing up or down
+#define SLF_EVAC        // stage 8: a timed evacuation: the reactor blows in 3 minutes, then quakes hurt
+#define SLF_MAG         // stage 7 on: magnetic storms: the scanner and arrow go dark, the lander drifts
+#endif
 #define NOINL __attribute__((noinline))                     // small helpers called from many places: one copy saves flash
 
 // HOUSE index -> game colour
@@ -210,6 +217,9 @@ static uint8_t titleSel, pauseSel, helpPage, optSel, musicV = 4, fxV = 4;
 static uint8_t won, wpn;                                      // wpn: the laser power-up, 0 none, 1 spread, 2 fat, 3 rapid, 4 twin                                           // all eight worlds done
 struct Fetch { int16_t x; uint8_t kind, st; };               // a fetch quest's cargo: st 0 none, 1 on the ground, 2 on the rope, 3 aboard
 static Fetch fq;
+static uint8_t leak, magT;
+static uint16_t evT;                                          // stage 8: frames to the reactor blowing                                    // leak: the tank holed; magT: a magnetic storm's frames left
+static int16_t tunX[2];                                       // wind tunnels (stage 4 on)
 static int16_t fqX[2], ventX[3];                               // ventX: stage 5 on, vents in the ground that erupt                                        // where this stage's cargo turns up
 static uint8_t fqN, fqT;                                      // quests still to come, frames to the next
 static uint8_t credits = 5;                                   // continues left this game
@@ -510,6 +520,8 @@ static void genStage() {
     nSaved = nLost = 0;
     fq.st = 0; fqT = 200; fqN = (uint8_t)(stage < 2 ? 0 : stage < 5 ? 1 : 2);   // stage 3 on: fetch quests (two from stage 6)
     for (int k = 0; k < fqN; k++) { int x = (baseRight ? 300 : W / 2) + (int)(hash(s + k * 89u) % (W / 2 - 300)); while (busyAt(x)) x += 23; fqX[k] = (int16_t)x; flatten(x, 24); }
+    for (int k = 0; k < 2; k++) { int x = stage < 3 ? -999 : 600 + k * (W - 1200) + (int)(hash(s + k * 61u) % 120); tunX[k] = (int16_t)x; }
+    leak = magT = 0; evT = stage == 7 ? 5400 : 0;
     for (int k = 0; k < 3; k++) { int x = stage < 4 ? -999 : 380 + k * (W - 760) / 2 + (int)(hash(s + k * 37u) % 90); if (x > 0) while (busyAt(x)) x += 23; ventX[k] = (int16_t)x; }
     memset(en, 0, sizeof en);
     const int turrets = clampi(planet / 2 + sector * 2, 0, 4);
@@ -553,7 +565,7 @@ static void boom(int x, int y, int n, int r) {
     blast(x, y, r, 0);
 }
 static NOINL void say(uint8_t id, uint8_t t = 50, int num = -1) { banner = id; bannerT = t; bannerNum = (int8_t)num; bannerNew = 1; }
-static NOINL void sfxSay(uint8_t snd, uint8_t id, uint8_t t = 50) { sfx(snd); say(id, t); }   // a sound with its call-out
+static NOINL void sfxSay(uint8_t snd, uint8_t id, uint8_t t = 50, int num = -1) { sfx(snd); say(id, t, num); }   // a sound with its call-out
 static NOINL void addScore(int v, int x, int y) {
     score += v;
     if (score > hiScore) hiScore = score;
@@ -600,7 +612,7 @@ static void gameOver() { state = OVER; overT = 0; newHi = score > 0 && score >= 
 // ---- the lander -----------------------------------------------------------------------------------------------------
 static void wreck() {
     wpn = 0;                                                          // the power-up goes with the lander
-    lst = 2; deadT = 80; shake = 18; flashT = 6; crashN++;
+    lst = 2; deadT = 80; shake = 18; flashT = 6; crashN++; leak = 0;
     boom(LX(), LY(), 34, 20);
     blast(LX() + 6, LY() - 4, 12, 8);                                  // a tank goes after it
     burst(LX(), LY(), 14, 60, 50, 60, 50, C_SILVER, C_GOLD);           // the hull in pieces
@@ -615,6 +627,9 @@ static void wreck() {
 static void damage(int n) {
     if (invT || lst == 2) return;
     sfx(S_HIT); shake = 6; invT = 80;
+#ifdef SLF_LEAK
+    if (stage >= 3 && !leak && rnd(2)) { leak = 1; say(MS_LEAK, 90); }     // a holed tank
+#endif
     if (shield <= n) { shield = 0; wreck(); } else shield -= (uint8_t)n;
 }
 
@@ -715,6 +730,7 @@ static void updateLander(bool l, bool r, bool thr, bool gearEdge, bool fire, boo
             const int dgy = groundAt(doorX);
             if (onPad == 2) {                                        // the base pad: refuel, repair, let the colonists off
                 if (fq.st == 3) fqDone();
+                leak = 0;                                            // the tank patched
                 if (foodOn) {
                     foodOn = 0; partyT = 180; feasts++; addScoreS(2000, doorX, dgy - 28); sfx(S_CLEAR);
                     const int k = planet % 3;                                    // the world's food: a lander, a better engine or a mended hull
@@ -1174,7 +1190,7 @@ static void updateEnemies() {
             if (nearL(ex, 120) && (frameNo % 60) == 0) for (int k = -8; k <= 8; k += 16) eshot(ex + k, ey + 6, X, Y, 20, 1);
             break;
         case E_TURRET:
-            if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, 26 + sector * 6, 1);
+            if (nearL(ex, 100) && Y < ey - 16 && (e.t % 70) == 0) eshot(ex, ey - 4, X, Y, stage >= 5 ? 44 : 26, 1);   // (stage 6 on: a sniper's fast shot)
             break;
         }
         if (!e.kind) continue;
@@ -1634,6 +1650,20 @@ static void fqDone() {
     wpn = (uint8_t)(wpn % 4 + 1); say((uint8_t)(MS_WPN1 + wpn - 1), 90);   // the reward: a laser power-up (and the call-out names it)
 }
 static void updateFetch() {
+#ifdef SLF_LEAK
+    if (leak && fuel && lst != 2 && !(frameNo & 3)) { fuel--; if (!(frameNo & 12)) part(LX(), LY() + 6, rnd(5) - 2, 8, 16, C_GOLD); }   // dripping
+#endif
+#ifdef SLF_TUNNEL
+    for (int k = 0; k < 2; k++) if (tunX[k] > 0 && lst == 0 && absi(tunX[k] - LX()) < 10) lvy = (int16_t)(lvy + (k ? 14 : -16));   // the first blows up, the second down
+#endif
+#ifdef SLF_EVAC
+    if (evT) { if (--evT % 900 == 0) sfxSay(S_WARN, evT ? MS_EVAC : MS_MELTDOWN, 90, evT / 30); }   // every 30 s: the seconds left
+    else if (stage == 7 && (frameNo % 90) == 0) { shake = 12; sfx(S_CRASH); if (lst == 0) damage(1); }   // the reactor gone: quakes
+#endif
+#ifdef SLF_MAG
+    if (stage >= 6 && !magT && (frameNo % 1100) == 600) { magT = 150; sfxSay(S_WARN, MS_MAG, 90); }
+    if (magT) { magT--; if (lst == 0 && !(frameNo & 3)) lvx = (int16_t)(lvx + rnd(41) - 20); }   // the controls drift
+#endif
     if (stage >= 5 && (frameNo % (200 - stage * 15)) == 0) { const int mx = LX() + rnd(120) - 60; eshot(mx, TOP - 8, mx, groundAt(mx), 26, 2); }   // stage 6 on: meteors
     for (int k = 0; k < 3; k++) {                                       // the vents: rumble, then a column of fire (or steam) 60 px high
         const int vx = ventX[k];
@@ -1665,6 +1695,15 @@ static void drawVents() {
 }
 static void drawFetch() {
     drawVents();
+#ifdef SLF_TUNNEL
+    for (int k = 0; k < 2; k++) {
+        const int sx = tunX[k] - cam;
+        if (tunX[k] < 0 || sx < -12 || sx > 140) continue;
+        const int gy = groundAt(tunX[k]);
+        R(sx - 6, gy - 3, 13, 3, C_STEEL); R(sx - 5, gy - 3, 11, 1, (frameNo & 4) ? C_GOLD : C_STEEL);   // the fan housing
+        for (int j = 0; j < 10; j++) { const int y = gy - 8 - ((j * 13 + (k ? -1 : 1) * (int)frameNo * 3) & 63); pset(sx - 6 + (j * 7) % 13, y, C_WHITE); }   // the air streaming
+    }
+#endif
     if (fq.st != 1 && fq.st != 2) return;
     const CSpr &sp = *FETCH[fq.kind];
     const int sx = fq.x - cam, by = fq.st == 2 ? LY() + 28 : groundAt(fq.x), ty = by - sp.h;
@@ -2024,6 +2063,9 @@ static void drawEnemies() {
         case E_TURRET: {
             const int dx = clampi((LX() - (e.x >> 4)) / 8, -4, 4);
             for (int k = 0; k < 5; k++) pset(sx + dx * k / 4, sy - 4 - k, C_STEEL);
+#ifdef SLF_SNIPER
+            if (stage >= 5 && nearL(e.x >> 4, 100) && (e.t % 70) >= 50 && (frameNo & 1)) for (int k = 1; k < 16; k++) pset(sx + (LX() - cam - sx) * k / 16, sy - 8 + (LY() - sy + 8) * k / 16, C_RED);   // the sight line
+#endif
             blit(C_TURRET, sx - 6, sy - 4, false, solid, EMAP);
             break;
         }
@@ -2141,6 +2183,9 @@ static void drawHud() {
     text35(127 - sw, 1, s, C_WHITE);
     // the scanner: the whole stage, 16 px to a dot
     R(3, 8, 122, 1, C_STEEL);
+#ifdef SLF_MAG
+    if (magT) { if (frameNo & 2) text35(40, 9, "NO SIGNAL", C_RED); return; }   // the storm: no scanner
+#endif
     for (int i = 0; i < 120; i++) { const int m = hgt[i * 4] < hgt[i * 4 + 2] ? hgt[i * 4] : hgt[i * 4 + 2]; pset(4 + i, 9 + ((m - TOP) * 7 >> 7), C_GNDD); }   // the ground line
     const int c0 = 4 + cam / 16;
     rects(c0, 9, RX_POST, 2);
@@ -2197,7 +2242,7 @@ static void drawWorld() {
     for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); text35(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
     cam = saved;
     dbg::prof(8);
-    drawPointer();
+    if (!magT) drawPointer();
 #ifdef SLF_WORM_LIFT
 #endif
     if (bannerT) {
