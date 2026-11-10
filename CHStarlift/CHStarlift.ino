@@ -265,12 +265,11 @@ static NOINL void pset(int x, int y, uint8_t c) { psetR(x, y, c); }           //
 static NOINL void hl(int x, int y, int w, uint8_t c) { if (w > 0) gfx_hline(x, y, w, c); }
 // A list of filled rectangles: dx, dy, w, h, colour, drawn from an anchor
 static NOINL void rects(int ox, int oy, const int8_t *t, int n) { for (; n--; t += 5) R(ox + t[0], oy + t[1], t[2], t[3], t[4]); }
-static const int8_t RX_PAD[] = { 0, 0, 40, 3, C_STEEL,  0, 0, 40, 1, C_SILVER,  -1, -6, 1, 6, C_STEEL,  40, -6, 1, 6, C_STEEL };
-static const int8_t RX_POD[] = { 1, 0, 38, 15, C_INK,  1, 0, 38, 1, C_STEEL,  1, 14, 38, 1, C_STEEL,  1, 0, 1, 15, C_STEEL,  38, 0, 1, 15, C_STEEL };
-static const int8_t RX_ITEM[] = { 0, 0, 7, 1, C_WHITE,  6, 1, 1, 4, C_INK };
-static const int8_t RX_POST[] = { 0, 0, 1, 6, C_STEEL,  8, 0, 1, 6, C_STEEL };
-static const int8_t RX_LID[] = { -3, -10, 7, 2, C_INK,  4, -17, 2, 8, C_SILVER };
-static const int8_t RX_CROSS[] = { 3, 1, 1, 3, C_RED,  2, 2, 3, 1, C_RED };
+// (the lists are on the card, with the world: Game.h's Planet, tools/make_card.py's RX)
+#define RX_PAD (PLR.rx + 0)
+#define RX_POD (PLR.rx + 20)
+#define RX_POST (PLR.rx + 45)
+#define RX_LID (PLR.rx + 55)
 
 // Run-length rows from flash or from the card. solid: 255 = the sprite's colours, else one colour for every pixel (a hit flash)
 RAMFUNC(blitRd) static void blitRd(Rd &rd, int w, int h, int x, int y, bool flip, uint8_t solid, const uint8_t *map) {
@@ -484,8 +483,8 @@ static void genStage() {
         hgt[i] = (uint8_t)clampi(h, 46, 122);
     }
     // the pads: the start at one end, the base (pad and building) at the other
-    if (baseRight) { startPadX = 30; basePadX = W - 116; buildX = W - 54; doorX = buildX + BASE_DOOR[PLR.base]; }
-    else { startPadX = W - 70; basePadX = 76; buildX = 10; doorX = buildX + 43 - BASE_DOOR[PLR.base]; }
+    if (baseRight) { startPadX = 30; basePadX = W - 116; buildX = W - 54; doorX = buildX + PLR.door; }
+    else { startPadX = W - 70; basePadX = 76; buildX = 10; doorX = buildX + 43 - PLR.door; }
     flatten(startPadX + 20, 64);
     flatten(baseRight ? W - 70 : 70, 128);
     alienX = baseRight ? 170 : W - 210;
@@ -928,7 +927,7 @@ static void updateMen() {
         }
         case M_DROP:                                                           // falling into the aliens' bucket, 1/4 px
             m.y = (int16_t)(m.y + 3);
-            if ((m.y >> 2) >= groundAt(alienX + 20) - COLL_TOP[PLR.coll] + 3) { m.st = M_LOST; m.by = 255; nLost++; tubeT = 45; sfx(S_SLURP); }   // (255: in the collector)
+            if ((m.y >> 2) >= groundAt(alienX + 20) - PLR.collTop + 3) { m.st = M_LOST; m.by = 255; nLost++; tubeT = 45; sfx(S_SLURP); }   // (255: in the collector)
             break;
         case M_WALK:
             if (frameNo & 1) manStep(m, sgn(doorX - m.x));
@@ -1127,7 +1126,7 @@ static void updateEnemies() {
             const int gx = groundAt(ex);
 #ifdef SLF_WORM_LIFT
             if (e.st >= 4) {                                                  // 4 on the rope, 5 dropped into the collector, 6 chewed up
-                const int cy = groundAt(alienX + 20) - COLL_TOP[PLR.coll];
+                const int cy = groundAt(alienX + 20) - PLR.collTop;
                 if (e.st == 4) {
                     if (lst == 2) { e.st = 0; e.t = 0; hoverT = 0; break; }   // the lander lost: back into the sand
                     if (e.cargo < 34) {                                       // still in the sand: the lander has to haul it out
@@ -1328,7 +1327,6 @@ static void updateShots() {
 static uint8_t wxX[WXN], wxY[WXN];
 static int lastCam;
 // rain, (ash,) drizzle, acid: how fast a streak falls, its head and its tail
-static const uint8_t FALL[5][3] = { { 5, C_SILVER, C_STEEL }, { 0, 0, 0 }, { 2, C_GNDL, C_SKY1 }, { 0, 0, 0 }, { 4, C_GREEN, C_GREEN } };
 static void updateWeather() {
     const Planet &p = PLR;
     const int dc = cam - lastCam;
@@ -1347,7 +1345,7 @@ static void updateWeather() {
             break;
         }
         case WX_ASH: if (i & 1) { y -= 1; x += (frameNo + i) % 3 == 0; } else { y += (frameNo & 1); } break;
-        case WX_RAIN: case WX_DRIZZLE: case WX_ACID: y += FALL[p.weather - WX_RAIN][0]; x -= p.weather == WX_RAIN; break;
+        case WX_RAIN: case WX_DRIZZLE: case WX_ACID: y += p.fall[0]; x -= p.weather == WX_RAIN; break;
         default: break;
         }
         while (x < 0) x += 160;
@@ -1372,7 +1370,7 @@ static void drawWeather() {
         case WX_DUST: pset(x, y, (i & 1) ? C_GNDL : C_SKY1); break;
         case WX_SNOW: pset(x, y, C_WHITE); if ((i & 3) == 0) pset(x + 1, y + 1, C_SILVER); break;
         case WX_RAIN: case WX_DRIZZLE: case WX_ACID: {                // a falling streak: its speed and colours from the table
-            const uint8_t *f = FALL[p.weather - WX_RAIN];
+            const uint8_t *f = p.fall;
             pset(x, y, f[1]); pset(x + (p.weather == WX_RAIN), y - 1, f[2]);
             break;
         }
@@ -1426,7 +1424,7 @@ static void drawSkyObjects() {
     switch (p.sky) {
     default: {                                                  // a planet, a sun or moons: a picture from the card
         const CSpr &c = PK.sky;
-        blitRm(c, SKY_AT[p.sky][0] - pc - c.w / 2, SKY_AT[p.sky][1] - c.h / 2, false, RM(7, C_SKY0) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);
+        blitRm(c, p.skyAt[0] - pc - c.w / 2, p.skyAt[1] - c.h / 2, false, RM(7, C_SKY0) | RM(9, C_FAR) << 8 | RM(12, C_GNDL) << 16);
         break;
     }
     case SK_AURORA:                                             // curtains of light, shimmering
@@ -1540,7 +1538,7 @@ static void structure(int n, int sx, int base, int L, uint32_t h) {
     const CSpr &c = PK.st[n];
     const int x = sx, y = base - c.h + 1;
     blitRm(c, x, y, ((h >> 22) & 1) && n != 3, RM(2, LDARK[L]) | RM(3, LBODY[L]) << 8 | RM(4, LLIT[L]) << 16);
-    const int8_t *li = STRUCT_LIGHT[PLR.theme - 1][n];
+    const int8_t *li = PLR.light[n];
     const int lx = x + li[0], ly = y + li[1];
     switch (li[2]) {
     case 1: pset(lx, ly, (frameNo & 16) ? C_RED : C_GOLD); break;                       // a beacon
@@ -1768,7 +1766,7 @@ static void drawAlienBase() {
     int bx, gy;
     if (!placeAt(alienX, 20, -50, 130, bx, gy)) return;
     const int cy = gy + 9;
-    const uint8_t *TX = COLL_TUBE[PLR.coll];
+    const uint8_t *TX = PLR.tube;
     if (cy < 128) {
         rects(bx, cy, RX_POD, 5);
         for (int k = 0; k < 4; k++) {                                   // pods, glowing
@@ -1784,7 +1782,7 @@ static void drawAlienBase() {
         const int y = gy - 12 + ((45 - tubeT) * 2 + t * 3) % 22;
         R(bx + TX[t], y, 2, 3, C_GREEN); pset(bx + TX[t], y + 1, C_WHITE);
     }
-    if (tubeT && (frameNo & 2)) R(bx + 6, gy - COLL_TOP[PLR.coll] + 1, 28, 1, C_WHITE);       // a splash as one goes in
+    if (tubeT && (frameNo & 2)) R(bx + 6, gy - PLR.collTop + 1, 28, 1, C_WHITE);       // a splash as one goes in
     flag(bx + 39, gy, 1);
 }
 
@@ -2022,7 +2020,7 @@ static void drawEnemies() {
         case E_WORM: {
 #ifdef SLF_WORM_LIFT
             if (e.st >= 4) {                                            // hanging by its head: the rope, the maw, the body swinging below
-                const int cy = groundAt(alienX + 20) - COLL_TOP[PLR.coll], hy = e.st == 6 ? cy - 30 + e.t * 3 / 10 : (e.y >> 4);
+                const int cy = groundAt(alienX + 20) - PLR.collTop, hy = e.st == 6 ? cy - 30 + e.t * 3 / 10 : (e.y >> 4);
                 if (e.st == 4) rope(sx, hy - 5);
                 for (int y = 1; y <= 30; y += 3) {
                     const int x0 = sx - 6 + isin(frameNo * (e.st == 4 && e.cargo < 34 ? 5 : 3) + y * 7) * (y + 6) / (e.st == 4 && e.cargo < 34 ? 400 : 900);   // curving, the tail swinging widest (wildly while it fights)

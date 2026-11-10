@@ -17,6 +17,9 @@ struct Planet {
     uint8_t food, shopc, basec, fly, crawl, plants[3], wind, base, coll, worms;
     uint8_t alien[2][4];                                // each sector's alien colours: the saucers' dome, hull and shade, and the creatures' bodies     // the takeaway's food and colour, the base's colour, the wildlife, wind 0-3, the base's and the aliens' designs
     char name[12], place[20], shop[12], ads[3][14];
+    // small tables that were in flash: this world's lights on its buildings (x, y, kind), its sky object's centre, its rain (speed, two colours),
+    // its collector's tubes and mouth and its base's door; then rectangle lists (the same on every world: rects(), RX_...)
+    int8_t light[6][3]; uint8_t skyAt[2], fall[3], tube[3], collTop, door; int8_t rx[65];
 };
 enum State : uint8_t { TITLE, INTRO, PLAY, CLEAR, OVER, WIN, PAUSED, HELP, OPTIONS };
 enum ManSt : uint8_t { M_NONE, M_IDLE, M_RUN, M_ABOARD, M_BEAM, M_JET, M_WALK, M_SAVED, M_LOST, M_HELD, M_DROP };   // HELD: in a UFO; DROP: falling into its bucket; JET: jet-packing down

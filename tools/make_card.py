@@ -9,6 +9,7 @@
 Runs both generators first. Run: python tools/make_card.py   (copy out/card/STARLIFT.DAT to the card's root)
 """
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -96,6 +97,16 @@ def fixed(t, n):
     return b + bytes(n - len(b))
 
 
+# small tables the game kept in flash, now part of each world's record: the generated ones are read back from Sprites.h
+GEN = {}
+for m in re.finditer(r'static const u?int8_t (STRUCT_LIGHT|SKY_AT|COLL_TUBE|COLL_TOP|BASE_DOOR)\b[^=]*= (.*?);', open(os.path.join(ROOT, 'CHStarlift', 'Sprites.h')).read()):
+    GEN[m.group(1)] = [int(v) for v in re.findall(r'-?\d+', m.group(2))]
+FALL = dict(RAIN=(5, C['SILVER'], C['STEEL']), DRIZZLE=(2, C['GNDL'], C['SKY1']), ACID=(4, C['GREEN'], C['GREEN']))   # rain: px a frame, two colours
+ST, SI, IN = C['STEEL'], C['SILVER'], C['INK']
+RX = [0, 0, 40, 3, ST,  0, 0, 40, 1, SI,  -1, -6, 1, 6, ST,  40, -6, 1, 6, ST,                       # RX_PAD: the pad's slab, then its lamp posts
+      1, 0, 38, 15, IN,  1, 0, 38, 1, ST,  1, 14, 38, 1, ST,  1, 0, 1, 15, ST,  38, 0, 1, 15, ST,   # RX_POD
+      0, 0, 1, 6, ST,  8, 0, 1, 6, ST,                                                              # RX_POST
+      -3, -10, 7, 2, IN,  4, -17, 2, 8, SI]                                                         # RX_LID
 plan = bytearray()
 for w in WORLDS:
     r = bytearray()
@@ -107,6 +118,12 @@ for w in WORLDS:
     r += fixed(w['name'], 12) + fixed(w['place'], 20) + fixed(w['shop'], 12)
     for a in w['ads']:
         r += fixed(a, 14)
+    th = TH[w['theme']]
+    for li in (GEN['STRUCT_LIGHT'][(th - 1) * 18:th * 18] if th else [0] * 18):
+        r += struct.pack('b', li)
+    r += bytes(GEN['SKY_AT'][SKY[w['sky']] * 2:][:2]) + bytes(FALL.get(w['wx'], (0, 0, 0)))
+    r += bytes(GEN['COLL_TUBE'][w['coll'] * 3:][:3]) + bytes([GEN['COLL_TOP'][w['coll']], GEN['BASE_DOOR'][w['base']]])
+    r += struct.pack('%db' % len(RX), *RX)
     PLANET_LEN = len(r)
     plan += r
 
