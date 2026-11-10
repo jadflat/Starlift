@@ -596,7 +596,7 @@ static void saveProgress(bool inGame) {
 static void newStage() {
     planet = stage & 7;
     loadReq = true;
-    state = INTRO; timer = 210;                                            // the stage card, then who's who
+    state = INTRO; timer = HZ[stage & 7] ? 290 : 210;                                            // the stage card, then who's who
     synth::music((stage & 3) == 3 ? 9 : 1 + planet);                     // a boss stage: SHOWDOWN
 }
 static void newGame() {
@@ -2349,17 +2349,28 @@ static void drawIntro() {
     drawWorld();
 #ifndef SL_SLIM
     char s[28];
-    if (timer <= 100) {                                                    // who's who (0.46: back, from a table)
-        struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };
-        static const Row ROWS[6] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
+    const int split = hz ? 80 : 0;                                         // with hazards: a second page for them
+    if (timer <= 100 + split) {                                            // who's who (0.46: back, from a table)
+        struct Row { const CSpr *sp; int8_t dx, dy; uint8_t kind, msg, col; };   // kind: the enemy that must be about, or 0x80 + the stage's hazard bit
+        static const Row ROWS[13] = { { &C_MAN_WAVE1, 10, 0, 0, MS_R_COLONIST, C_GREEN }, { &SAUCER[0], 6, 2, 0, MS_R_UFO, C_RED },
             { &C_SNATCH0, 10, 0, 0, MS_R_STINGER, C_RED }, { &C_MINE0, 13, 1, 0, MS_R_MINE, C_GOLD },
-            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_WORM_UP, 10, -2, E_WORM, MS_R_WORM, C_RED } };
+            { &C_TURRET, 11, 3, E_TURRET, MS_R_TURRET, C_RED }, { &C_WORM_UP, 10, -2, E_WORM, MS_R_WORM, C_RED },
+            { &C_IHZ_LEAK, 12, 2, 0x80 | HZ_LEAK, MS_R_LEAK, C_GOLD }, { &C_IHZ_SNIPER, 12, 1, 0x80 | HZ_SNIPER, MS_R_SNIPER, C_RED },
+            { &C_IHZ_TUNNEL, 12, 1, 0x80 | HZ_TUNNEL, MS_R_TUNNEL, C_WHITE }, { &C_IHZ_MAG, 12, 1, 0x80 | HZ_MAG, MS_R_MAG, C_GOLD },
+            { &C_IHZ_VENTS, 12, 2, 0x80 | HZ_VENTS, MS_R_VENTS, C_RED }, { &C_IHZ_METEORS, 12, 1, 0x80 | HZ_METEORS, MS_R_METEOR, C_GOLD },
+            { &C_IHZ_EVAC, 12, 1, 0x80 | HZ_EVAC, MS_R_EVAC, C_RED } };
+        const int i0 = timer <= split ? 6 : 0, i1 = i0 ? 13 : 6;
         int n = 0, m = 0;
-        for (int i = 0; i < 6; i++) { bool h = !ROWS[i].kind; for (const auto &e : en) h |= e.kind == ROWS[i].kind; if (h) { m |= 1 << i; n++; } }
+        for (int i = i0; i < i1; i++) {
+            const uint8_t k = ROWS[i].kind;
+            bool h = k & 0x80 ? (hz & k) != 0 : !k;
+            if (!(k & 0x80)) for (const auto &e : en) h |= e.kind == k;
+            if (h) { m |= 1 << i; n++; }
+        }
         panel(18, 17 + n * 13);                                            // the card just as tall as its rows
-        tCS(21, MS_WHO, C_GOLD);
+        tCS(21, i0 ? MS_HAZARDS : MS_WHO, C_GOLD);
         int y = 32;
-        for (int i = 0; i < 6; i++) {
+        for (int i = i0; i < i1; i++) {
             const Row &r = ROWS[i];
             if (!(m >> i & 1)) continue;
             const bool ufo = r.sp == &SAUCER[0];

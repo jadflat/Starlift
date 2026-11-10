@@ -128,3 +128,14 @@ WORM_UP = ['..kwkwkwkwk.',                  # the sandworm fully risen, for the 
            '.ssnnnnnnn..',
            '.kkkkkkkkk..',
            'oooooooooooo']
+
+
+HAZ_ICONS = {                               # the who's-who hazards page (0.46), about 12 x 10
+    'HZ_LEAK':   ['....y.......', '...yy.......', '..yyyy......', '..yyyy...y..', '...yy...yyy.', '........yyy.', '.........y..'],
+    'HZ_SNIPER': ['r...........', '.r..........', '..r.........', '...r........', '....r.......', '.....r.nn...', '......nssn..', '.....nnnnnn.', '....kkkkkkkk'],
+    'HZ_TUNNEL': ['..w..w..w...', '..w..w..w...', '.www.w.www..', '..w.www.w...', '..w..w..w...', 'nnnnnnnnnnn.', 'nyyyyyyyyyn.', 'nnnnnnnnnnn.'],
+    'HZ_MAG':    ['....yy......', '...yy.......', '..yyyyy.....', '....yy......', '...yy.......', '..yyyyy.....', '....yy......', '...y........'],
+    'HZ_VENTS':  ['....rr......', '...ryyr.....', '...ryyr.....', '...rwyr.....', '...rwyr.....', '..rrwyrr....', 'kkkkkkkkkk..'],
+    'HZ_METEORS':['y...........', '.r..........', '..r.........', '...yy.......', '...nns......', '..nnnns.....', '..nnnnn.....', '...nnn......'],
+    'HZ_EVAC':   ['..kkkkkk....', '.kwwwwwwk...', 'kwwwkwwwwk..', 'kwwwkwwwwk..', 'kwwwkkkwwk..', 'kwwwwwwwwk..', '.kwwwwwwk...', '..kkkkkk....'],
+}

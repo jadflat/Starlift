@@ -356,6 +356,8 @@ for _k, _f in enumerate(fetch.FLAGS):
     CARD['FLAG%d' % _k] = life.g(_f)
 CARD['MAW'] = life.g(fetch.MAW)
 CARD['WORM_UP'] = life.g(fetch.WORM_UP)
+for _n, _g in fetch.HAZ_ICONS.items():
+    CARD['I' + _n] = life.g(_g)
 for n in life.GIANT_ORDER:
     CARD['GI_' + n] = life.g(life.GIANTS[n])
 for n, gr in life.LOGOS.items():
