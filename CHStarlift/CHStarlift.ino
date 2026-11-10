@@ -264,6 +264,8 @@ RAMFUNC(psetR) static void psetR(int x, int y, uint8_t c) {                     
 }
 static NOINL void pset(int x, int y, uint8_t c) { psetR(x, y, c); }           // the way in from flash: a short call (the RAM copy is out of a jal's reach)
 #define R gfx_fillRect
+// text35() runs from RAM, out of a jal's reach (8 B a call from flash): the way in from flash, one short call
+static NOINL void t35(int x, int y, const char *s, uint8_t c) { text35(x, y, s, c); }
 static NOINL void hl(int x, int y, int w, uint8_t c) { if (w > 0) gfx_hline(x, y, w, c); }
 // A list of filled rectangles: dx, dy, w, h, colour, drawn from an anchor
 static NOINL void rects(int ox, int oy, const int8_t *t, int n) { for (; n--; t += 5) R(ox + t[0], oy + t[1], t[2], t[3], t[4]); }
@@ -335,13 +337,13 @@ static NOINL const char *T(uint8_t id) {
     return d;
 }
 // all the text is the small 3 x 5 font (the call-outs at twice its size): one font in flash, not two
-static NOINL void textC(int y, const char *s, uint8_t c) { text35((128 - text35Width(s)) / 2, y + 1, s, c); }
+static NOINL void textC(int y, const char *s, uint8_t c) { t35((128 - text35Width(s)) / 2, y + 1, s, c); }
 static NOINL void textSh(int x, int y, const char *s, uint8_t c) { text35s(x, y + 1, s, c, C_INK); }
 static NOINL void textCS(int y, const char *s, uint8_t c) { textSh((128 - text35Width(s)) / 2, y, s, c); }
 static NOINL void tC(int y, uint8_t id, uint8_t c) { textC(y, T(id), c); }       // a message from the card, centred
 static NOINL void tCS(int y, uint8_t id, uint8_t c) { textCS(y, T(id), c); }
 static NOINL void tN(int y, uint8_t id, int v, uint8_t c) { char s[28]; textC(y, fmt(s, T(id), v), c); }   // a message with a number
-static NOINL void tX(int x, int y, uint8_t id, uint8_t c) { text35(x, y, T(id), c); }
+static NOINL void tX(int x, int y, uint8_t id, uint8_t c) { t35(x, y, T(id), c); }
 
 // ---- palette ------------------------------------------------------------------------------------------------------
 static const uint8_t PAL_SLOT[9] = { C_SKY0, C_SKY1, C_FAR, C_MID, C_NEAR, C_GNDD, C_GND, C_GNDL, C_ACC };
@@ -1616,7 +1618,7 @@ static void drawPad(int px, bool base) {
         const int fx = baseRight ? sx + 42 : sx - 6;
         blit(C_PUMP, fx, gy - 9, false);
         if (lst == 1 && onPad == 2 && (frameNo & 4)) R(fx + 1, gy - 6, 2, 2, C_GREEN);                // pumping
-        text35(sx + 8, gy + 4, "BASE", C_GOLD);
+        t35(sx + 8, gy + 4, "BASE", C_GOLD);
     } else {                                                        // a launch gantry
         const int gx = baseRight ? sx - 10 : sx + 44;
         blit(C_GANTRY, gx, gy - 32, false);
@@ -1803,12 +1805,12 @@ static void drawDiner() {
     blitRm(P_SHOP, bx, top, false, RM(6, PLR.shopc));                  // the shop's own colour
     blit(P_FOOD, bx + 44, top + 1, false);
     const bool flicker = (hash((uint32_t)(frameNo >> 1)) & 63) == 0;
-    if (!flicker) text35(bx + 23 - text35Width(PLR.shop) / 2, top + 5, PLR.shop, (frameNo & 32) ? C_GOLD : C_WHITE);
+    if (!flicker) t35(bx + 23 - text35Width(PLR.shop) / 2, top + 5, PLR.shop, (frameNo & 32) ? C_GOLD : C_WHITE);
     for (int k = 0; k < 46; k += 2) {                                   // chasing bulbs round the board
         const uint8_t c = ((k / 2 + (frameNo >> 2)) & 3) == 0 ? C_GOLD : C_WHITE;
         pset(bx + k, top + 2, c); pset(bx + 45 - k, top + 12, c);
     }
-    if ((frameNo & 63) < 50) text35(bx + 7, top + 28, "OPEN", C_RED);
+    if ((frameNo & 63) < 50) t35(bx + 7, top + 28, "OPEN", C_RED);
     for (int k = 0; k < 4; k++) {                                       // the lane
         const int ax = bx + 46 + k * 16, ay = groundAt(burgerX + 46 + k * 16);
         pset(ax + 1, ay + 1, C_GOLD); pset(ax, ay + 2, C_GOLD); pset(ax + 1, ay + 3, C_GOLD);
@@ -1924,7 +1926,7 @@ static void adBoard(int x, int y, const char *t, uint32_t h) {
     for (int k = 2; k < ht - 1; k += 2) { const uint8_t c = ((k / 2 + (frameNo >> 2)) & 1) ? C_GOLD : C_RED; pset(x, y + k, c); pset(x + w - 1, y + ht - 1 - k, c); }
     const int ph = (frameNo + (int)(h & 255)) & 63;
     const bool on = (h & 4) ? ph < 44 || (ph & 4) : true;             // some boards blink off and on, the rest pulse
-    if (on) text35(x + 3, y + 3, t, (ph & 32) ? C_ACC : (h & 8) ? C_GOLD : C_WHITE);   // neon, blinking or pulsing
+    if (on) t35(x + 3, y + 3, t, (ph & 32) ? C_ACC : (h & 8) ? C_GOLD : C_WHITE);   // neon, blinking or pulsing
 }
 
 static void drawBeam(int ux, int uy, int gy) {                       // the tractor beam: a shimmering green cone
@@ -2190,23 +2192,23 @@ static void drawHud() {
     const int gap = (126 - 28 - qw - 31 - hw - sw) / 4;            // the five blocks spread with equal gaps between them
     int x = 1 + 28 + gap;
     // fuel
-    text35(1, 0, "F", C_SILVER);
+    t35(1, 0, "F", C_SILVER);
     R(7, 2, 22, 4, C_STEEL);
     const int fw = fuel * 20 / FUEL_MAX;
     R(8, 3, fw, 2, (fuel < FUEL_MAX / 3 && (frameNo & 8)) ? C_RED : C_GOLD);
     // colonists saved / quota
-    text35(x, 1, q, nSaved >= quota ? C_GREEN : C_GOLD);
+    t35(x, 1, q, nSaved >= quota ? C_GREEN : C_GOLD);
     x += qw + gap;
     // the seats: a white figure for each colonist aboard
     for (int i = 0; i < SEATS; i++) { const uint8_t c = i < seats ? C_WHITE : C_STEEL; R(x + i * 4, 2, 3, 4, c); pset(x + 1 + i * 4, 3, i < seats ? C_GOLD : C_INK); }
     x += 31 + gap;
     // shield
     for (int i = 0; i < shMax(); i++) R(x + i * 3, 2, 2, 4, i < shield ? C_GREEN : C_STEEL);
-    text35(127 - sw, 1, s, C_WHITE);
+    t35(127 - sw, 1, s, C_WHITE);
     // the scanner: the whole stage, 16 px to a dot
     R(3, 8, 122, 1, C_STEEL);
 #ifdef SLF_MAG
-    if (magT) { if (frameNo & 2) text35(40, 9, "NO SIGNAL", C_RED); return; }   // the storm: no scanner
+    if (magT) { if (frameNo & 2) t35(40, 9, "NO SIGNAL", C_RED); return; }   // the storm: no scanner
 #endif
     for (int i = 0; i < 120; i++) { const int m = hgt[i * 4] < hgt[i * 4 + 2] ? hgt[i * 4] : hgt[i * 4 + 2]; pset(4 + i, 9 + ((m - TOP) * 7 >> 7), C_GNDD); }   // the ground line
     const int c0 = 4 + cam / 16;
@@ -2261,7 +2263,7 @@ static void drawWorld() {
     if ((frameNo & 15) == 0) fprintf(stderr, "cut f%d dlv%d party%d at%d\n", frameNo, dlv, partyT, cutAt());
 #endif
     dbg::prof(7);
-    for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); text35(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
+    for (auto &q : pops) if (q.t) { char s[8]; fmt(s, "", q.v); t35(q.x - cam - 6, q.y - (30 - q.t) / 3, s, (q.t & 2) ? C_WHITE : C_GOLD); }
     cam = saved;
     dbg::prof(8);
     if (!magT) drawPointer();
@@ -2308,7 +2310,7 @@ static void drawTitle() {
     const uint8_t n = menuItems(it);
     panel(74, n * 9 + 5);
     menuList(it, n, titleSel, 32, 77);
-    text35(2, 122, "V" SL_VERSION, C_SILVER);
+    t35(2, 122, "V" SL_VERSION, C_SILVER);
 #ifdef SL_STAGESEL
     char q[16];
     textCS(64, fmt(q, "< STAGE ", selStage + 1, " >"), C_GOLD);
@@ -2320,9 +2322,9 @@ static NOINL void menuList(const uint8_t *it, int n, int sel, int x, int y) {
     for (int i = 0; i < n; i++) {
         char b[32];
         if (it[i] == MS_DIFF) fmt(b, T(MS_DIFF), -1, T((uint8_t)(MS_EASY + diff))); else fmt(b, T(it[i]));
-        text35(x, y + i * 9, b, sel == i ? C_GOLD : C_WHITE);
+        t35(x, y + i * 9, b, sel == i ? C_GOLD : C_WHITE);
     }
-    text35(x - 7, y + sel * 9, ">", (frameNo & 8) ? C_GOLD : C_RED);
+    t35(x - 7, y + sel * 9, ">", (frameNo & 8) ? C_GOLD : C_RED);
 }
 
 static uint8_t menuItems(uint8_t *it) {
@@ -2345,7 +2347,7 @@ static void drawHelp() {
     for (int i = 0; i < HELP_LINES; i++) {                          // the text, from the card
         const uint8_t *o = card::at(CARD_TXT + i * 2u);
         const uint8_t *r = o ? card::at(CARD_TXT + (uint32_t)(o[0] | o[1] << 8)) : nullptr;
-        if (r && r[0] == helpPage) text35(r[1], r[2], (const char *)r + 4, r[3]);
+        if (r && r[0] == helpPage) t35(r[1], r[2], (const char *)r + 4, r[3]);
     }
     if (frameNo & 16) tX(55, 114, MS_A_NEXT_B_BACK, C_SILVER);
 #endif
