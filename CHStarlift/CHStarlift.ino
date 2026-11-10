@@ -2163,9 +2163,18 @@ static void drawShots() {
     }
     for (const auto &q : pt) if (q.life) pset((q.x >> 4) - cam, q.y >> 4, q.col);
     for (const auto &b : booms) if (b.t && !b.delay) {
-        const int age = 16 - b.t, x = b.x - cam, r = b.r, y = b.y - (age > 7 ? age - 7 : 0);   // 0.45: a flash, then the fireball rising and shrinking (the smoke ring dropped for room)
-        const int rr = age < 2 ? 2 + r * (age + 1) / 4 : age < 7 ? r * (age + 2) / 9 : r * (12 - age) / 6;
-        if (rr > 0) { gfx_fillCircle(x, y, rr, age < 2 ? C_WHITE : C_RED); if (age >= 2) gfx_fillCircle(x - 1, y - 1, rr / 2, (age & 1) ? C_GOLD : C_WHITE); }
+        const int age = 16 - b.t, x = b.x - cam, r = b.r;                  // a flash, the fireball, its ember rising, then a ring of smoke
+        if (age < 2) gfx_fillCircle(x, b.y, 2 + r * (age + 1) / 4, C_WHITE);
+        else if (age < 7) {
+            const int rr = r * (age + 2) / 9;
+            gfx_fillCircle(x, b.y, rr, C_RED); gfx_fillCircle(x - 1, b.y - 1, rr * 2 / 3, C_GOLD); gfx_fillCircle(x - 1, b.y - 1, rr / 3, C_WHITE);
+        } else if (age < 12) {
+            const int rr = r * (12 - age) / 6;
+            if (rr > 0) { gfx_fillCircle(x, b.y - (age - 7), rr, C_RED); if (rr > 2) gfx_fillCircle(x, b.y - (age - 7), rr / 2, C_GOLD); }
+        } else {
+            const int rr = r / 2 + (age - 10) * 2;
+            for (int k = 0; k < 32; k += 2) pset(x + isin(k * 8 + 64) * rr / 128, b.y - (age - 10) + isin(k * 8) * rr / 160, (k & 2) ? C_STEEL : C_SILVER);
+        }
     }
 }
 
